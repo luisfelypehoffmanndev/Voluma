@@ -43,6 +43,18 @@ create table if not exists public.routine_exercises (
   deleted_at       timestamptz
 );
 
+create table if not exists public.week_targets (
+  id                  uuid primary key,
+  user_id             uuid not null references auth.users (id) on delete cascade,
+  week_start          date not null,
+  routine_exercise_id uuid not null,
+  target_sets         integer not null,
+  target_reps         integer not null,
+  target_weight_kg    real not null,
+  updated_at          timestamptz not null default now(),
+  deleted_at          timestamptz
+);
+
 create table if not exists public.sessions (
   id          uuid primary key,
   user_id     uuid not null references auth.users (id) on delete cascade,
@@ -86,6 +98,7 @@ create table if not exists public.body_weight_logs (
 create index if not exists idx_exercises_sync         on public.exercises (user_id, updated_at);
 create index if not exists idx_routines_sync          on public.routines (user_id, updated_at);
 create index if not exists idx_routine_exercises_sync on public.routine_exercises (user_id, updated_at);
+create index if not exists idx_week_targets_sync      on public.week_targets (user_id, updated_at);
 create index if not exists idx_sessions_sync          on public.sessions (user_id, updated_at);
 create index if not exists idx_session_sets_sync      on public.session_sets (user_id, updated_at);
 create index if not exists idx_body_weight_sync       on public.body_weight_logs (user_id, updated_at);
@@ -95,6 +108,7 @@ create index if not exists idx_body_weight_sync       on public.body_weight_logs
 alter table public.exercises         enable row level security;
 alter table public.routines          enable row level security;
 alter table public.routine_exercises enable row level security;
+alter table public.week_targets      enable row level security;
 alter table public.sessions          enable row level security;
 alter table public.session_sets      enable row level security;
 alter table public.body_weight_logs  enable row level security;
@@ -104,7 +118,7 @@ declare
   target text;
 begin
   foreach target in array array[
-    'exercises', 'routines', 'routine_exercises',
+    'exercises', 'routines', 'routine_exercises', 'week_targets',
     'sessions', 'session_sets', 'body_weight_logs'
   ]
   loop

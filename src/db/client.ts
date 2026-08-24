@@ -44,6 +44,7 @@ export async function resetDb(): Promise<void> {
   await db.execAsync(`
     DELETE FROM session_sets;
     DELETE FROM sessions;
+    DELETE FROM week_targets;
     DELETE FROM routine_exercises;
     DELETE FROM routines;
     DELETE FROM exercises;
