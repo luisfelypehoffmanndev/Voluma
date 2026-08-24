@@ -10,7 +10,7 @@
  * last-write-wins do sync. Nada e apagado de verdade: delete e soft delete.
  */
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const MIGRATIONS: readonly string[] = [
   // v1 — schema inicial
@@ -102,6 +102,81 @@ export const MIGRATIONS: readonly string[] = [
   CREATE INDEX IF NOT EXISTS idx_body_weight_logged
     ON body_weight_logs (logged_at);
   `,
+
+  // v2 — a semana vira um eixo: um dia por dia da semana, alvos por semana
+  `
+  CREATE TABLE IF NOT EXISTS week_targets (
+    id                  TEXT PRIMARY KEY NOT NULL,
+    week_start          TEXT NOT NULL,
+    routine_exercise_id TEXT NOT NULL,
+    target_sets         INTEGER NOT NULL,
+    target_reps         INTEGER NOT NULL,
+    target_weight_kg    REAL NOT NULL,
+    updated_at          TEXT NOT NULL,
+    deleted_at          TEXT
+  );
+
+  -- Indice comum, NAO unico. O pull do sync grava com INSERT OR REPLACE
+  -- (src/sync/engine.ts) e o REPLACE resolve conflito de unicidade APAGANDO a
+  -- linha conflitante. Com indice unico, dois aparelhos que ajustassem a mesma
+  -- semana offline ficariam se apagando um ao outro em looping, cada pull
+  -- destruindo a linha do outro. Duplicata e desempatada na leitura, por
+  -- updated_at — a mesma postura que o resto do app ja tem.
+  CREATE INDEX IF NOT EXISTS idx_week_targets_slot
+    ON week_targets (week_start, routine_exercise_id);
+
+  -- Um dia da semana passa a ter no maximo um plano. Nada impedia duas rotinas
+  -- no mesmo weekday (createRoutine sempre gravava position 0) e a segunda
+  -- ficava invisivel, escondida pelo LIMIT 1 de routineForWeekday. Antes de
+  -- apagar as duplicatas, os exercicios delas mudam de dono para a
+  -- sobrevivente do dia — a que tem menor position, com o id como desempate.
+  --
+  -- A tabela temporaria existe porque a outbox precisa saber QUAIS linhas
+  -- mudaram. Depois do UPDATE nao da mais para distinguir uma linha
+  -- re-parenteada de uma que ja era daquela rotina, e enfileirar todas
+  -- encheria a fila de linhas intactas em cada instalacao.
+  CREATE TEMP TABLE IF NOT EXISTS dedupe_perdedoras AS
+  SELECT perdedora.id AS id
+    FROM routines perdedora
+   WHERE perdedora.deleted_at IS NULL
+     AND perdedora.id <> (
+           SELECT vencedora.id FROM routines vencedora
+            WHERE vencedora.deleted_at IS NULL
+              AND vencedora.weekday = perdedora.weekday
+            ORDER BY vencedora.position, vencedora.id LIMIT 1);
+
+  -- A migracao escreve direto, sem passar pelo enqueue() do repositorio, entao
+  -- a outbox e alimentada na mao: sem isso a deduplicacao ficaria so neste
+  -- aparelho e o Supabase continuaria com as duplicatas.
+  INSERT INTO outbox (table_name, row_id, queued_at)
+  SELECT 'routine_exercises', id, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+    FROM routine_exercises
+   WHERE deleted_at IS NULL
+     AND routine_id IN (SELECT id FROM dedupe_perdedoras);
+
+  INSERT INTO outbox (table_name, row_id, queued_at)
+  SELECT 'routines', id, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+    FROM dedupe_perdedoras;
+
+  UPDATE routine_exercises
+     SET routine_id = (
+           SELECT vencedora.id FROM routines vencedora
+            WHERE vencedora.deleted_at IS NULL
+              AND vencedora.weekday = (
+                    SELECT dona.weekday FROM routines dona
+                     WHERE dona.id = routine_exercises.routine_id)
+            ORDER BY vencedora.position, vencedora.id LIMIT 1),
+         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+   WHERE deleted_at IS NULL
+     AND routine_id IN (SELECT id FROM dedupe_perdedoras);
+
+  UPDATE routines
+     SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+   WHERE id IN (SELECT id FROM dedupe_perdedoras);
+
+  DROP TABLE dedupe_perdedoras;
+  `,
 ];
 
 /** Tabelas que participam do sync, na ordem em que devem subir (pais antes de filhos). */
@@ -109,6 +184,7 @@ export const SYNCED_TABLES = [
   'exercises',
   'routines',
   'routine_exercises',
+  'week_targets',
   'sessions',
   'session_sets',
   'body_weight_logs',

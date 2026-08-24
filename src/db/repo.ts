@@ -8,9 +8,12 @@ import type {
   RoutineExercise,
   Session,
   SessionSet,
+  Targets,
   Weekday,
+  WeekTarget,
 } from '@/domain/types';
-import { toDateKey } from '@/domain/week';
+import { resolveTargets, targetsFromSets } from '@/domain/targets';
+import { toDateKey, weekStartKey } from '@/domain/week';
 
 import { getDb } from './client';
 import type { SyncedTable } from './schema';
@@ -21,12 +24,14 @@ import {
   toRoutineExercise,
   toSession,
   toSessionSet,
+  toWeekTarget,
   type BodyWeightLogRow,
   type ExerciseRow,
   type RoutineExerciseRow,
   type RoutineRow,
   type SessionRow,
   type SessionSetRow,
+  type WeekTargetRow,
 } from './rows';
 
 /**
@@ -138,6 +143,63 @@ export async function createRoutine(name: string, weekday: Weekday): Promise<Rou
     await enqueue(db, 'routines', routine.id);
   });
 
+  return routine;
+}
+
+/**
+ * A rotina de um dia da semana, criando-a se ainda nao existir.
+ *
+ * Os sete dias sao sintetizados na leitura (`weekPlan`), nao gravados de
+ * antemao: sete linhas vazias subiriam para o Supabase e voltariam em todo
+ * aparelho, inclusive dias que o usuario nunca vai usar, e ainda calariam o
+ * `seedIfEmpty`, cuja guarda e "ja existe alguma rotina?".
+ *
+ * O preco e este: toda escrita num dia passa por aqui primeiro, para ter um
+ * `routine_id`. A busca e a criacao ficam na mesma transacao porque dois toques
+ * rapidos em "adicionar exercicio" num dia vazio criariam duas rotinas para o
+ * mesmo dia — exatamente a duplicata que a migracao v2 existe para limpar.
+ */
+export async function ensureDayRoutine(weekday: Weekday): Promise<Routine> {
+  const db = await getDb();
+  let routine: Routine | null = null;
+
+  await db.withTransactionAsync(async () => {
+    const existing = await db.getFirstAsync<RoutineRow>(
+      `SELECT * FROM routines
+        WHERE weekday = ? AND deleted_at IS NULL
+        ORDER BY position, updated_at, id
+        LIMIT 1`,
+      weekday,
+    );
+    if (existing) {
+      routine = toRoutine(existing);
+      return;
+    }
+
+    // Nome vazio e legitimo: o dia so ganha rotulo se o usuario quiser um. A
+    // tela mostra o nome do proprio dia enquanto isso.
+    const created: Routine = {
+      id: newId(),
+      name: '',
+      weekday,
+      position: 0,
+      updatedAt: now(),
+      deletedAt: null,
+    };
+    await db.runAsync(
+      'INSERT INTO routines (id, name, weekday, position, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, NULL)',
+      created.id,
+      created.name,
+      created.weekday,
+      created.position,
+      created.updatedAt,
+    );
+    await enqueue(db, 'routines', created.id);
+    routine = created;
+  });
+
+  // A transacao sempre atribui, mas o TS nao sabe disso.
+  if (!routine) throw new Error(`Nao foi possivel abrir o dia ${weekday}`);
   return routine;
 }
 
@@ -254,6 +316,213 @@ export async function reorderRoutineExercises(orderedIds: readonly string[]): Pr
   });
 }
 
+// ------------------------------------------------------- alvos de uma semana
+
+/** Um exercicio do dia com os numeros ja resolvidos para uma semana. */
+export type WeekExercise = RoutineExerciseWithName & {
+  targets: Targets;
+  /** true quando os numeros vieram de um ajuste explicito daquela semana. */
+  adjusted: boolean;
+};
+
+/**
+ * Os alvos de UM exercicio na ultima vez que ele foi treinado antes de `before`.
+ *
+ * Duas leituras em vez de uma: a primeira acha a sessao, a segunda le as series
+ * dela. Um `GROUP BY` sozinho nao resolve porque `reps` e `weight_kg` tem que
+ * sair da mesma serie (a ultima), e nao de agregados independentes.
+ *
+ * Tres filtros que parecem redundantes e nao sao. `finished_at IS NOT NULL`
+ * exclui o treino em andamento; `deleted_at IS NULL` aproveita que
+ * `finishSession` soft-deleta toda serie que ficou desmarcada; e `done = 1`
+ * pega o caso que escapa dos dois — desmarcar uma serie DEPOIS de finalizar o
+ * treino deixa uma linha viva com `done = 0`, que e alvo, nao carga levantada.
+ *
+ * A ordenacao prefere o mesmo dia da semana (`s.routine_id`) quando ele e
+ * recente. Sem isso, quem faz agachamento pesado na segunda e leve na quinta
+ * veria a segunda herdar a carga da quinta so por ela ter sido mais recente.
+ * Passados 35 dias sem treinar aquele dia, a preferencia cai e vale a execucao
+ * mais recente, seja de que dia for — melhor um numero de outro dia do que
+ * voltar para a semente de meses atras.
+ *
+ * O piso de 365 dias e o unico limite: "semana passada" quer dizer a ultima vez
+ * que treinei isso, nao literalmente sete dias atras — quem pulou a segunda
+ * passada herda da segunda anterior aquela. Mais de um ano ja e arqueologia, e
+ * ai vale a semente do dia.
+ */
+async function lastPerformedTargets(
+  db: SQLiteDatabase,
+  exerciseId: string,
+  routineId: string,
+  before: string,
+): Promise<Targets | null> {
+  const session = await db.getFirstAsync<{ session_id: string }>(
+    `SELECT ss.session_id AS session_id
+       FROM session_sets ss
+       JOIN sessions s ON s.id = ss.session_id
+      WHERE ss.exercise_id = ?
+        AND ss.done = 1
+        AND ss.deleted_at IS NULL
+        AND s.deleted_at IS NULL
+        AND s.finished_at IS NOT NULL
+        AND s.date < ?
+        AND s.date >= date(?, '-365 days')
+      GROUP BY s.id
+      ORDER BY CASE WHEN s.routine_id = ? AND s.date >= date(?, '-35 days')
+                    THEN 0 ELSE 1 END,
+               s.date DESC,
+               s.started_at DESC
+      LIMIT 1`,
+    exerciseId,
+    before,
+    before,
+    routineId,
+    before,
+  );
+  if (!session) return null;
+
+  const sets = await db.getAllAsync<{ set_index: number; reps: number; weight_kg: number }>(
+    `SELECT set_index, reps, weight_kg
+       FROM session_sets
+      WHERE session_id = ? AND exercise_id = ? AND done = 1 AND deleted_at IS NULL`,
+    session.session_id,
+    exerciseId,
+  );
+
+  return targetsFromSets(
+    sets.map((set) => ({ setIndex: set.set_index, reps: set.reps, weightKg: set.weight_kg })),
+  );
+}
+
+/**
+ * Os exercicios de um dia com os numeros daquela semana ja resolvidos.
+ *
+ * A semana nao e materializada: sem ajuste do usuario nao existe linha nenhuma
+ * e o valor sai do historico na hora. E o que faz "vem como semana passada" ser
+ * literalmente verdade em vez de um estado velho esperando correcao.
+ */
+export async function targetsForWeek(
+  weekStart: string,
+  routineId: string,
+): Promise<WeekExercise[]> {
+  const db = await getDb();
+  const planned = await listRoutineExercises(routineId);
+
+  // ORDER BY + Map: sem indice unico, o sync pode deixar duas linhas para o
+  // mesmo slot. A ultima gravacao vence, e o `set` sobrescreve o que veio antes
+  // porque a ordem crescente coloca a mais nova no fim.
+  const overrides = await db.getAllAsync<WeekTargetRow>(
+    `SELECT * FROM week_targets
+      WHERE week_start = ? AND deleted_at IS NULL
+      ORDER BY updated_at ASC, id ASC`,
+    weekStart,
+  );
+  const bySlot = new Map<string, WeekTarget>();
+  for (const row of overrides) bySlot.set(row.routine_exercise_id, toWeekTarget(row));
+
+  const resolved: WeekExercise[] = [];
+  for (const item of planned) {
+    const override = bySlot.get(item.id) ?? null;
+    const performed = override
+      ? null // ja tem decisao explicita; nao gasta consulta com o historico
+      : await lastPerformedTargets(db, item.exerciseId, routineId, weekStart);
+
+    resolved.push({
+      ...item,
+      adjusted: override !== null,
+      targets: resolveTargets(
+        override
+          ? {
+              sets: override.targetSets,
+              reps: override.targetReps,
+              weightKg: override.targetWeightKg,
+            }
+          : null,
+        performed,
+        { sets: item.targetSets, reps: item.targetReps, weightKg: item.targetWeightKg },
+      ),
+    });
+  }
+
+  return resolved;
+}
+
+/**
+ * Grava o ajuste do usuario para uma semana.
+ *
+ * Procura a linha e decide entre UPDATE e INSERT, em vez do `ON CONFLICT` que
+ * seria natural: sem indice unico (ver o comentario da migracao v2) nao ha
+ * conflito para o SQLite detectar. Reaproveitar o id existente e justamente o
+ * que mantem os aparelhos convergindo — gravar um id novo a cada toque criaria
+ * uma linha nova por edicao.
+ *
+ * Se o sync ja deixou duplicatas, a mais recente e a que sobrevive ao UPDATE;
+ * as outras continuam la, inertes, porque a leitura so olha a ultima.
+ */
+export async function setWeekTarget(
+  weekStart: string,
+  routineExerciseId: string,
+  targets: Targets,
+): Promise<void> {
+  const db = await getDb();
+  const timestamp = now();
+
+  await db.withTransactionAsync(async () => {
+    const existing = await db.getFirstAsync<{ id: string }>(
+      `SELECT id FROM week_targets
+        WHERE week_start = ? AND routine_exercise_id = ?
+        ORDER BY updated_at DESC, id ASC
+        LIMIT 1`,
+      weekStart,
+      routineExerciseId,
+    );
+
+    const id = existing?.id ?? newId();
+    if (existing) {
+      await db.runAsync(
+        `UPDATE week_targets
+            SET target_sets = ?, target_reps = ?, target_weight_kg = ?,
+                updated_at = ?, deleted_at = NULL
+          WHERE id = ?`,
+        targets.sets,
+        targets.reps,
+        targets.weightKg,
+        timestamp,
+        id,
+      );
+    } else {
+      await db.runAsync(
+        `INSERT INTO week_targets
+           (id, week_start, routine_exercise_id, target_sets, target_reps, target_weight_kg,
+            updated_at, deleted_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
+        id,
+        weekStart,
+        routineExerciseId,
+        targets.sets,
+        targets.reps,
+        targets.weightKg,
+        timestamp,
+      );
+    }
+    await enqueue(db, 'week_targets', id);
+  });
+}
+
+/** Desfaz o ajuste de uma semana: o exercicio volta a herdar do historico. */
+export async function clearWeekTarget(
+  weekStart: string,
+  routineExerciseId: string,
+): Promise<void> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ id: string }>(
+    'SELECT id FROM week_targets WHERE week_start = ? AND routine_exercise_id = ? AND deleted_at IS NULL',
+    weekStart,
+    routineExerciseId,
+  );
+  for (const row of rows) await softDelete('week_targets', row.id);
+}
+
 // ------------------------------------------------------------------ treinos
 
 export async function getSession(id: string): Promise<Session | null> {
@@ -297,7 +566,9 @@ export async function startSession(routineId: string | null, when = new Date()):
     deletedAt: null,
   };
 
-  const planned = routineId ? await listRoutineExercises(routineId) : [];
+  // Os alvos saem da semana do treino, nao do plano estatico: e o que faz a
+  // sessao ja nascer com o peso que o usuario levantou da ultima vez.
+  const planned = routineId ? await targetsForWeek(weekStartKey(when), routineId) : [];
 
   await db.withTransactionAsync(async () => {
     await db.runAsync(
@@ -312,7 +583,7 @@ export async function startSession(routineId: string | null, when = new Date()):
     await enqueue(db, 'sessions', session.id);
 
     for (const item of planned) {
-      for (let index = 1; index <= item.targetSets; index += 1) {
+      for (let index = 1; index <= item.targets.sets; index += 1) {
         const setId = newId();
         await db.runAsync(
           `INSERT INTO session_sets
@@ -322,8 +593,8 @@ export async function startSession(routineId: string | null, when = new Date()):
           session.id,
           item.exerciseId,
           index,
-          item.targetReps,
-          item.targetWeightKg,
+          item.targets.reps,
+          item.targets.weightKg,
           session.updatedAt,
         );
         await enqueue(db, 'session_sets', setId);

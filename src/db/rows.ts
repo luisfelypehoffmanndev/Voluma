@@ -6,6 +6,7 @@ import type {
   Session,
   SessionSet,
   Weekday,
+  WeekTarget,
 } from '@/domain/types';
 
 /**
@@ -37,6 +38,17 @@ export type RoutineExerciseRow = {
   routine_id: string;
   exercise_id: string;
   position: number;
+  target_sets: number;
+  target_reps: number;
+  target_weight_kg: number;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+export type WeekTargetRow = {
+  id: string;
+  week_start: string;
+  routine_exercise_id: string;
   target_sets: number;
   target_reps: number;
   target_weight_kg: number;
@@ -97,6 +109,17 @@ export const toRoutineExercise = (row: RoutineExerciseRow): RoutineExercise => (
   routineId: row.routine_id,
   exerciseId: row.exercise_id,
   position: row.position,
+  targetSets: row.target_sets,
+  targetReps: row.target_reps,
+  targetWeightKg: row.target_weight_kg,
+  updatedAt: row.updated_at,
+  deletedAt: row.deleted_at,
+});
+
+export const toWeekTarget = (row: WeekTargetRow): WeekTarget => ({
+  id: row.id,
+  weekStart: row.week_start,
+  routineExerciseId: row.routine_exercise_id,
   targetSets: row.target_sets,
   targetReps: row.target_reps,
   targetWeightKg: row.target_weight_kg,
