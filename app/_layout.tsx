@@ -53,7 +53,7 @@ export default function RootLayout() {
         >
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="session/[id]" options={{ animation: 'slide_from_bottom' }} />
-          <Stack.Screen name="routine/[id]" />
+          <Stack.Screen name="day/[weekday]" />
           <Stack.Screen name="bodyweight" options={{ presentation: 'modal' }} />
           <Stack.Screen name="login" options={{ presentation: 'modal' }} />
         </Stack>

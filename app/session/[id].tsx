@@ -24,7 +24,7 @@ import {
   updateSet,
 } from '@/db/repo';
 import type { SessionSet } from '@/domain/types';
-import { weekdayLabel } from '@/domain/week';
+import { weekdayName } from '@/domain/week';
 import {
   completedSets,
   formatVolume,
@@ -262,7 +262,7 @@ export default function SessionScreen() {
             <Body>Adicionar exercício</Body>
             <Meta>
               {routine
-                ? `entra também em ${weekdayLabel(routine.weekday).toLowerCase()}`
+                ? `entra também toda ${weekdayName(routine.weekday).toLowerCase()}`
                 : 'só neste treino — sem rotina para repetir'}
             </Meta>
           </View>
@@ -286,7 +286,7 @@ export default function SessionScreen() {
         catalog={data.catalog.filter((exercise) => !usedExercises.has(exercise.id))}
         subtitle={
           routine
-            ? `Passa a valer toda ${weekdayLabel(routine.weekday).toLowerCase().replace(/s$/, '')}`
+            ? `Passa a valer toda ${weekdayName(routine.weekday).toLowerCase()}`
             : 'Só neste treino'
         }
         onClose={() => setPicking(false)}

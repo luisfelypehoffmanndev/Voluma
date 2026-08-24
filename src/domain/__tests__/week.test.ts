@@ -1,4 +1,4 @@
-import { addWeeks, daysSinceMonthStart, fromDateKey, lastNDays, monthGrid, nextRoutine, routineForWeekday, toDateKey, weekPlan, weekRangeLabel, weekStartKey, weekdayLabel, weekdayOf } from '../week';
+import { addWeeks, daysSinceMonthStart, fromDateKey, lastNDays, monthGrid, nextRoutine, routineForWeekday, toDateKey, weekPlan, weekRangeLabel, weekStartKey, weekdayLabel, weekdayName, weekdayOf, weeksBetween } from '../week';
 import type { Routine, Weekday } from '../types';
 
 function makeRoutine(overrides: Partial<Routine> & { weekday: Weekday }): Routine {
@@ -258,5 +258,44 @@ describe('weekPlan', () => {
       makeRoutine({ weekday: 1, deletedAt: '2026-08-20T10:00:00.000Z' }),
     ]);
     expect(plan[1]).toBeNull();
+  });
+});
+
+describe('weeksBetween', () => {
+  it('mesma semana da zero', () => {
+    expect(weeksBetween('2026-08-16', '2026-08-16')).toBe(0);
+  });
+
+  it('conta para frente e para tras', () => {
+    expect(weeksBetween('2026-08-16', '2026-08-23')).toBe(1);
+    expect(weeksBetween('2026-08-16', '2026-08-09')).toBe(-1);
+    expect(weeksBetween('2026-08-16', '2026-09-06')).toBe(3);
+  });
+
+  it('atravessa o horario de verao sem errar a semana', () => {
+    // Se a conta fosse em milissegundos, a hora a mais ou a menos na virada
+    // arredondaria para a semana errada.
+    expect(weeksBetween('2026-10-11', '2026-10-18')).toBe(1);
+    expect(weeksBetween('2027-02-14', '2027-02-21')).toBe(1);
+  });
+});
+
+describe('weekdayName', () => {
+  it('e singular, diferente do rotulo recorrente', () => {
+    expect(weekdayName(1)).toBe('Segunda');
+    expect(weekdayLabel(1)).toBe('Segundas');
+  });
+
+  it('cobre os sete dias comecando no domingo', () => {
+    const names = [0, 1, 2, 3, 4, 5, 6].map((d) => weekdayName(d as Weekday));
+    expect(names).toEqual([
+      'Domingo',
+      'Segunda',
+      'Terça',
+      'Quarta',
+      'Quinta',
+      'Sexta',
+      'Sábado',
+    ]);
   });
 });

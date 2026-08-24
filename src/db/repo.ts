@@ -318,11 +318,13 @@ export async function reorderRoutineExercises(orderedIds: readonly string[]): Pr
 
 // ------------------------------------------------------- alvos de uma semana
 
+/** De qual degrau da cascata sairam os numeros — a tela mostra isso ao usuario. */
+export type TargetSource = 'override' | 'lastActual' | 'plan';
+
 /** Um exercicio do dia com os numeros ja resolvidos para uma semana. */
 export type WeekExercise = RoutineExerciseWithName & {
   targets: Targets;
-  /** true quando os numeros vieram de um ajuste explicito daquela semana. */
-  adjusted: boolean;
+  source: TargetSource;
 };
 
 /**
@@ -427,20 +429,22 @@ export async function targetsForWeek(
       ? null // ja tem decisao explicita; nao gasta consulta com o historico
       : await lastPerformedTargets(db, item.exerciseId, routineId, weekStart);
 
+    const overrideTargets = override
+      ? {
+          sets: override.targetSets,
+          reps: override.targetReps,
+          weightKg: override.targetWeightKg,
+        }
+      : null;
+
     resolved.push({
       ...item,
-      adjusted: override !== null,
-      targets: resolveTargets(
-        override
-          ? {
-              sets: override.targetSets,
-              reps: override.targetReps,
-              weightKg: override.targetWeightKg,
-            }
-          : null,
-        performed,
-        { sets: item.targetSets, reps: item.targetReps, weightKg: item.targetWeightKg },
-      ),
+      source: overrideTargets ? 'override' : performed ? 'lastActual' : 'plan',
+      targets: resolveTargets(overrideTargets, performed, {
+        sets: item.targetSets,
+        reps: item.targetReps,
+        weightKg: item.targetWeightKg,
+      }),
     });
   }
 
