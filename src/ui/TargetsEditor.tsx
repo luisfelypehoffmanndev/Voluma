@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import type { Targets } from '@/domain/types';
-import { spacing } from '@/theme/tokens';
+import { formatDistance, formatPace } from '@/domain/run';
+import type { ExerciseKind, Targets } from '@/domain/types';
+import { colors, spacing } from '@/theme/tokens';
 
 import { Stepper } from './Stepper';
+import { Meta } from './Text';
 
 /** Tempo de mao parada antes de gravar. Curto o bastante para nao se perder ao
  *  sair da tela, longo o bastante para um ajuste de 3 toques virar uma escrita. */
@@ -15,6 +17,8 @@ const formatWeight = (value: number): string =>
 
 type Props = {
   value: Targets;
+  /** `run` troca series/reps/carga por distancia e tempo. */
+  kind?: ExerciseKind;
   onCommit: (targets: Targets) => void;
   /**
    * Muda quando o destino da gravacao muda — a chave da semana, por exemplo.
@@ -26,25 +30,24 @@ type Props = {
 };
 
 /**
- * Alvos de um exercicio: series, reps e carga.
+ * Alvos de um exercicio: series, reps e carga; distancia e tempo na corrida.
  *
- * Os tres ficam empilhados, um por linha. Lado a lado eles nao cabem — cada
+ * Os campos ficam empilhados, um por linha. Lado a lado eles nao cabem — cada
  * stepper pede 138px e a area util do card e ~310px num telefone comum, entao o
  * terceiro era cortado pelo `overflow: hidden` do Card.
  *
  * O valor exibido vive aqui, em estado local, e so desce para o banco depois que
  * a mao para. Antes cada toque gravava e recarregava, e o proximo toque somava em
  * cima do valor antigo que ainda estava na tela: dois toques rapidos no + viravam
- * um so. Os tres campos sao gravados juntos porque o destino grava a linha
- * inteira — commitar um de cada vez reescreveria os outros dois com o valor
- * velho.
+ * um so. Os campos sao gravados juntos porque o destino grava a linha inteira —
+ * commitar um de cada vez reescreveria os outros com o valor velho.
  *
  * O componente nao sabe onde grava: quem chama decide se o destino e o plano do
  * dia ou o ajuste de uma semana. Foi assim que o eixo de semana entrou sem
  * mexer em nada da mecanica de debounce abaixo, que existe por causa de tres
  * bugs reais.
  */
-export function TargetsEditor({ value, onCommit, resetKey }: Props) {
+export function TargetsEditor({ value, kind = 'strength', onCommit, resetKey }: Props) {
   const [targets, setTargets] = useState(value);
 
   const dirty = useRef(false);
@@ -60,7 +63,7 @@ export function TargetsEditor({ value, onCommit, resetKey }: Props) {
   useEffect(() => {
     if (dirty.current) return;
     setTargets(value);
-  }, [value.sets, value.reps, value.weightKg]);
+  }, [value.sets, value.reps, value.weightKg, value.distanceKm, value.durationMin]);
 
   // Trocar de semana descarta a edicao pendente em vez de grava-la: o commit
   // atrasado cairia na semana nova, com os numeros da antiga.
@@ -97,6 +100,39 @@ export function TargetsEditor({ value, onCommit, resetKey }: Props) {
     timer.current = setTimeout(commit, COMMIT_DELAY);
   };
 
+  if (kind === 'run') {
+    const pace = formatPace(targets.distanceKm, targets.durationMin);
+    return (
+      <View style={styles.targets}>
+        <Stepper
+          layout="row"
+          label="DISTÂNCIA"
+          value={targets.distanceKm}
+          step={0.5}
+          min={0}
+          max={200}
+          suffix="km"
+          editable
+          format={formatDistance}
+          onChange={(distanceKm) => change({ distanceKm })}
+        />
+        <Stepper
+          layout="row"
+          label="TEMPO"
+          value={targets.durationMin}
+          step={1}
+          min={0}
+          max={600}
+          suffix="min"
+          editable
+          onChange={(durationMin) => change({ durationMin })}
+        />
+        {/* Ritmo e derivado, nunca gravado: some quando falta distancia ou tempo. */}
+        {pace ? <Meta style={styles.pace}>{`ritmo ${pace} /km`}</Meta> : null}
+      </View>
+    );
+  }
+
   return (
     <View style={styles.targets}>
       <Stepper
@@ -132,5 +168,9 @@ export function TargetsEditor({ value, onCommit, resetKey }: Props) {
 const styles = StyleSheet.create({
   targets: {
     marginTop: -spacing.xs,
+  },
+  pace: {
+    marginTop: spacing.sm,
+    color: colors.textSecondary,
   },
 });

@@ -16,9 +16,19 @@ export type Syncable = {
 /** 0 = domingo ... 6 = sabado, igual a Date#getDay. */
 export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
+/**
+ * O que o exercicio mede.
+ *
+ * `strength` e o caso geral: series, reps e carga. `run` existe para a corrida,
+ * que mede distancia e tempo — os campos de carga ficam zerados e nao entram no
+ * volume levantado.
+ */
+export type ExerciseKind = 'strength' | 'run';
+
 export type Exercise = Syncable & {
   name: string;
   muscleGroup: string | null;
+  kind: ExerciseKind;
 };
 
 /** Um treino planejado, fixo em um dia da semana ("Costas + biceps · Segundas"). */
@@ -35,13 +45,25 @@ export type RoutineExercise = Syncable & {
   targetSets: number;
   targetReps: number;
   targetWeightKg: number;
+  targetDistanceKm: number;
+  targetDurationMin: number;
 };
 
-/** Series, reps e carga de um exercicio — o trio que anda sempre junto. */
+/**
+ * Os alvos de um exercicio.
+ *
+ * Os cinco campos vivem juntos num tipo so, em vez de um tipo por modalidade,
+ * porque e o que deixa `routine_exercises`, `week_targets` e o editor de alvos
+ * atenderem corrida sem duplicar nada. Quem le decide o que importa pelo
+ * `kind` do exercicio: musculacao olha sets/reps/weightKg, corrida olha
+ * distanceKm/durationMin. O outro par fica em zero.
+ */
 export type Targets = {
   sets: number;
   reps: number;
   weightKg: number;
+  distanceKm: number;
+  durationMin: number;
 };
 
 /**
@@ -58,6 +80,8 @@ export type WeekTarget = Syncable & {
   targetSets: number;
   targetReps: number;
   targetWeightKg: number;
+  targetDistanceKm: number;
+  targetDurationMin: number;
 };
 
 /** Uma execucao real de treino, em uma data. */
@@ -76,6 +100,10 @@ export type SessionSet = Syncable & {
   setIndex: number;
   reps: number;
   weightKg: number;
+  /** Corrida: quanto foi percorrido. Zero em exercicio de carga. */
+  distanceKm: number;
+  /** Corrida: quanto tempo levou, em minutos. Zero em exercicio de carga. */
+  durationMin: number;
   done: boolean;
 };
 

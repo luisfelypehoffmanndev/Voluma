@@ -24,6 +24,13 @@ import {
   updateSet,
 } from '@/db/repo';
 import type { SessionSet } from '@/domain/types';
+import {
+  formatDistance,
+  formatDuration,
+  formatPace,
+  totalDistance,
+  totalDuration,
+} from '@/domain/run';
 import { weekdayName } from '@/domain/week';
 import {
   completedSets,
@@ -36,7 +43,7 @@ import { bumpData, useQuery } from '@/store/data';
 import { useAuth } from '@/sync/auth';
 import { colors, fontSize, hitSlop, radius, spacing } from '@/theme/tokens';
 import { DashedBar } from '@/ui/DashedBar';
-import { DEFAULT_TARGETS, ExercisePicker } from '@/ui/ExercisePicker';
+import { DEFAULT_RUN_TARGETS, DEFAULT_TARGETS, ExercisePicker } from '@/ui/ExercisePicker';
 import { Header, Screen } from '@/ui/Screen';
 import { StatNumber } from '@/ui/StatNumber';
 import { Body, Label, Meta } from '@/ui/Text';
@@ -73,6 +80,7 @@ export default function SessionScreen() {
         sets,
         catalog: exercises,
         names: new Map(exercises.map((e) => [e.id, e.name])),
+        runIds: new Set(exercises.filter((e) => e.kind === 'run').map((e) => e.id)),
       };
     }, [id]),
   );
@@ -92,7 +100,7 @@ export default function SessionScreen() {
 
   // Aplica as escritas otimistas por cima do que veio do banco.
   const sets = data.sets.map((set) => ({ ...set, ...overrides.get(set.id) }));
-  const groups = groupByExercise(sets, data.names);
+  const groups = groupByExercise(sets, data.names, data.runIds);
 
   const patch = (setId: string, change: Partial<SessionSet>) => {
     setOverrides((current) => {
@@ -127,10 +135,12 @@ export default function SessionScreen() {
    * entra so na sessao, e o texto do botao avisa.
    */
   const addExercise = async (exerciseId: string) => {
+    const picked = data.catalog.find((exercise) => exercise.id === exerciseId);
+    const initial = picked?.kind === 'run' ? DEFAULT_RUN_TARGETS : DEFAULT_TARGETS;
     if (routine) {
-      await addExerciseToRoutine(routine.id, exerciseId, DEFAULT_TARGETS);
+      await addExerciseToRoutine(routine.id, exerciseId, initial);
     }
-    await addExerciseToSession(id, exerciseId, DEFAULT_TARGETS);
+    await addExerciseToSession(id, exerciseId, initial);
     bumpData();
     setPicking(false);
     reload();
@@ -176,10 +186,7 @@ export default function SessionScreen() {
             >
               <View style={styles.groupTitle}>
                 <Body numberOfLines={1}>{group.name}</Body>
-                <Meta>
-                  {group.doneCount}/{group.sets.length} séries ·{' '}
-                  {formatVolume(group.volume)} kg
-                </Meta>
+                <Meta>{groupSummary(group)}</Meta>
               </View>
             </Pressable>
 
@@ -199,21 +206,42 @@ export default function SessionScreen() {
 
                   {isOpen ? (
                     <View style={styles.steppers}>
-                      <Stepper
-                        label="REPS"
-                        value={set.reps}
-                        min={0}
-                        onChange={(reps) => patch(set.id, { reps })}
-                      />
-                      <Stepper
-                        label="PESO"
-                        value={set.weightKg}
-                        step={2.5}
-                        min={0}
-                        suffix="kg"
-                        format={formatWeight}
-                        onChange={(weightKg) => patch(set.id, { weightKg })}
-                      />
+                      {group.isRun ? (
+                        <>
+                          <Stepper
+                            label="KM"
+                            value={set.distanceKm}
+                            step={0.5}
+                            min={0}
+                            format={formatDistance}
+                            onChange={(distanceKm) => patch(set.id, { distanceKm })}
+                          />
+                          <Stepper
+                            label="MIN"
+                            value={set.durationMin}
+                            min={0}
+                            onChange={(durationMin) => patch(set.id, { durationMin })}
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <Stepper
+                            label="REPS"
+                            value={set.reps}
+                            min={0}
+                            onChange={(reps) => patch(set.id, { reps })}
+                          />
+                          <Stepper
+                            label="PESO"
+                            value={set.weightKg}
+                            step={2.5}
+                            min={0}
+                            suffix="kg"
+                            format={formatWeight}
+                            onChange={(weightKg) => patch(set.id, { weightKg })}
+                          />
+                        </>
+                      )}
                       <Pressable
                         hitSlop={hitSlop}
                         onPress={() => {
@@ -227,9 +255,15 @@ export default function SessionScreen() {
                   ) : (
                     <View style={styles.compact}>
                       <Body style={styles.compactValue}>
-                        {set.reps} × {formatWeight(set.weightKg)} kg
+                        {group.isRun
+                          ? `${formatDistance(set.distanceKm)} km · ${formatDuration(set.durationMin)}`
+                          : `${set.reps} × ${formatWeight(set.weightKg)} kg`}
                       </Body>
-                      <Meta>{formatVolume(set.reps * set.weightKg)} kg</Meta>
+                      <Meta>
+                        {group.isRun
+                          ? (formatPace(set.distanceKm, set.durationMin) ?? '—')
+                          : `${formatVolume(set.reps * set.weightKg)} kg`}
+                      </Meta>
                     </View>
                   )}
                 </View>
@@ -243,7 +277,9 @@ export default function SessionScreen() {
               }}
             >
               <PlusIcon size={14} color={colors.textSecondary} />
-              <Label style={styles.addSetLabel}>Série extra</Label>
+              <Label style={styles.addSetLabel}>
+                {group.isRun ? 'Outra corrida' : 'Série extra'}
+              </Label>
             </Pressable>
           </View>
         ))}
@@ -303,12 +339,29 @@ export default function SessionScreen() {
 type Group = {
   exerciseId: string;
   name: string;
+  isRun: boolean;
   sets: SessionSet[];
   volume: number;
   doneCount: number;
 };
 
-function groupByExercise(sets: SessionSet[], names: Map<string, string>): Group[] {
+/** O resumo do grupo: km e tempo na corrida, series e volume na carga. */
+function groupSummary(group: Group): string {
+  if (group.isRun) {
+    const km = totalDistance(group.sets);
+    const minutes = totalDuration(group.sets);
+    const pace = formatPace(km, minutes);
+    const base = `${formatDistance(km)} km · ${formatDuration(minutes)}`;
+    return pace ? `${base} · ${pace} /km` : base;
+  }
+  return `${group.doneCount}/${group.sets.length} séries · ${formatVolume(group.volume)} kg`;
+}
+
+function groupByExercise(
+  sets: SessionSet[],
+  names: Map<string, string>,
+  runIds: Set<string>,
+): Group[] {
   const volumes = volumeByExercise(sets);
   const order: string[] = [];
   const buckets = new Map<string, SessionSet[]>();
@@ -326,6 +379,7 @@ function groupByExercise(sets: SessionSet[], names: Map<string, string>): Group[
     return {
       exerciseId,
       name: names.get(exerciseId) ?? 'Exercício',
+      isRun: runIds.has(exerciseId),
       sets: bucket.sort((a, b) => a.setIndex - b.setIndex),
       volume: volumes.get(exerciseId) ?? 0,
       doneCount: completedSets(bucket),

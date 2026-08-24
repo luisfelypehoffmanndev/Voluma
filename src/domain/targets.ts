@@ -43,7 +43,15 @@ export function targetsFromSets(sets: readonly PerformedSet[]): Targets | null {
     if (set.setIndex > last.setIndex) last = set;
   }
 
-  return { sets: sets.length, reps: last.reps, weightKg: last.weightKg };
+  // Distancia e tempo zerados: exercicio de carga nao percorre nada, e e isso
+  // que mantem o total de km da home livre de musculacao.
+  return {
+    sets: sets.length,
+    reps: last.reps,
+    weightKg: last.weightKg,
+    distanceKm: 0,
+    durationMin: 0,
+  };
 }
 
 /**

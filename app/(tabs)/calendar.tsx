@@ -14,6 +14,7 @@ import {
   type WeekExercise,
 } from '@/db/repo';
 import type { Routine } from '@/domain/types';
+import { formatDistance, formatDuration } from '@/domain/run';
 import { formatVolume, formatWeight, totalVolume, volumeByExercise } from '@/domain/volume';
 import {
   fromDateKey,
@@ -253,7 +254,11 @@ function DayDetail({
           <Body numberOfLines={1} style={styles.detailName}>
             {item.exerciseName}
           </Body>
-          <Meta>{`${item.targets.sets} × ${item.targets.reps} · ${formatWeight(item.targets.weightKg)} kg`}</Meta>
+          <Meta>
+            {item.exerciseKind === 'run'
+              ? `${formatDistance(item.targets.distanceKm)} km · ${formatDuration(item.targets.durationMin)}`
+              : `${item.targets.sets} × ${item.targets.reps} · ${formatWeight(item.targets.weightKg)} kg`}
+          </Meta>
         </View>
       ))}
     </Card>

@@ -10,7 +10,7 @@
  * last-write-wins do sync. Nada e apagado de verdade: delete e soft delete.
  */
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const MIGRATIONS: readonly string[] = [
   // v1 — schema inicial
@@ -176,6 +176,28 @@ export const MIGRATIONS: readonly string[] = [
    WHERE id IN (SELECT id FROM dedupe_perdedoras);
 
   DROP TABLE dedupe_perdedoras;
+  `,
+
+  // v3 — corrida: distancia e tempo ao lado de series, reps e carga
+  `
+  -- A coluna kind distingue a corrida do resto. Default 'strength' faz toda linha que
+  -- ja existe continuar sendo exercicio de carga, sem backfill.
+  ALTER TABLE exercises ADD COLUMN kind TEXT NOT NULL DEFAULT 'strength';
+
+  -- Os alvos ganham o par distancia/tempo. Ficam em zero na musculacao, e os
+  -- campos de carga ficam em zero na corrida — e o que mantem setVolume
+  -- (reps vezes peso) devolvendo zero para corrida sem nenhum caso especial, e o
+  -- "Volume levantado" em kg livre de quilometro.
+  ALTER TABLE routine_exercises ADD COLUMN target_distance_km REAL NOT NULL DEFAULT 0;
+  ALTER TABLE routine_exercises ADD COLUMN target_duration_min INTEGER NOT NULL DEFAULT 0;
+
+  ALTER TABLE week_targets ADD COLUMN target_distance_km REAL NOT NULL DEFAULT 0;
+  ALTER TABLE week_targets ADD COLUMN target_duration_min INTEGER NOT NULL DEFAULT 0;
+
+  ALTER TABLE session_sets ADD COLUMN distance_km REAL NOT NULL DEFAULT 0;
+  ALTER TABLE session_sets ADD COLUMN duration_min INTEGER NOT NULL DEFAULT 0;
+
+  CREATE INDEX IF NOT EXISTS idx_exercises_kind ON exercises (kind);
   `,
 ];
 

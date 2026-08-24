@@ -20,6 +20,8 @@ function makeSet(overrides: Partial<SessionSet>): SessionSet {
     setIndex: 1,
     reps: 10,
     weightKg: 60,
+    distanceKm: 0,
+    durationMin: 0,
     done: true,
     ...overrides,
   };
