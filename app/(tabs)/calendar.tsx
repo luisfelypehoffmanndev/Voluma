@@ -8,16 +8,20 @@ import {
   listRoutines,
   listSessionSets,
   startSession,
+  targetsForWeek,
   trainedDates,
   volumeByDate,
+  type WeekExercise,
 } from '@/db/repo';
-import { formatVolume, totalVolume, volumeByExercise } from '@/domain/volume';
+import type { Routine } from '@/domain/types';
+import { formatVolume, formatWeight, totalVolume, volumeByExercise } from '@/domain/volume';
 import {
   fromDateKey,
   monthGrid,
   monthLabel,
   routineForWeekday,
   toDateKey,
+  weekStartKey,
   weekdayInitials,
   weekdayOf,
 } from '@/domain/week';
@@ -72,7 +76,13 @@ export default function CalendarScreen() {
         listRoutines(),
         listExercises(),
       ]);
-      const planned = routineForWeekday(routines, weekdayOf(fromDateKey(selected)));
+      const routine = routineForWeekday(routines, weekdayOf(fromDateKey(selected)));
+      // Os alvos da SEMANA daquela data, nao os de hoje: abrir uma segunda de
+      // tres semanas atras tem que mostrar o que estava valendo naquela semana.
+      const plannedItems = routine
+        ? await targetsForWeek(weekStartKey(fromDateKey(selected)), routine.id)
+        : [];
+      const planned = routine ? { ...routine, items: plannedItems } : null;
       if (!session) return { session: null, planned, sets: [], names: new Map<string, string>() };
 
       const sets = await listSessionSets(session.id);
@@ -174,7 +184,8 @@ export default function CalendarScreen() {
 
 type DayDetailData = {
   session: Awaited<ReturnType<typeof getSessionByDate>>;
-  planned: ReturnType<typeof routineForWeekday>;
+  /** A rotina do dia com os exercicios ja resolvidos para a semana daquela data. */
+  planned: (Routine & { items: WeekExercise[] }) | null;
   sets: Awaited<ReturnType<typeof listSessionSets>>;
   names: Map<string, string>;
 };
@@ -203,7 +214,7 @@ function DayDetail({
       <Card onPress={() => onOpen(session.id)}>
         <Label>{shortDate(date)}</Label>
         <View style={styles.detailHead}>
-          <Body>{planned?.name ?? 'Treino livre'}</Body>
+          <Body>{dayTitle(planned?.name ?? '', planned?.items.length ?? 0, 'Treino livre')}</Body>
           <Meta>
             {formatVolume(totalVolume(sets))} kg
             {session.finishedAt
@@ -224,21 +235,36 @@ function DayDetail({
     );
   }
 
+  const items = planned?.items ?? [];
+  const trains = items.length > 0;
+
   return (
     <Card onPress={isFuture ? undefined : () => onStart(planned?.id ?? null)}>
       <Label>{shortDate(date)}</Label>
       <View style={styles.detailHead}>
-        <Body>{planned?.name ?? 'Descanso'}</Body>
+        <Body>{dayTitle(planned?.name ?? '', items.length, 'Descanso')}</Body>
         <Meta>
-          {planned
-            ? isFuture
-              ? 'planejado'
-              : 'toque para registrar'
-            : 'nenhuma rotina neste dia'}
+          {trains ? (isFuture ? 'planejado' : 'toque para registrar') : 'sem exercícios neste dia'}
         </Meta>
       </View>
+
+      {items.map((item) => (
+        <View key={item.id} style={styles.detailRow}>
+          <Body numberOfLines={1} style={styles.detailName}>
+            {item.exerciseName}
+          </Body>
+          <Meta>{`${item.targets.sets} × ${item.targets.reps} · ${formatWeight(item.targets.weightKg)} kg`}</Meta>
+        </View>
+      ))}
     </Card>
   );
+}
+
+/** O nome do dia na tela; `fallback` cobre o dia sem rotulo e sem exercicio. */
+function dayTitle(name: string, exerciseCount: number, fallback: string): string {
+  const label = name.trim();
+  if (label) return label;
+  return exerciseCount === 0 ? fallback : 'Sem nome';
 }
 
 const styles = StyleSheet.create({

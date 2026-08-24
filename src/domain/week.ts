@@ -42,6 +42,20 @@ export function weekStartKey(date: Date): string {
   return toDateKey(start);
 }
 
+/**
+ * Quantas semanas separam duas chaves de semana. 0 = a mesma, -1 = a anterior.
+ *
+ * Divide por dias inteiros em vez de milissegundos porque o horario de verao
+ * muda a diferenca em uma hora e o arredondamento erraria a semana na virada.
+ */
+export function weeksBetween(from: string, to: string): number {
+  const start = fromDateKey(from);
+  const end = fromDateKey(to);
+  const dayInMs = 24 * 60 * 60 * 1000;
+  const days = Math.round((end.getTime() - start.getTime()) / dayInMs);
+  return Math.round(days / 7);
+}
+
 /** Anda `count` semanas a partir de uma chave de semana. Aceita negativo. */
 export function addWeeks(weekStart: string, count: number): string {
   const date = fromDateKey(weekStart);
@@ -96,9 +110,28 @@ const WEEKDAY_LABELS = [
 
 const WEEKDAY_SHORT = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'] as const;
 
+const WEEKDAY_NAMES = [
+  'Domingo',
+  'Segunda',
+  'Terça',
+  'Quarta',
+  'Quinta',
+  'Sexta',
+  'Sábado',
+] as const;
+
 /** "Sextas" — o rotulo recorrente do plano, como no mockup. */
 export function weekdayLabel(weekday: Weekday): string {
   return WEEKDAY_LABELS[weekday];
+}
+
+/**
+ * "Sexta" — o nome de UM dia, para titular a tela do dia e as linhas de
+ * Ajustes. Existe separado de `weekdayLabel` porque o plural ali carrega o
+ * sentido recorrente ("toda sexta"), que nao serve para nomear um dia so.
+ */
+export function weekdayName(weekday: Weekday): string {
+  return WEEKDAY_NAMES[weekday];
 }
 
 /** Iniciais para o cabecalho do calendario, comecando no domingo. */
