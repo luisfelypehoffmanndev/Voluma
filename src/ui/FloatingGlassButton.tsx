@@ -17,8 +17,8 @@ type Props = {
  * do brief. O accent fica reservado para acoes terminais (finalizar, registrar);
  * estas sao acoes de edicao e nao competem por atencao.
  *
- * Vale lembrar que ele gasta o unico vidro permitido na tela: onde este botao
- * aparece, nada mais pode ser vidro.
+ * Ele e nivel 3, como a tab bar: esconde o que passa por baixo. Os cards da
+ * mesma tela tambem sao vidro, mas de nivel 1 — muda a densidade, nao a materia.
  */
 export function FloatingGlassButton({ label, onPress, bottom }: Props) {
   return (

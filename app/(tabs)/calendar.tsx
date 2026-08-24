@@ -27,7 +27,7 @@ import {
   weekdayOf,
 } from '@/domain/week';
 import { bumpData, useQuery } from '@/store/data';
-import { colors, fontSize, fonts, radius, spacing } from '@/theme/tokens';
+import { colors, fontSize, fonts, radius, spacing, surfaces } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
 import { duration, shortDate } from '@/ui/relative';
 import { Header, RoundButton, Screen } from '@/ui/Screen';
@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
   },
   /** Selecionado: preenchido. E o estado que o dedo acabou de causar. */
   daySelected: {
-    backgroundColor: colors.surfaceRaised,
+    backgroundColor: surfaces.raised,
     borderColor: colors.border,
   },
   /** Os dois ao mesmo tempo: preenchido, com a borda um passo mais visivel. */
@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
+    borderTopColor: colors.divider,
   },
   detailName: {
     flex: 1,

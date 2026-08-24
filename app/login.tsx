@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 
 import { useAuth } from '@/sync/auth';
-import { colors, fontSize, fonts, radius, spacing } from '@/theme/tokens';
+import { colors, fontSize, fonts, radius, spacing, surfaces } from '@/theme/tokens';
 import { Header, Screen } from '@/ui/Screen';
 import { Body, Label, Meta } from '@/ui/Text';
 import { ArrowDownIcon } from '@/ui/icons';
@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
   input: {
     height: 52,
     paddingHorizontal: spacing.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: surfaces.raised,
     borderRadius: radius.inner,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,

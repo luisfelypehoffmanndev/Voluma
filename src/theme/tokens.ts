@@ -9,13 +9,18 @@
 export const colors = {
   /** fundo base, quase preto — nunca #000 puro (mata a profundidade) */
   bg: '#0A0A0A',
-  /** cards e superficies elevadas */
-  surface: '#161616',
-  /** superficie um passo acima, para linhas de serie dentro de um card */
-  surfaceRaised: '#1E1E1E',
   /** bordas de 1px, nunca mais grossas */
   border: 'rgba(255,255,255,0.08)',
-  /** borda um pouco mais visivel, para o highlight superior do glass */
+  /**
+   * Divisores dentro de um card.
+   *
+   * Mais forte que `border` de proposito: a linha nao vive mais sobre o
+   * #161616 chapado de antes, e sim sobre uma superficie que clareia ao
+   * atravessar um halo do campo de luz. A 0,08 ela enfraquecia justamente onde
+   * o card estava mais claro.
+   */
+  divider: 'rgba(255,255,255,0.12)',
+  /** borda um pouco mais visivel, para marcar estado sem mudar preenchimento */
   borderStrong: 'rgba(255,255,255,0.18)',
   textPrimary: '#F5F5F5',
   textSecondary: '#8A8A8A',
@@ -55,8 +60,60 @@ export const colors = {
 } as const;
 
 /**
- * Vidro — camada estrutural, nao enfeite. O que flutua e vidro; o que e
- * conteudo e solido.
+ * A escada de densidade.
+ *
+ * Nenhuma superficie do app tem cor propria: todas sao branco translucido sobre
+ * o campo de luz do `Ambient`. O que separa um nivel do outro e o alpha, nao a
+ * materia. Branco a alpha `A` sobre um valor `B` resulta em `B + A·(255−B)` —
+ * a conta vive em `src/theme/composite.ts`, com teste, e e ela que fixou os
+ * numeros abaixo:
+ *
+ * | nivel | o que                  | alpha       | sobre o fundo sem halo |
+ * |-------|------------------------|-------------|------------------------|
+ * | 1     | card, grupo de treino  | 0,06        | `#191919`              |
+ * | 2     | superficie dentro dele | 0,08        | `#2B2B2B`              |
+ * | 3     | tab bar, modal         | ver `glass` | quase opaco            |
+ *
+ * Duas consequencias que valem lembrar antes de mexer nos valores:
+ *
+ * - **O baseline nao muda.** A 6% o card cai em `#191919` onde nao ha halo —
+ *   praticamente o `#161616` dos cards solidos de antes. O vidro nao clareia o
+ *   app; ele so faz a superficie *amostrar* o que passa por tras.
+ * - **A separacao card/fundo nao depende da posicao.** Ela fica entre 12,9 e
+ *   14,7 pontos em qualquer ponto do campo, contra os 12 fixos de antes.
+ */
+export const surfaces = {
+  /** nivel 1 — cards e grupos, o que rola junto com a pagina */
+  card: 'rgba(255,255,255,0.06)',
+  /**
+   * Nivel 1 pressionado. O vidro *acende*; opacidade na superficie inteira nao
+   * serve aqui, porque apagaria o texto junto e o card quase sumiria.
+   */
+  cardPressed: 'rgba(255,255,255,0.11)',
+  /** nivel 2 — superficie dentro de um card: input, dia selecionado */
+  raised: 'rgba(255,255,255,0.08)',
+  /**
+   * Nivel 1 em area pequena (o botao redondo do cabecalho). Alpha um pouco
+   * maior: numa area de 38px o olho le menos luz atravessando, e a 6% o botao
+   * sumia do cabecalho.
+   */
+  control: 'rgba(255,255,255,0.09)',
+  controlPressed: 'rgba(255,255,255,0.14)',
+  /**
+   * Especular do card — os mesmos tres param do `border-image` do brief, um por
+   * lado, mas mais contido que o do `glass`: sao 5-6 cards por tela, nao um
+   * elemento flutuante solitario.
+   */
+  specularTop: 'rgba(255,255,255,0.18)',
+  specularSide: 'rgba(255,255,255,0.10)',
+  specularBottom: 'rgba(255,255,255,0.05)',
+} as const;
+
+/**
+ * Vidro de nivel 3 — o chrome que flutua e precisa OCULTAR o que passa por
+ * baixo: a tab bar e o modal. E o unico nivel quase opaco da escada; os cards,
+ * que existem justamente para deixar o campo de luz atravessar, usam
+ * `surfaces`.
  *
  * O blur so existe no iOS. No Android o expo-blur crasha com o unico metodo
  * que borra de verdade, entao `GlassSurface` cai para `fillNoBlur` — os tokens
@@ -69,8 +126,12 @@ export const glass = {
    * Preenchimento do Android, onde nao ha blur por tras (ver GlassSurface).
    * Precisa ser quase opaco: sem borrar o que passa embaixo, uma superficie
    * translucida deixaria o conteudo rolar legivel atras do vidro.
+   *
+   * Baixou de 0,93 para 0,86 quando os cards viraram vidro: contra superficies
+   * translucidas, o chrome a 0,93 lia como laje. O limite e a legibilidade — se
+   * der para ler o texto que passa por baixo, subiu demais.
    */
-  fillNoBlur: 'rgba(34,34,37,0.93)',
+  fillNoBlur: 'rgba(34,34,37,0.86)',
   border: 'rgba(255,255,255,0.12)',
   /**
    * Brilho especular — os tres param do `border-image` do brief, um por lado.
@@ -101,12 +162,24 @@ export const accentGlow = {
   elevation: 12,
 } as const;
 
-/** Brilho ambiente atras do conteudo rolavel — sem ele o blur nao tem o que borrar. */
+/**
+ * O campo de luz atras de tudo — o que as superficies de vidro amostram.
+ *
+ * Tres halos brancos cobrindo a tela inteira, e nao um brilho preso no topo:
+ * sem luz la embaixo, um card no fim da rolagem seria vidro sobre preto
+ * chapado, que o brief chama pelo nome de mentira.
+ *
+ * As posicoes sao assimetricas de proposito. Halos simetricos leem como
+ * vinheta; assimetricos leem como luz entrando num ambiente — e a diferenca
+ * entre "campo de luz" e "efeito".
+ */
 export const ambient = {
   color: '#FFFFFF',
-  opacity: 0.04,
-  /** altura do brilho a partir do topo da area rolavel, em px */
-  height: 320,
+  halos: [
+    { id: 'topo', cx: '50%', cy: '0%', r: '85%', opacity: 0.09 },
+    { id: 'direita', cx: '88%', cy: '42%', r: '55%', opacity: 0.06 },
+    { id: 'base', cx: '10%', cy: '88%', r: '60%', opacity: 0.05 },
+  ],
 } as const;
 
 /** Raio consistente por nivel de hierarquia — nunca raios aleatorios entre irmaos. */

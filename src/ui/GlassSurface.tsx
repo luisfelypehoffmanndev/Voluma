@@ -14,7 +14,7 @@ type Props = {
 };
 
 /**
- * A unica forma de fazer vidro neste app.
+ * Vidro de nivel 3: o chrome que flutua e precisa esconder o que passa por baixo.
  *
  * Duas decisoes aqui merecem explicacao, porque as duas ja foram feitas errado:
  *
@@ -40,8 +40,8 @@ type Props = {
  * frame desenhando a arvore de views num Canvas de SOFTWARE, e o framework
  * lanca `Software rendering doesn't support hardware bitmaps`.
  *
- * Lembrete do brief: vidro sobre fundo liso e mentira. Use isto so onde
- * conteudo passa por tras de verdade.
+ * Nao use isto num card. Card e nivel 1 e existe justamente para deixar o campo
+ * de luz atravessar — ver a escada de densidade em src/theme/tokens.ts.
  */
 export function GlassSurface({
   children,

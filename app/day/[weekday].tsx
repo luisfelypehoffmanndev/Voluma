@@ -119,8 +119,6 @@ export default function DayScreen() {
           <DayNameInput routineId={routine.id} value={routine.name} />
         </Card>
 
-        {/* Card solido, nao vidro: o unico vidro da tela ja e o botao flutuante,
-            e este rola junto com o conteudo. */}
         <Card>
           <Label>Semana</Label>
           <View style={styles.weekNav}>

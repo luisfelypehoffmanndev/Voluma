@@ -7,7 +7,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { accentGlow, colors, radius, spacing } from '@/theme/tokens';
+import { accentGlow, colors, radius, spacing, surfaces } from '@/theme/tokens';
 
 type Props = {
   children: ReactNode;
@@ -21,8 +21,21 @@ type Props = {
 };
 
 /**
- * Card de nivel 1. Raio unico (`radius.card`) para toda a hierarquia, borda de
- * 1px, sem sombra: o brief proibe sombra difusa como separador.
+ * Card de nivel 1: vidro sobre o campo de luz do `Ambient`. Raio unico
+ * (`radius.card`) para toda a hierarquia, borda de 1px, sem sombra — o brief
+ * proibe sombra difusa como separador.
+ *
+ * **Nao usa o `GlassSurface`, de proposito.** Aquele e o vidro de nivel 3, o
+ * chrome que flutua e precisa esconder o que passa por baixo; no Android ele e
+ * quase opaco justamente para isso. Reusar ali entregaria cards praticamente
+ * solidos, o oposto do que este componente existe para fazer. Tambem nao ha
+ * `BlurView` aqui: o que passa por tras e um degrade suave, e borrar um degrade
+ * suave devolve o mesmo degrade suave — no iOS seria invisivel e ainda custaria
+ * GPU por card em lista rolavel.
+ *
+ * O card accent continua solido: laranja translucido perderia o soco do unico
+ * elemento de cor da tela, e o glow precisa de uma forma opaca de onde o iOS
+ * tire a sombra.
  */
 export function Card({ children, onPress, accent = false, style }: Props) {
   const surface: StyleProp<ViewStyle> = [
@@ -36,7 +49,13 @@ export function Card({ children, onPress, accent = false, style }: Props) {
   ) : (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [surface, pressed && styles.pressed]}
+      // O card de vidro *acende*; o accent, solido, apaga. Baixar a opacidade
+      // de uma superficie translucida apagaria o texto junto com ela e o card
+      // quase sumiria — nao e o mesmo gesto.
+      style={({ pressed }) => [
+        surface,
+        pressed && (accent ? styles.pressedAccent : styles.pressedGlass),
+      ]}
     >
       {children}
     </Pressable>
@@ -58,9 +77,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   plain: {
-    backgroundColor: colors.surface,
+    backgroundColor: surfaces.card,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    // A luz tem direcao: clara na quina de cima, sumindo ao descer. E o que
+    // separa material fisico de retangulo translucido.
+    borderTopColor: surfaces.specularTop,
+    borderLeftColor: surfaces.specularSide,
+    borderRightColor: surfaces.specularSide,
+    borderBottomColor: surfaces.specularBottom,
   },
   accent: {
     backgroundColor: colors.accent,
@@ -75,7 +99,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
     elevation: accentGlow.elevation,
   },
-  pressed: {
+  pressedGlass: {
+    backgroundColor: surfaces.cardPressed,
+  },
+  pressedAccent: {
     opacity: 0.72,
   },
 });

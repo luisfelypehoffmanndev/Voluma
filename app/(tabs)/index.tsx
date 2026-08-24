@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
     paddingVertical: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
+    borderTopColor: colors.divider,
   },
   exerciseName: {
     flex: 1,
@@ -389,7 +389,7 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
     paddingVertical: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
+    borderTopColor: colors.divider,
   },
   row: {
     flexDirection: 'row',
