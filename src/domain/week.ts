@@ -25,6 +25,65 @@ export function weekdayOf(date: Date): Weekday {
   return date.getDay() as Weekday;
 }
 
+/**
+ * O domingo da semana de `date`, como YYYY-MM-DD. E a chave de uma semana.
+ *
+ * A semana comeca no domingo por coerencia com o resto do app: `Weekday` ja usa
+ * 0 = domingo e a grade do calendario (`monthGrid`) ja abre no domingo. Fazer o
+ * seletor de semana comecar na segunda deixaria as duas telas discordando sobre
+ * onde a semana quebra.
+ *
+ * Para mudar para segunda-primeiro, trocar SO a linha do `offset` abaixo por
+ * `(date.getDay() + 6) % 7`.
+ */
+export function weekStartKey(date: Date): string {
+  const offset = date.getDay();
+  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate() - offset);
+  return toDateKey(start);
+}
+
+/** Anda `count` semanas a partir de uma chave de semana. Aceita negativo. */
+export function addWeeks(weekStart: string, count: number): string {
+  const date = fromDateKey(weekStart);
+  date.setDate(date.getDate() + count * 7);
+  return toDateKey(date);
+}
+
+/**
+ * "23 – 29 ago" para o cabecalho do seletor de semana. Quando a semana cruza
+ * dois meses, os dois aparecem: "30 ago – 5 set".
+ */
+export function weekRangeLabel(weekStart: string): string {
+  const start = fromDateKey(weekStart);
+  const end = fromDateKey(addWeeks(weekStart, 1));
+  end.setDate(end.getDate() - 1);
+
+  const startMonth = monthLabelShort(start.getMonth()).toLowerCase();
+  const endMonth = monthLabelShort(end.getMonth()).toLowerCase();
+
+  if (start.getMonth() === end.getMonth()) {
+    return `${start.getDate()} – ${end.getDate()} ${endMonth}`;
+  }
+  return `${start.getDate()} ${startMonth} – ${end.getDate()} ${endMonth}`;
+}
+
+/**
+ * Os 7 dias da semana, domingo primeiro, com a rotina de cada um ou null.
+ *
+ * Os dias nao existem como linha no banco — sao sintetizados aqui na leitura.
+ * Fazer backfill de 7 rotinas vazias faria elas subirem para o Supabase e
+ * reaparecerem em todo dispositivo, inclusive dias que o usuario nunca vai
+ * usar, e ainda quebraria a guarda do `seedIfEmpty`, que bail quando ja existe
+ * qualquer rotina.
+ */
+export function weekPlan(routines: readonly Routine[]): (Routine | null)[] {
+  const days: (Routine | null)[] = [];
+  for (let weekday = 0; weekday <= 6; weekday += 1) {
+    days.push(routineForWeekday(routines, weekday as Weekday));
+  }
+  return days;
+}
+
 const WEEKDAY_LABELS = [
   'Domingos',
   'Segundas',

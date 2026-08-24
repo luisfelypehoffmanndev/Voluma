@@ -1,4 +1,4 @@
-import { daysSinceMonthStart, fromDateKey, lastNDays, monthGrid, nextRoutine, routineForWeekday, toDateKey, weekdayLabel, weekdayOf } from '../week';
+import { addWeeks, daysSinceMonthStart, fromDateKey, lastNDays, monthGrid, nextRoutine, routineForWeekday, toDateKey, weekPlan, weekRangeLabel, weekStartKey, weekdayLabel, weekdayOf } from '../week';
 import type { Routine, Weekday } from '../types';
 
 function makeRoutine(overrides: Partial<Routine> & { weekday: Weekday }): Routine {
@@ -162,5 +162,101 @@ describe('daysSinceMonthStart', () => {
 
   it('rende exatamente um dia quando e dia 1 e nao volta meses', () => {
     expect(daysSinceMonthStart(new Date(2026, 7, 1), 0)).toBe(1);
+  });
+});
+
+describe('weekStartKey', () => {
+  it('devolve o domingo da semana', () => {
+    // Sexta 21/08/2026. O domingo dessa semana e 16/08.
+    expect(weekStartKey(new Date(2026, 7, 21))).toBe('2026-08-16');
+  });
+
+  it('num domingo devolve o proprio dia', () => {
+    expect(weekStartKey(new Date(2026, 7, 16))).toBe('2026-08-16');
+  });
+
+  it('num sabado ainda devolve o domingo anterior — a semana nao virou', () => {
+    expect(weekStartKey(new Date(2026, 7, 22))).toBe('2026-08-16');
+  });
+
+  it('usa a data local, nao UTC', () => {
+    // Domingo 16/08 as 22h. Em UTC-3 ja e 17/08 em UTC; a semana tem que
+    // continuar comecando em 16, senao o treino da noite de domingo cai na
+    // semana seguinte.
+    expect(weekStartKey(new Date(2026, 7, 16, 22, 0, 0))).toBe('2026-08-16');
+  });
+
+  it('atravessa virada de mes', () => {
+    // Terca 01/09/2026: o domingo dessa semana ainda esta em agosto.
+    expect(weekStartKey(new Date(2026, 8, 1))).toBe('2026-08-30');
+  });
+
+  it('atravessa virada de ano', () => {
+    // Sexta 01/01/2027: o domingo dessa semana e 27/12/2026.
+    expect(weekStartKey(new Date(2027, 0, 1))).toBe('2026-12-27');
+  });
+});
+
+describe('addWeeks', () => {
+  it('anda para frente', () => {
+    expect(addWeeks('2026-08-16', 1)).toBe('2026-08-23');
+  });
+
+  it('anda para tras', () => {
+    expect(addWeeks('2026-08-16', -1)).toBe('2026-08-09');
+  });
+
+  it('atravessa virada de mes e de ano', () => {
+    expect(addWeeks('2026-08-30', 1)).toBe('2026-09-06');
+    expect(addWeeks('2026-12-27', 1)).toBe('2027-01-03');
+  });
+
+  it('zero semanas devolve a mesma chave', () => {
+    expect(addWeeks('2026-08-16', 0)).toBe('2026-08-16');
+  });
+});
+
+describe('weekRangeLabel', () => {
+  it('mostra um mes so quando a semana nao cruza', () => {
+    expect(weekRangeLabel('2026-08-16')).toBe('16 – 22 ago');
+  });
+
+  it('mostra os dois meses quando cruza', () => {
+    expect(weekRangeLabel('2026-08-30')).toBe('30 ago – 5 set');
+  });
+
+  it('mostra os dois meses na virada de ano', () => {
+    expect(weekRangeLabel('2026-12-27')).toBe('27 dez – 2 jan');
+  });
+});
+
+describe('weekPlan', () => {
+  const routines = [
+    makeRoutine({ weekday: 1, name: 'Costas + biceps' }),
+    makeRoutine({ weekday: 5, name: 'Peito + triceps' }),
+  ];
+
+  it('devolve sempre 7 posicoes, domingo primeiro', () => {
+    const plan = weekPlan(routines);
+    expect(plan).toHaveLength(7);
+    expect(plan[0]).toBeNull();
+    expect(plan[1]?.name).toBe('Costas + biceps');
+    expect(plan[5]?.name).toBe('Peito + triceps');
+  });
+
+  it('devolve null nos dias sem rotina — o dia existe mesmo vazio', () => {
+    const plan = weekPlan(routines);
+    expect(plan.filter((day) => day === null)).toHaveLength(5);
+  });
+
+  it('sem rotina nenhuma ainda devolve os 7 dias', () => {
+    expect(weekPlan([])).toEqual([null, null, null, null, null, null, null]);
+  });
+
+  it('ignora rotina apagada', () => {
+    const plan = weekPlan([
+      makeRoutine({ weekday: 1, deletedAt: '2026-08-20T10:00:00.000Z' }),
+    ]);
+    expect(plan[1]).toBeNull();
   });
 });
