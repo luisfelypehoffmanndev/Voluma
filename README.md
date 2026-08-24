@@ -14,7 +14,7 @@ Leia o QR code com o Expo Go. Nenhum build nativo é necessário — todas as
 dependências são JS puro ou já vêm embarcadas no Expo Go.
 
 ```bash
-npm test        # testes de domínio (volume, semana, streak)
+npm test        # domínio (volume, semana, streak) e a conta do vidro
 npm run typecheck
 ```
 
@@ -31,7 +31,8 @@ src/domain/     lógica pura e testável — volume, calendário, streak
 src/db/         SQLite: schema, migrations, repositórios
 src/sync/       Supabase: cliente, auth, push/pull
 src/ui/         componentes do design system
-src/theme/      tokens do design.md
+src/theme/      tokens do design.md e a conta de composição do vidro
+scripts/        gerador do grão que dithera o campo de luz
 supabase/       schema.sql para colar no SQL Editor
 ```
 
@@ -73,7 +74,10 @@ De `Design/design.md`, as que mais restringem o código:
 
 - **Um único elemento em `--accent` por tela.** Na home é o card de volume de 7
   dias; por isso o dot-matrix de lá recebe `showRecord={false}`.
-- **No máximo um elemento de vidro por tela** — aqui, só a tab bar.
+- **Toda superfície é vidro sobre um campo de luz.** O que muda entre os níveis
+  é a densidade, não a matéria: cards a 6%, superfície dentro deles a 8%, e tab
+  bar e modal quase opacos — esses precisam esconder o que passa por baixo. O
+  card accent é a única superfície sólida que sobrou.
 - **Sem cor de estado.** Erro e sucesso são comunicados por texto, nunca por
   vermelho ou verde.
 - **Números em mono de traço fino**, nunca sans bold.

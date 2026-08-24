@@ -2,20 +2,25 @@ import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors, hitSlop, radius, spacing } from '@/theme/tokens';
+import { colors, hitSlop, radius, spacing, surfaces } from '@/theme/tokens';
 import { Ambient } from './Ambient';
 import { Title } from './Text';
 
 /**
- * Base de toda tela. O `Ambient` fica atras de tudo: e o que da luminancia para
- * as superficies de vidro capturarem — sem ele o blur nao tem o que borrar.
+ * Base de toda tela. O `Ambient` fica atras de tudo: e o campo de luz que as
+ * superficies de vidro amostram — sem ele todas leem como cinza morto.
+ *
+ * O conteudo mora num filho proprio porque a area segura e dele, nao do campo:
+ * filho absoluto se posiciona a partir da borda de padding do pai, entao com o
+ * `paddingTop` na raiz o campo comecaria abaixo da barra de status e deixaria
+ * uma faixa preta no topo.
  */
 export function Screen({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets();
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
+    <View style={styles.screen}>
       <Ambient />
-      {children}
+      <View style={[styles.content, { paddingTop: insets.top }]}>{children}</View>
     </View>
   );
 }
@@ -57,6 +62,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bg,
   },
+  content: {
+    flex: 1,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -75,11 +83,15 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: surfaces.control,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    borderTopColor: surfaces.specularTop,
+    borderLeftColor: surfaces.specularSide,
+    borderRightColor: surfaces.specularSide,
+    borderBottomColor: surfaces.specularBottom,
   },
+  /** Acende, como os cards: opacidade sobre superficie translucida apagaria o icone junto. */
   pressed: {
-    opacity: 0.6,
+    backgroundColor: surfaces.controlPressed,
   },
 });

@@ -42,6 +42,7 @@ import {
 import { bumpData, useQuery } from '@/store/data';
 import { useAuth } from '@/sync/auth';
 import { colors, fontSize, hitSlop, radius, spacing } from '@/theme/tokens';
+import { Card } from '@/ui/Card';
 import { DashedBar } from '@/ui/DashedBar';
 import { DEFAULT_RUN_TARGETS, DEFAULT_TARGETS, ExercisePicker } from '@/ui/ExercisePicker';
 import { Header, Screen } from '@/ui/Screen';
@@ -175,7 +176,7 @@ export default function SessionScreen() {
         showsVerticalScrollIndicator={false}
       >
         {groups.map((group) => (
-          <View key={group.exerciseId} style={styles.group}>
+          <Card key={group.exerciseId} style={styles.group}>
             <Pressable
               style={styles.groupHeader}
               onPress={() =>
@@ -281,7 +282,7 @@ export default function SessionScreen() {
                 {group.isRun ? 'Outra corrida' : 'Série extra'}
               </Label>
             </Pressable>
-          </View>
+          </Card>
         ))}
 
         {groups.length === 0 ? (
@@ -403,11 +404,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     gap: spacing.xl,
   },
+  /** Um Card com padding menor: sao 5-6 por tela, e spacing.xl empurraria os numeros para fora. */
   group: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
     padding: spacing.lg,
   },
   groupHeader: {
@@ -422,7 +420,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingVertical: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
+    borderTopColor: colors.divider,
   },
   check: {
     width: 24,
@@ -465,7 +463,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingTop: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
+    borderTopColor: colors.divider,
   },
   addSetLabel: {
     letterSpacing: 0.6,

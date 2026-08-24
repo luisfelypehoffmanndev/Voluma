@@ -3,7 +3,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Exercise, Targets } from '@/domain/types';
-import { colors, fontSize, fonts, radius, spacing } from '@/theme/tokens';
+import { colors, fontSize, fonts, radius, spacing, surfaces } from '@/theme/tokens';
 
 import { GlassSurface } from './GlassSurface';
 import { Header } from './Screen';
@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: surfaces.raised,
     borderRadius: radius.inner,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
