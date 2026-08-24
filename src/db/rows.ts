@@ -20,6 +20,7 @@ export type ExerciseRow = {
   id: string;
   name: string;
   muscle_group: string | null;
+  kind: string;
   updated_at: string;
   deleted_at: string | null;
 };
@@ -41,6 +42,8 @@ export type RoutineExerciseRow = {
   target_sets: number;
   target_reps: number;
   target_weight_kg: number;
+  target_distance_km: number;
+  target_duration_min: number;
   updated_at: string;
   deleted_at: string | null;
 };
@@ -52,6 +55,8 @@ export type WeekTargetRow = {
   target_sets: number;
   target_reps: number;
   target_weight_kg: number;
+  target_distance_km: number;
+  target_duration_min: number;
   updated_at: string;
   deleted_at: string | null;
 };
@@ -73,6 +78,8 @@ export type SessionSetRow = {
   set_index: number;
   reps: number;
   weight_kg: number;
+  distance_km: number;
+  duration_min: number;
   /** SQLite nao tem boolean: 0 ou 1. */
   done: number;
   updated_at: string;
@@ -91,6 +98,8 @@ export const toExercise = (row: ExerciseRow): Exercise => ({
   id: row.id,
   name: row.name,
   muscleGroup: row.muscle_group,
+  // Banco antigo pode nao ter a coluna preenchida; carga e o padrao.
+  kind: row.kind === 'run' ? 'run' : 'strength',
   updatedAt: row.updated_at,
   deletedAt: row.deleted_at,
 });
@@ -112,6 +121,8 @@ export const toRoutineExercise = (row: RoutineExerciseRow): RoutineExercise => (
   targetSets: row.target_sets,
   targetReps: row.target_reps,
   targetWeightKg: row.target_weight_kg,
+  targetDistanceKm: row.target_distance_km,
+  targetDurationMin: row.target_duration_min,
   updatedAt: row.updated_at,
   deletedAt: row.deleted_at,
 });
@@ -123,6 +134,8 @@ export const toWeekTarget = (row: WeekTargetRow): WeekTarget => ({
   targetSets: row.target_sets,
   targetReps: row.target_reps,
   targetWeightKg: row.target_weight_kg,
+  targetDistanceKm: row.target_distance_km,
+  targetDurationMin: row.target_duration_min,
   updatedAt: row.updated_at,
   deletedAt: row.deleted_at,
 });
@@ -144,6 +157,8 @@ export const toSessionSet = (row: SessionSetRow): SessionSet => ({
   setIndex: row.set_index,
   reps: row.reps,
   weightKg: row.weight_kg,
+  distanceKm: row.distance_km,
+  durationMin: row.duration_min,
   done: row.done === 1,
   updatedAt: row.updated_at,
   deletedAt: row.deleted_at,

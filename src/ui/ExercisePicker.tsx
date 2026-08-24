@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import type { Exercise } from '@/domain/types';
+import type { Exercise, Targets } from '@/domain/types';
 import { colors, fontSize, fonts, radius, spacing } from '@/theme/tokens';
 
 import { GlassSurface } from './GlassSurface';
@@ -11,7 +11,22 @@ import { Body, Meta } from './Text';
 import { ArrowDownIcon, PlusIcon } from './icons';
 
 /** Alvos iniciais de um exercicio recem-adicionado, ajustaveis logo em seguida. */
-export const DEFAULT_TARGETS = { sets: 3, reps: 10, weightKg: 0 } as const;
+export const DEFAULT_TARGETS: Targets = {
+  sets: 3,
+  reps: 10,
+  weightKg: 0,
+  distanceKm: 0,
+  durationMin: 0,
+};
+
+/** Alvos iniciais de uma corrida: 5 km em 30 min e o ponto de partida obvio. */
+export const DEFAULT_RUN_TARGETS: Targets = {
+  sets: 1,
+  reps: 0,
+  weightKg: 0,
+  distanceKm: 5,
+  durationMin: 30,
+};
 
 type Props = {
   visible: boolean;
@@ -93,7 +108,11 @@ export function ExercisePicker({
                   <Body style={styles.name} numberOfLines={1}>
                     {exercise.name}
                   </Body>
-                  {exercise.muscleGroup ? <Meta>{exercise.muscleGroup}</Meta> : null}
+                  {exercise.kind === 'run' ? (
+                    <Meta>km</Meta>
+                  ) : exercise.muscleGroup ? (
+                    <Meta>{exercise.muscleGroup}</Meta>
+                  ) : null}
                 </Pressable>
               ))}
 

@@ -6,12 +6,14 @@ import type {
   Exercise,
   Routine,
   RoutineExercise,
+  ExerciseKind,
   Session,
   SessionSet,
   Targets,
   Weekday,
   WeekTarget,
 } from '@/domain/types';
+import { runTargetsFromSets } from '@/domain/run';
 import { resolveTargets, targetsFromSets } from '@/domain/targets';
 import { toDateKey, weekStartKey } from '@/domain/week';
 
@@ -63,28 +65,54 @@ export async function listExercises(): Promise<Exercise[]> {
   return rows.map(toExercise);
 }
 
-export async function createExercise(name: string, muscleGroup?: string): Promise<Exercise> {
+export async function createExercise(
+  name: string,
+  muscleGroup?: string,
+  kind: ExerciseKind = 'strength',
+): Promise<Exercise> {
   const db = await getDb();
   const exercise: Exercise = {
     id: newId(),
     name: name.trim(),
     muscleGroup: muscleGroup?.trim() || null,
+    kind,
     updatedAt: now(),
     deletedAt: null,
   };
 
   await db.withTransactionAsync(async () => {
     await db.runAsync(
-      'INSERT INTO exercises (id, name, muscle_group, updated_at, deleted_at) VALUES (?, ?, ?, ?, NULL)',
+      'INSERT INTO exercises (id, name, muscle_group, kind, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, NULL)',
       exercise.id,
       exercise.name,
       exercise.muscleGroup,
+      exercise.kind,
       exercise.updatedAt,
     );
     await enqueue(db, 'exercises', exercise.id);
   });
 
   return exercise;
+}
+
+/**
+ * O exercicio de corrida, criando-o se ainda nao existir.
+ *
+ * A corrida e um item fixo do catalogo, nao um tipo que qualquer exercicio
+ * possa ter: existe uma linha so, com `kind = 'run'`, e e ela que aparece no
+ * seletor com os campos de distancia e tempo.
+ *
+ * Nasce sob demanda em vez de vir na migracao porque a migracao teria que
+ * inventar um uuid em SQL puro, e porque assim ela some de vez se o usuario
+ * apagar — sem reaparecer no proximo boot.
+ */
+export async function ensureRunExercise(): Promise<Exercise> {
+  const db = await getDb();
+  const existing = await db.getFirstAsync<ExerciseRow>(
+    "SELECT * FROM exercises WHERE kind = 'run' AND deleted_at IS NULL ORDER BY updated_at, id LIMIT 1",
+  );
+  if (existing) return toExercise(existing);
+  return createExercise('Corrida', 'Cardio', 'run');
 }
 
 export async function renameExercise(id: string, name: string): Promise<void> {
@@ -226,27 +254,36 @@ export async function deleteRoutine(id: string): Promise<void> {
 
 // ------------------------------------------------- exercicios de uma rotina
 
-export type RoutineExerciseWithName = RoutineExercise & { exerciseName: string };
+export type RoutineExerciseWithName = RoutineExercise & {
+  exerciseName: string;
+  exerciseKind: ExerciseKind;
+};
 
 export async function listRoutineExercises(
   routineId: string,
 ): Promise<RoutineExerciseWithName[]> {
   const db = await getDb();
-  const rows = await db.getAllAsync<RoutineExerciseRow & { exercise_name: string }>(
-    `SELECT re.*, e.name AS exercise_name
+  const rows = await db.getAllAsync<
+    RoutineExerciseRow & { exercise_name: string; exercise_kind: string }
+  >(
+    `SELECT re.*, e.name AS exercise_name, e.kind AS exercise_kind
        FROM routine_exercises re
        JOIN exercises e ON e.id = re.exercise_id
       WHERE re.routine_id = ? AND re.deleted_at IS NULL AND e.deleted_at IS NULL
       ORDER BY re.position`,
     routineId,
   );
-  return rows.map((row) => ({ ...toRoutineExercise(row), exerciseName: row.exercise_name }));
+  return rows.map((row) => ({
+    ...toRoutineExercise(row),
+    exerciseName: row.exercise_name,
+    exerciseKind: row.exercise_kind === 'run' ? 'run' : 'strength',
+  }));
 }
 
 export async function addExerciseToRoutine(
   routineId: string,
   exerciseId: string,
-  targets: { sets: number; reps: number; weightKg: number },
+  targets: Targets,
 ): Promise<void> {
   const db = await getDb();
   const id = newId();
@@ -258,8 +295,9 @@ export async function addExerciseToRoutine(
     );
     await db.runAsync(
       `INSERT INTO routine_exercises
-         (id, routine_id, exercise_id, position, target_sets, target_reps, target_weight_kg, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+         (id, routine_id, exercise_id, position, target_sets, target_reps, target_weight_kg,
+          target_distance_km, target_duration_min, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
       id,
       routineId,
       exerciseId,
@@ -267,6 +305,8 @@ export async function addExerciseToRoutine(
       targets.sets,
       targets.reps,
       targets.weightKg,
+      targets.distanceKm,
+      targets.durationMin,
       now(),
     );
     await enqueue(db, 'routine_exercises', id);
@@ -275,17 +315,20 @@ export async function addExerciseToRoutine(
 
 export async function updateRoutineExercise(
   id: string,
-  targets: { sets: number; reps: number; weightKg: number },
+  targets: Targets,
 ): Promise<void> {
   const db = await getDb();
   await db.withTransactionAsync(async () => {
     await db.runAsync(
       `UPDATE routine_exercises
-          SET target_sets = ?, target_reps = ?, target_weight_kg = ?, updated_at = ?
+          SET target_sets = ?, target_reps = ?, target_weight_kg = ?,
+              target_distance_km = ?, target_duration_min = ?, updated_at = ?
         WHERE id = ?`,
       targets.sets,
       targets.reps,
       targets.weightKg,
+      targets.distanceKm,
+      targets.durationMin,
       now(),
       id,
     );
@@ -355,6 +398,7 @@ export type WeekExercise = RoutineExerciseWithName & {
 async function lastPerformedTargets(
   db: SQLiteDatabase,
   exerciseId: string,
+  kind: ExerciseKind,
   routineId: string,
   before: string,
 ): Promise<Targets | null> {
@@ -383,13 +427,31 @@ async function lastPerformedTargets(
   );
   if (!session) return null;
 
-  const sets = await db.getAllAsync<{ set_index: number; reps: number; weight_kg: number }>(
-    `SELECT set_index, reps, weight_kg
+  const sets = await db.getAllAsync<{
+    set_index: number;
+    reps: number;
+    weight_kg: number;
+    distance_km: number;
+    duration_min: number;
+  }>(
+    `SELECT set_index, reps, weight_kg, distance_km, duration_min
        FROM session_sets
       WHERE session_id = ? AND exercise_id = ? AND done = 1 AND deleted_at IS NULL`,
     session.session_id,
     exerciseId,
   );
+
+  // Corrida soma as series (3 km + 2 km = 5 km); carga pega a ultima serie. As
+  // duas regras vivem em `@/domain/run` e `@/domain/targets`, testadas la.
+  if (kind === 'run') {
+    return runTargetsFromSets(
+      sets.map((set) => ({
+        distanceKm: set.distance_km,
+        durationMin: set.duration_min,
+        done: true,
+      })),
+    );
+  }
 
   return targetsFromSets(
     sets.map((set) => ({ setIndex: set.set_index, reps: set.reps, weightKg: set.weight_kg })),
@@ -427,13 +489,15 @@ export async function targetsForWeek(
     const override = bySlot.get(item.id) ?? null;
     const performed = override
       ? null // ja tem decisao explicita; nao gasta consulta com o historico
-      : await lastPerformedTargets(db, item.exerciseId, routineId, weekStart);
+      : await lastPerformedTargets(db, item.exerciseId, item.exerciseKind, routineId, weekStart);
 
     const overrideTargets = override
       ? {
           sets: override.targetSets,
           reps: override.targetReps,
           weightKg: override.targetWeightKg,
+          distanceKm: override.targetDistanceKm,
+          durationMin: override.targetDurationMin,
         }
       : null;
 
@@ -444,6 +508,8 @@ export async function targetsForWeek(
         sets: item.targetSets,
         reps: item.targetReps,
         weightKg: item.targetWeightKg,
+        distanceKm: item.targetDistanceKm,
+        durationMin: item.targetDurationMin,
       }),
     });
   }
@@ -486,11 +552,14 @@ export async function setWeekTarget(
       await db.runAsync(
         `UPDATE week_targets
             SET target_sets = ?, target_reps = ?, target_weight_kg = ?,
+                target_distance_km = ?, target_duration_min = ?,
                 updated_at = ?, deleted_at = NULL
           WHERE id = ?`,
         targets.sets,
         targets.reps,
         targets.weightKg,
+        targets.distanceKm,
+        targets.durationMin,
         timestamp,
         id,
       );
@@ -498,14 +567,16 @@ export async function setWeekTarget(
       await db.runAsync(
         `INSERT INTO week_targets
            (id, week_start, routine_exercise_id, target_sets, target_reps, target_weight_kg,
-            updated_at, deleted_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
+            target_distance_km, target_duration_min, updated_at, deleted_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
         id,
         weekStart,
         routineExerciseId,
         targets.sets,
         targets.reps,
         targets.weightKg,
+        targets.distanceKm,
+        targets.durationMin,
         timestamp,
       );
     }
@@ -587,18 +658,26 @@ export async function startSession(routineId: string | null, when = new Date()):
     await enqueue(db, 'sessions', session.id);
 
     for (const item of planned) {
-      for (let index = 1; index <= item.targets.sets; index += 1) {
+      // Corrida entra como UMA linha, com a distancia e o tempo alvo. Repetir a
+      // corrida em N linhas como se fossem series multiplicaria a quilometragem
+      // do dia pelo numero de series.
+      const rows = item.exerciseKind === 'run' ? 1 : item.targets.sets;
+
+      for (let index = 1; index <= rows; index += 1) {
         const setId = newId();
         await db.runAsync(
           `INSERT INTO session_sets
-             (id, session_id, exercise_id, set_index, reps, weight_kg, done, updated_at, deleted_at)
-           VALUES (?, ?, ?, ?, ?, ?, 0, ?, NULL)`,
+             (id, session_id, exercise_id, set_index, reps, weight_kg,
+              distance_km, duration_min, done, updated_at, deleted_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, NULL)`,
           setId,
           session.id,
           item.exerciseId,
           index,
           item.targets.reps,
           item.targets.weightKg,
+          item.targets.distanceKm,
+          item.targets.durationMin,
           session.updatedAt,
         );
         await enqueue(db, 'session_sets', setId);
@@ -655,7 +734,13 @@ export async function listSessionSets(sessionId: string): Promise<SessionSet[]> 
 
 export async function updateSet(
   id: string,
-  patch: { reps?: number; weightKg?: number; done?: boolean },
+  patch: {
+    reps?: number;
+    weightKg?: number;
+    distanceKm?: number;
+    durationMin?: number;
+    done?: boolean;
+  },
 ): Promise<void> {
   const db = await getDb();
   const timestamp = now();
@@ -666,6 +751,20 @@ export async function updateSet(
     }
     if (patch.weightKg !== undefined) {
       await db.runAsync('UPDATE session_sets SET weight_kg = ? WHERE id = ?', patch.weightKg, id);
+    }
+    if (patch.distanceKm !== undefined) {
+      await db.runAsync(
+        'UPDATE session_sets SET distance_km = ? WHERE id = ?',
+        patch.distanceKm,
+        id,
+      );
+    }
+    if (patch.durationMin !== undefined) {
+      await db.runAsync(
+        'UPDATE session_sets SET duration_min = ? WHERE id = ?',
+        patch.durationMin,
+        id,
+      );
     }
     if (patch.done !== undefined) {
       await db.runAsync('UPDATE session_sets SET done = ? WHERE id = ?', patch.done ? 1 : 0, id);
@@ -686,7 +785,7 @@ export async function updateSet(
 export async function addExerciseToSession(
   sessionId: string,
   exerciseId: string,
-  targets: { sets: number; reps: number; weightKg: number },
+  targets: Targets,
 ): Promise<void> {
   const db = await getDb();
   const timestamp = now();
@@ -702,18 +801,25 @@ export async function addExerciseToSession(
     );
     const offset = last?.last_index ?? 0;
 
-    for (let index = 1; index <= targets.sets; index += 1) {
+    // Corrida ocupa uma linha so, pelo mesmo motivo de `startSession`: repetir
+    // a distancia em N series multiplicaria a quilometragem do dia.
+    const rows = targets.distanceKm > 0 ? 1 : targets.sets;
+
+    for (let index = 1; index <= rows; index += 1) {
       const setId = newId();
       await db.runAsync(
         `INSERT INTO session_sets
-           (id, session_id, exercise_id, set_index, reps, weight_kg, done, updated_at, deleted_at)
-         VALUES (?, ?, ?, ?, ?, ?, 0, ?, NULL)`,
+           (id, session_id, exercise_id, set_index, reps, weight_kg,
+            distance_km, duration_min, done, updated_at, deleted_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, NULL)`,
         setId,
         sessionId,
         exerciseId,
         offset + index,
         targets.reps,
         targets.weightKg,
+        targets.distanceKm,
+        targets.durationMin,
         timestamp,
       );
       await enqueue(db, 'session_sets', setId);
@@ -727,8 +833,14 @@ export async function addSet(sessionId: string, exerciseId: string): Promise<voi
   const id = newId();
 
   await db.withTransactionAsync(async () => {
-    const last = await db.getFirstAsync<{ set_index: number; reps: number; weight_kg: number }>(
-      `SELECT set_index, reps, weight_kg FROM session_sets
+    const last = await db.getFirstAsync<{
+      set_index: number;
+      reps: number;
+      weight_kg: number;
+      distance_km: number;
+      duration_min: number;
+    }>(
+      `SELECT set_index, reps, weight_kg, distance_km, duration_min FROM session_sets
         WHERE session_id = ? AND exercise_id = ? AND deleted_at IS NULL
         ORDER BY set_index DESC LIMIT 1`,
       sessionId,
@@ -736,14 +848,17 @@ export async function addSet(sessionId: string, exerciseId: string): Promise<voi
     );
     await db.runAsync(
       `INSERT INTO session_sets
-         (id, session_id, exercise_id, set_index, reps, weight_kg, done, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, 0, ?, NULL)`,
+         (id, session_id, exercise_id, set_index, reps, weight_kg,
+          distance_km, duration_min, done, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, NULL)`,
       id,
       sessionId,
       exerciseId,
       (last?.set_index ?? 0) + 1,
       last?.reps ?? 10,
       last?.weight_kg ?? 0,
+      last?.distance_km ?? 0,
+      last?.duration_min ?? 0,
       now(),
     );
     await enqueue(db, 'session_sets', id);
@@ -803,6 +918,31 @@ export async function volumeByDate(fromKey: string, toKey: string): Promise<Map<
     toKey,
   );
   return new Map(rows.map((row) => [row.date, row.volume]));
+}
+
+/**
+ * Quilometros percorridos por data — o par do `volumeByDate` para a corrida.
+ *
+ * Consulta separada em vez de mais uma coluna no volume: o volume e em kg e a
+ * distancia em km, e somar os dois num numero so nao quer dizer nada. Cada um
+ * tem seu card.
+ */
+export async function distanceByDate(
+  fromKey: string,
+  toKey: string,
+): Promise<Map<string, number>> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ date: string; distance: number }>(
+    `SELECT s.date AS date, COALESCE(SUM(ss.distance_km), 0) AS distance
+       FROM sessions s
+       LEFT JOIN session_sets ss
+         ON ss.session_id = s.id AND ss.done = 1 AND ss.deleted_at IS NULL
+      WHERE s.deleted_at IS NULL AND s.date BETWEEN ? AND ?
+      GROUP BY s.date`,
+    fromKey,
+    toKey,
+  );
+  return new Map(rows.map((row) => [row.date, row.distance]));
 }
 
 /** Datas com treino registrado, para os pontos do calendario. */

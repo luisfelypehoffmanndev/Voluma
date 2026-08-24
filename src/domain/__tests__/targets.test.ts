@@ -1,7 +1,7 @@
 import { resolveTargets, targetsFromSets } from '../targets';
 import type { Targets } from '../types';
 
-const SEED: Targets = { sets: 3, reps: 10, weightKg: 0 };
+const SEED: Targets = { sets: 3, reps: 10, weightKg: 0, distanceKm: 0, durationMin: 0 };
 
 describe('targetsFromSets', () => {
   it('conta as series concluidas', () => {
@@ -10,7 +10,7 @@ describe('targetsFromSets', () => {
       { setIndex: 2, reps: 10, weightKg: 60 },
       { setIndex: 3, reps: 10, weightKg: 60 },
     ]);
-    expect(targets).toEqual({ sets: 3, reps: 10, weightKg: 60 });
+    expect(targets).toEqual({ sets: 3, reps: 10, weightKg: 60, distanceKm: 0, durationMin: 0 });
   });
 
   it('em rampa, o peso que vale e o da ULTIMA serie, nao o da primeira', () => {
@@ -30,7 +30,7 @@ describe('targetsFromSets', () => {
       { setIndex: 1, reps: 12, weightKg: 60 },
       { setIndex: 2, reps: 6, weightKg: 62.5 },
     ]);
-    expect(targets).toEqual({ sets: 2, reps: 6, weightKg: 62.5 });
+    expect(targets).toEqual({ sets: 2, reps: 6, weightKg: 62.5, distanceKm: 0, durationMin: 0 });
   });
 
   it('acha a ultima serie mesmo fora de ordem', () => {
@@ -39,7 +39,7 @@ describe('targetsFromSets', () => {
       { setIndex: 1, reps: 10, weightKg: 60 },
       { setIndex: 2, reps: 10, weightKg: 62.5 },
     ]);
-    expect(targets).toEqual({ sets: 3, reps: 8, weightKg: 65 });
+    expect(targets).toEqual({ sets: 3, reps: 8, weightKg: 65, distanceKm: 0, durationMin: 0 });
   });
 
   it('serie unica funciona', () => {
@@ -47,6 +47,8 @@ describe('targetsFromSets', () => {
       sets: 1,
       reps: 5,
       weightKg: 100,
+      distanceKm: 0,
+      durationMin: 0,
     });
   });
 
@@ -56,8 +58,8 @@ describe('targetsFromSets', () => {
 });
 
 describe('resolveTargets', () => {
-  const performed: Targets = { sets: 4, reps: 8, weightKg: 70 };
-  const override: Targets = { sets: 5, reps: 6, weightKg: 75 };
+  const performed: Targets = { sets: 4, reps: 8, weightKg: 70, distanceKm: 0, durationMin: 0 };
+  const override: Targets = { sets: 5, reps: 6, weightKg: 75, distanceKm: 0, durationMin: 0 };
 
   it('o ajuste da semana ganha de tudo', () => {
     expect(resolveTargets(override, performed, SEED)).toEqual(override);
@@ -78,7 +80,7 @@ describe('resolveTargets', () => {
   it('ajuste que zera o peso e respeitado — nao e tratado como ausente', () => {
     // Guarda contra `override || lastPerformed`: um alvo de 0 kg (peso
     // corporal) e uma escolha valida do usuario, nao um valor vazio.
-    const zeroed: Targets = { sets: 3, reps: 15, weightKg: 0 };
+    const zeroed: Targets = { sets: 3, reps: 15, weightKg: 0, distanceKm: 0, durationMin: 0 };
     expect(resolveTargets(zeroed, performed, SEED)).toEqual(zeroed);
   });
 });

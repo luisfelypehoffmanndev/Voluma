@@ -7,6 +7,7 @@ import {
   addExerciseToRoutine,
   createExercise,
   ensureDayRoutine,
+  ensureRunExercise,
   listExercises,
   removeRoutineExercise,
   setWeekTarget,
@@ -20,7 +21,7 @@ import { addWeeks, weekRangeLabel, weekStartKey, weekdayName, weeksBetween } fro
 import { bumpData, useQuery } from '@/store/data';
 import { colors, fontSize, hitSlop, spacing } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
-import { DEFAULT_TARGETS, ExercisePicker } from '@/ui/ExercisePicker';
+import { DEFAULT_RUN_TARGETS, DEFAULT_TARGETS, ExercisePicker } from '@/ui/ExercisePicker';
 import { FloatingGlassButton } from '@/ui/FloatingGlassButton';
 import { Header, RoundButton, Screen } from '@/ui/Screen';
 import { TargetsEditor } from '@/ui/TargetsEditor';
@@ -61,6 +62,9 @@ export default function DayScreen() {
   const { data, loading, reload } = useQuery(
     useCallback(async () => {
       const routine = await ensureDayRoutine(weekday);
+      // A corrida existe sob demanda: garantir aqui e o que a faz aparecer no
+      // seletor sem precisar de backfill na migracao.
+      await ensureRunExercise();
       const [items, catalog] = await Promise.all([
         targetsForWeek(weekStart, routine.id),
         listExercises(),
@@ -86,7 +90,9 @@ export default function DayScreen() {
   const currentWeek = weekStartKey(new Date());
 
   const addToDay = async (exerciseId: string) => {
-    await addExerciseToRoutine(routine.id, exerciseId, DEFAULT_TARGETS);
+    const picked = catalog.find((exercise) => exercise.id === exerciseId);
+    const initial = picked?.kind === 'run' ? DEFAULT_RUN_TARGETS : DEFAULT_TARGETS;
+    await addExerciseToRoutine(routine.id, exerciseId, initial);
     bumpData();
     setPicking(false);
     reload();
@@ -219,7 +225,12 @@ function ExerciseCard({
         </Pressable>
       </View>
 
-      <TargetsEditor value={item.targets} onCommit={commit} resetKey={weekStart} />
+      <TargetsEditor
+        value={item.targets}
+        kind={item.exerciseKind}
+        onCommit={commit}
+        resetKey={weekStart}
+      />
     </Card>
   );
 }

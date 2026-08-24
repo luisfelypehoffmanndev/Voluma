@@ -92,6 +92,17 @@ create table if not exists public.body_weight_logs (
 -- offline e sobe as linhas em lote; uma FK faria o push falhar so por causa da
 -- ordem de chegada. A integridade e garantida pelo cliente, que gera os ids.
 
+-- ------------------------------------------------- v3: corrida (km e tempo)
+-- Idempotente como o resto do arquivo: rodar de novo nao quebra nada.
+
+alter table public.exercises         add column if not exists kind text not null default 'strength';
+alter table public.routine_exercises add column if not exists target_distance_km real not null default 0;
+alter table public.routine_exercises add column if not exists target_duration_min integer not null default 0;
+alter table public.week_targets      add column if not exists target_distance_km real not null default 0;
+alter table public.week_targets      add column if not exists target_duration_min integer not null default 0;
+alter table public.session_sets      add column if not exists distance_km real not null default 0;
+alter table public.session_sets      add column if not exists duration_min integer not null default 0;
+
 -- ---------------------------------------------------------------- indices
 -- O pull filtra sempre por dono + updated_at, entao esse e o indice que importa.
 

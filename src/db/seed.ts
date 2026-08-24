@@ -76,6 +76,8 @@ export async function seedIfEmpty(): Promise<boolean> {
         sets: item.sets,
         reps: item.reps,
         weightKg: item.weightKg,
+        distanceKm: 0,
+        durationMin: 0,
       });
     }
   }

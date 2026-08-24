@@ -13,6 +13,7 @@ import {
   getOpenSession,
   listBodyWeightLogs,
   listRoutineExercises,
+  distanceByDate,
   listRoutines,
   startSession,
   targetsForWeek,
@@ -22,6 +23,7 @@ import {
 } from '@/db/repo';
 import { seedIfEmpty } from '@/db/seed';
 import { buildDotMatrix, currentStreak } from '@/domain/streak';
+import { formatDistance, formatDuration } from '@/domain/run';
 import { formatVolume, formatWeight } from '@/domain/volume';
 import type { Routine, Weekday } from '@/domain/types';
 import {
@@ -99,7 +101,7 @@ export default function HomeScreen() {
     );
   }
 
-  const { today, upcoming, weekVolume, bodyWeight, dots, streak } = data;
+  const { today, upcoming, weekVolume, weekDistance, bodyWeight, dots, streak } = data;
 
   return (
     <Screen>
@@ -145,17 +147,34 @@ export default function HomeScreen() {
           ) : null}
         </Card>
 
-        <Card style={styles.weightCard} onPress={() => router.push('/bodyweight')}>
-          <View>
-            <Body>Peso corporal</Body>
-            <Meta>{bodyWeight ? relativeTime(bodyWeight.loggedAt) : 'sem registro'}</Meta>
-          </View>
-          <StatNumber
-            value={bodyWeight ? formatWeight(bodyWeight.weightKg) : '—'}
-            unit="kg"
-            size={fontSize.numberMd}
-          />
-        </Card>
+        <View style={styles.row}>
+          <Card style={styles.half} onPress={() => router.push('/bodyweight')}>
+            <StatNumber
+              value={bodyWeight ? formatWeight(bodyWeight.weightKg) : '—'}
+              unit="kg"
+              size={fontSize.numberMd}
+            />
+            <View style={styles.cardFoot}>
+              <Body>Peso corporal</Body>
+              <Meta>{bodyWeight ? relativeTime(bodyWeight.loggedAt) : 'sem registro'}</Meta>
+            </View>
+          </Card>
+
+          {/* Sem accent: o orcamento de cor da tela ja esta no card de volume.
+              Distancia e volume sao numeros de unidades diferentes — km e kg
+              nao somam — entao cada um tem o seu, nunca um total misturado. */}
+          <Card style={styles.half} onPress={() => router.push('/stats')}>
+            <StatNumber
+              value={formatDistance(weekDistance)}
+              unit="km"
+              size={fontSize.numberMd}
+            />
+            <View style={styles.cardFoot}>
+              <Body>Distância</Body>
+              <Meta>Últimos 7 dias</Meta>
+            </View>
+          </Card>
+        </View>
 
         <Card>
           <DotMatrix dots={dots} width={matrixWidth} showRecord={false} />
@@ -213,9 +232,10 @@ async function loadHome() {
   const matrixDays = daysSinceMonthStart(now, MATRIX_MONTHS);
   const window = lastNDays(now, matrixDays);
 
-  const [routines, volumes, trained, weights, open] = await Promise.all([
+  const [routines, volumes, distances, trained, weights, open] = await Promise.all([
     listRoutines(),
     volumeByDate(window[0], todayKey),
+    distanceByDate(window[0], todayKey),
     trainedDates(window[0], todayKey),
     listBodyWeightLogs(1),
     getOpenSession(),
@@ -232,6 +252,9 @@ async function loadHome() {
 
   const weekKeys = lastNDays(now, 7);
   const weekVolume = weekKeys.reduce((sum, key) => sum + (volumes.get(key) ?? 0), 0);
+  // Arredonda a uma casa: somar 0,1 sete vezes rende 0,7000000000000001.
+  const weekDistance =
+    Math.round(weekKeys.reduce((sum, key) => sum + (distances.get(key) ?? 0), 0) * 10) / 10;
 
   const doneToday = trained.has(todayKey);
 
@@ -247,6 +270,7 @@ async function loadHome() {
     },
     upcoming,
     weekVolume,
+    weekDistance,
     bodyWeight: weights[0] ?? null,
     dots: buildDotMatrix(volumes, now, matrixDays),
     streak: currentStreak(trained, now),
@@ -262,9 +286,15 @@ async function loadHome() {
  */
 const MAX_TODAY_ROWS = 5;
 
-/** "3 × 10 · 62,5 kg" — o alvo da semana, em mono, como todo numero do app. */
+/** "3 × 10 · 62,5 kg" ou "5 km · 28 min" — o alvo da semana, em mono. */
 function targetsLabel(item: WeekExercise): string {
-  const { sets, reps, weightKg } = item.targets;
+  const { sets, reps, weightKg, distanceKm, durationMin } = item.targets;
+
+  if (item.exerciseKind === 'run') {
+    const km = `${formatDistance(distanceKm)} km`;
+    return durationMin > 0 ? `${km} · ${formatDuration(durationMin)}` : km;
+  }
+
   if (weightKg === 0) return `${sets} × ${reps}`;
   return `${sets} × ${reps} · ${formatWeight(weightKg)} kg`;
 }
@@ -361,10 +391,17 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
   },
-  weightCard: {
+  row: {
     flexDirection: 'row',
-    alignItems: 'center',
+    gap: spacing.md,
+  },
+  half: {
+    flex: 1,
+    minHeight: 150,
     justifyContent: 'space-between',
+  },
+  cardFoot: {
+    marginTop: spacing.lg,
   },
   matrixFoot: {
     flexDirection: 'row',
