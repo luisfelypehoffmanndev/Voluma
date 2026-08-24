@@ -37,6 +37,29 @@ export type RoutineExercise = Syncable & {
   targetWeightKg: number;
 };
 
+/** Series, reps e carga de um exercicio — o trio que anda sempre junto. */
+export type Targets = {
+  sets: number;
+  reps: number;
+  weightKg: number;
+};
+
+/**
+ * O ajuste do usuario para UMA semana.
+ *
+ * A ausencia de linha e significativa: semana sem `WeekTarget` usa o padrao
+ * derivado do historico. So nasce linha quando o usuario mexe num stepper,
+ * entao o banco nunca guarda semana que ninguem pediu.
+ */
+export type WeekTarget = Syncable & {
+  /** Domingo da semana, no formato YYYY-MM-DD. */
+  weekStart: string;
+  routineExerciseId: string;
+  targetSets: number;
+  targetReps: number;
+  targetWeightKg: number;
+};
+
 /** Uma execucao real de treino, em uma data. */
 export type Session = Syncable & {
   routineId: string | null;
