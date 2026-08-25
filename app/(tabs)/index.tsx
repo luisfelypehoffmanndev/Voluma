@@ -10,12 +10,11 @@ import {
 
 import { getDb } from '@/db/client';
 import {
-  getOpenSession,
+  getOrCreateSessionForDate,
   listBodyWeightLogs,
   listRoutineExercises,
   distanceByDate,
   listRoutines,
-  startSession,
   targetsForWeek,
   trainedDates,
   volumeByDate,
@@ -76,18 +75,10 @@ export default function HomeScreen() {
 
   const { data, loading } = useQuery(useCallback(loadHome, []));
 
+  // Um treino por data: abrir de novo cai no mesmo registro, com os numeros que
+  // ja foram gravados. Nao ha "comecar" nem "continuar" — so o dia de hoje.
   const openWorkout = async () => {
-    if (!data) return;
-
-    // Um treino ja aberto tem prioridade: o usuario provavelmente saiu do app
-    // no meio da serie e quer voltar exatamente para onde estava.
-    const open = data.openSessionId ?? null;
-    if (open) {
-      router.push(`/session/${open}`);
-      return;
-    }
-
-    const session = await startSession(data.today.routineId);
+    const session = await getOrCreateSessionForDate(new Date());
     bumpData();
     router.push(`/session/${session.id}`);
   };
@@ -232,13 +223,12 @@ async function loadHome() {
   const matrixDays = daysSinceMonthStart(now, MATRIX_MONTHS);
   const window = lastNDays(now, matrixDays);
 
-  const [routines, volumes, distances, trained, weights, open] = await Promise.all([
+  const [routines, volumes, distances, trained, weights] = await Promise.all([
     listRoutines(),
     volumeByDate(window[0], todayKey),
     distanceByDate(window[0], todayKey),
     trainedDates(window[0], todayKey),
     listBodyWeightLogs(1),
-    getOpenSession(),
   ]);
 
   const weekStart = weekStartKey(now);
@@ -259,7 +249,6 @@ async function loadHome() {
   const doneToday = trained.has(todayKey);
 
   return {
-    openSessionId: open?.id ?? null,
     today: {
       routineId: todayRoutine?.id ?? null,
       weekday: weekdayOf(now),

@@ -31,6 +31,16 @@ Regra dura: se você usar `--accent` em mais de um elemento na mesma tela, volte
 
 Nada de segunda cor de acento (sem verde de "sucesso", sem vermelho de "erro" decorativo). Estado negativo pode ser comunicado com texto/ícone em branco, não com cor.
 
+### A única exceção: a caixa de concluído
+
+Há um caso, e só um, em que `--accent` aparece repetido na mesma tela: a **caixa de concluído** do registro de treino (`app/session/[id].tsx`), uma por exercício.
+
+A exceção se sustenta porque a cor ali não está fazendo o trabalho que a regra proíbe. A regra existe para impedir que dois elementos *disputem* a atenção — dois destaques concorrentes diluem os dois. A caixa não destaca um exercício entre os outros: ela marca **um estado binário que se repete**, e o que o laranja comunica é a leitura agregada — quanto do treino já foi feito, visível de relance pela quantidade de caixas acesas. Uma única caixa laranja no meio de caixas apagadas seria a leitura errada.
+
+O limite continua valendo do lado de fora: numa tela que tem caixas de concluído, **nenhum outro elemento** pode usar accent. Foi por isso que o botão fixo de "registrar treino" saiu da tela quando as caixas entraram — os dois juntos seriam exatamente a disputa que a regra impede.
+
+Isso **não** abre precedente para cor de estado (§2, parágrafo acima): não existe caixa verde de "ok" nem vermelha de "falhou". O par é aceso/apagado na mesma matiz, e "não concluído" continua sendo ausência de cor, não outra cor.
+
 ## 3. Tipografia
 
 Duas famílias, papéis bem definidos — não uma pilha de 4 fontes "pra variar":
@@ -97,6 +107,14 @@ Este é o ponto onde o app deve ser reconhecível. Baseado nas refs:
 - **Grade de pontos (dot-matrix)** para histórico/streak de treino ao longo do mês — pontos pequenos, apagados quando não há treino, cheios/brancos quando há. Não usar heatmap colorido tipo GitHub; manter em escala de cinza + 1 ponto em destaque se for recorde.
 - Números sempre como protagonistas visuais (peso, volume levantado, horas de sono) — a cor de fundo do card pode inverter (fundo laranja sólido, texto preto) *apenas* no card que representa o dado mais importante da tela, como no card de sono. Isso é o "uso mínimo mas com contraste" que você pediu: em vez de accent como detalhe pequeno, ocasionalmente ele vira o fundo de UM card inteiro para chamar atenção. Esse é o único card que continua **sólido**: laranja translúcido perde o soco.
 
+### Celula marcável
+
+Toda superfície pequena que representa **um item marcável ou marcado** usa a mesma forma: **quadrado de cantos arredondados** (`--radius-square`, ~10px sobre um lado de 28–34px), nunca círculo. Vale para o dia do calendário e para a caixa de concluído do treino. O app tem uma linguagem só para isso — abrir uma segunda (círculo) faria duas coisas equivalentes parecerem de famílias diferentes.
+
+O que muda entre os estados é **preenchimento e borda, nunca a forma nem o tamanho**: o quadrado tem a mesma caixa em todos os estados, e a borda existe mesmo quando é transparente, senão o conteúdo anda 1px ao entrar e sair do estado marcado.
+
+Marcada, a célula é laranja **sólido** com glow (`--accent` + a mesma sombra de offset zero do card accent) e o ícone em `--bg`. O glow é o que faz o laranja ler como neon em vez de retângulo chapado, e precisa de um wrapper próprio: `overflow: hidden` na própria forma recorta a sombra junto.
+
 ## 7. O que evitar (sinais de "AI slop")
 
 - Gradientes **coloridos** decorativos (roxo→rosa, azul→ciano) em qualquer botão ou fundo. Gradiente monocromático é permitido em exatamente dois lugares: a borda especular e o campo de luz (`--ambient`). Em nenhum outro.
@@ -106,8 +124,10 @@ Este é o ponto onde o app deve ser reconhecível. Baseado nas refs:
 - Grão ou ruído como "textura" decorativa, à procura de vibe analógica. O único ruído permitido é o dither do campo de luz, a ~1 nível — ele existe para corrigir banding, e se aparecer como textura subiu demais.
 - Emojis como substituto de ícone.
 - Sombra pesada (`box-shadow` grande e difusa) em todo card — usar no máximo uma sombra sutil e só quando o card realmente flutua.
-- Mais de uma cor de destaque na mesma tela.
+- Mais de uma cor de destaque na mesma tela (a caixa de concluído é a exceção documentada em §2 — e é a única).
+- Cor de estado: verde de "ok", vermelho de "falhou". Estado se comunica por aceso/apagado na mesma matiz, ou por texto.
 - Cantos arredondados com raios diferentes e aleatórios entre elementos do mesmo nível.
+- Checkbox/toggle redondo. Célula marcável é quadrado de cantos arredondados (§6).
 - Textos genéricos tipo "Bem-vindo de volta!", "Vamos treinar hoje?" — usar dado real e direto (número, hora, "Fridays", "31 min ago").
 - Ícones 3D estilo "Fluent/emoji 3D".
 
@@ -117,7 +137,8 @@ Direto, técnico, sem "vozinha animadora de app de fitness". Ex: `"Volume lifted
 
 ## 9. Checklist antes de finalizar uma tela
 
-- [ ] Só uma cor de destaque apareceu nesta tela?
+- [ ] Só uma cor de destaque apareceu nesta tela? (Exceção única: as caixas de concluído do registro de treino, §2 — e nessa tela nada mais pode usar accent.)
+- [ ] Toda célula marcável é quadrado de cantos arredondados, com a mesma caixa em todos os estados?
 - [ ] O fundo é quase-preto (não preto puro, não cinza-azulado)?
 - [ ] Os números grandes estão em mono, não em sans bold?
 - [ ] Não tem gradiente colorido nem glow em lugar nenhum?

@@ -1,153 +1,95 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   addExerciseToRoutine,
-  addExerciseToSession,
-  addSet,
   createExercise,
-  finishSession,
-  getRoutine,
   getSession,
   listExercises,
   listSessionSets,
-  removeSet,
-  updateSet,
+  removeRoutineExercise,
+  setSessionExerciseTargets,
+  targetsForWeek,
+  type WeekExercise,
 } from '@/db/repo';
-import type { SessionSet } from '@/domain/types';
-import {
-  formatDistance,
-  formatDuration,
-  formatPace,
-  totalDistance,
-  totalDuration,
-} from '@/domain/run';
-import { weekdayName } from '@/domain/week';
-import {
-  completedSets,
-  formatVolume,
-  formatWeight,
-  totalVolume,
-  volumeByExercise,
-} from '@/domain/volume';
+import type { ExerciseKind, SessionSet, Targets } from '@/domain/types';
+import { formatDistance, formatDuration, runTargetsFromSets } from '@/domain/run';
+import { targetsFromSets } from '@/domain/targets';
+import { formatVolume, formatWeight, totalVolume } from '@/domain/volume';
+import { fromDateKey, weekStartKey, weekdayName, weekdayOf } from '@/domain/week';
 import { bumpData, useQuery } from '@/store/data';
 import { useAuth } from '@/sync/auth';
-import { colors, fontSize, hitSlop, radius, spacing } from '@/theme/tokens';
+import { accentGlow, colors, fontSize, hitSlop, radius, spacing } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
-import { DashedBar } from '@/ui/DashedBar';
 import { DEFAULT_RUN_TARGETS, DEFAULT_TARGETS, ExercisePicker } from '@/ui/ExercisePicker';
+import { shortDate } from '@/ui/relative';
 import { Header, Screen } from '@/ui/Screen';
 import { StatNumber } from '@/ui/StatNumber';
+import { TargetsEditor } from '@/ui/TargetsEditor';
 import { Body, Label, Meta } from '@/ui/Text';
 import { ArrowDownIcon, CheckIcon, PlusIcon, TrashIcon } from '@/ui/icons';
-import { Stepper } from '@/ui/Stepper';
 
 /**
- * Treino em andamento.
+ * Registro do treino de um dia.
  *
- * O volume no topo e a barra pontilhada atualizam a cada serie marcada — e o
- * feedback que justifica marcar. A tela nao tem tab bar: enquanto o treino esta
- * aberto, nao ha para onde ir.
+ * O modelo e por exercicio, nao por serie: o usuario diz "3 x 10 a 60 kg" e
+ * pronto. E a mesma mecanica da tela do dia em Ajustes — os mesmos steppers, o
+ * mesmo debounce — so que o destino da escrita e a sessao daquela data, e nao
+ * os alvos da semana.
  *
- * Escritas sao otimistas: o estado local muda na hora e o SQLite grava em
- * seguida. Marcar serie com o celular na mao suada nao pode esperar I/O.
+ * Nada aqui precisa ser "finalizado". Cada exercicio grava sozinho quando a mao
+ * para, e o numero do topo — o peso agregado do dia — atualiza junto.
  */
 export default function SessionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
 
-  const { data, loading, reload } = useQuery(
-    useCallback(async () => {
-      const [session, sets, exercises] = await Promise.all([
-        getSession(id),
-        listSessionSets(id),
-        listExercises(),
-      ]);
-      const routine = session?.routineId ? await getRoutine(session.routineId) : null;
-      return {
-        session,
-        routine,
-        sets,
-        catalog: exercises,
-        names: new Map(exercises.map((e) => [e.id, e.name])),
-        runIds: new Set(exercises.filter((e) => e.kind === 'run').map((e) => e.id)),
-      };
-    }, [id]),
-  );
+  const { data, loading, reload } = useQuery(useCallback(() => loadSession(id), [id]));
 
-  const [overrides, setOverrides] = useState<Map<string, Partial<SessionSet>>>(new Map());
-  const [expanded, setExpanded] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
+
+  // Sair da tela e o melhor momento para tentar subir: o treino acabou de ser
+  // registrado e normalmente o usuario ja saiu da area morta da academia. Se
+  // falhar, a outbox segura.
+  useEffect(() => () => void useAuth.getState().runSync(), []);
 
   if (loading || !data?.session) {
     return (
       <Screen>
-        <Header title="Treino" />
+        <Header
+          title="Treino"
+          action={{ icon: <ArrowDownIcon size={20} />, onPress: () => router.back() }}
+        />
         <ActivityIndicator color={colors.textSecondary} />
       </Screen>
     );
   }
 
-  // Aplica as escritas otimistas por cima do que veio do banco.
-  const sets = data.sets.map((set) => ({ ...set, ...overrides.get(set.id) }));
-  const groups = groupByExercise(sets, data.names, data.runIds);
-
-  const patch = (setId: string, change: Partial<SessionSet>) => {
-    setOverrides((current) => {
-      const next = new Map(current);
-      next.set(setId, { ...next.get(setId), ...change });
-      return next;
-    });
-    updateSet(setId, change).then(bumpData);
-  };
-
-  const volume = totalVolume(sets);
-  const done = completedSets(sets);
-  const progress = sets.length === 0 ? 0 : done / sets.length;
-
-  const finish = async () => {
-    await finishSession(id);
-    bumpData();
-    router.back();
-    // Fim de treino e o melhor momento para tentar subir: normalmente o
-    // usuario ja saiu da area morta da academia. Se falhar, a outbox segura.
-    void useAuth.getState().runSync();
-  };
-
-  const routine = data.routine;
+  const { session, items, catalog, routineId, volume } = data;
+  const date = fromDateKey(session.date);
+  const used = new Set(items.map((item) => item.exerciseId));
+  const doneCount = items.filter((item) => item.done).length;
 
   /**
-   * Adicionar movimento aqui e recorrente por padrao: entra na rotina daquele
-   * dia da semana E aparece no treino de hoje. Adicionar remada na segunda faz
-   * toda segunda ja vir com ela.
-   *
-   * Treino livre (sem rotina) nao tem o que tornar recorrente — nesse caso
-   * entra so na sessao, e o texto do botao avisa.
+   * Adicionar aqui e recorrente por padrao: o exercicio entra na rotina daquele
+   * dia da semana, entao aparece neste treino E em todo dia igual daqui pra
+   * frente. E o mesmo contrato da tela do dia — por isso o mesmo subtitulo.
    */
   const addExercise = async (exerciseId: string) => {
-    const picked = data.catalog.find((exercise) => exercise.id === exerciseId);
-    const initial = picked?.kind === 'run' ? DEFAULT_RUN_TARGETS : DEFAULT_TARGETS;
-    if (routine) {
-      await addExerciseToRoutine(routine.id, exerciseId, initial);
-    }
-    await addExerciseToSession(id, exerciseId, initial);
+    if (!routineId) return;
+    const picked = catalog.find((exercise) => exercise.id === exerciseId);
+    await addExerciseToRoutine(
+      routineId,
+      exerciseId,
+      picked?.kind === 'run' ? DEFAULT_RUN_TARGETS : DEFAULT_TARGETS,
+    );
     bumpData();
     setPicking(false);
     reload();
   };
-
-  const usedExercises = new Set(sets.map((set) => set.exerciseId));
 
   return (
     <Screen>
@@ -161,171 +103,42 @@ export default function SessionScreen() {
         <View style={styles.summaryMeta}>
           <Label>Volume levantado</Label>
           <Meta>
-            {done} de {sets.length} séries
+            {`${weekdayName(weekdayOf(date))} · ${shortDate(date)} · ${doneCount} de ${items.length} concluídos`}
           </Meta>
         </View>
-        <DashedBar
-          progress={progress}
-          width={width - spacing.xl * 2}
-          style={styles.bar}
-        />
       </View>
 
       <ScrollView
         contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
+        // Sem isto, com o teclado do peso aberto, o primeiro toque em qualquer
+        // outro lugar so fecha o teclado e se perde.
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
       >
-        {groups.map((group) => (
-          <Card key={group.exerciseId} style={styles.group}>
-            <Pressable
-              style={styles.groupHeader}
-              onPress={() =>
-                setExpanded((current) =>
-                  current === group.exerciseId ? null : group.exerciseId,
-                )
-              }
-            >
-              <View style={styles.groupTitle}>
-                <Body numberOfLines={1}>{group.name}</Body>
-                <Meta>{groupSummary(group)}</Meta>
-              </View>
-            </Pressable>
-
-            {group.sets.map((set) => {
-              const isOpen = expanded === group.exerciseId;
-              return (
-                <View key={set.id} style={styles.setRow}>
-                  <Pressable
-                    hitSlop={hitSlop}
-                    onPress={() => patch(set.id, { done: !set.done })}
-                    style={[styles.check, set.done && styles.checkDone]}
-                  >
-                    {set.done ? <CheckIcon size={14} color={colors.bg} /> : null}
-                  </Pressable>
-
-                  <Label style={styles.setIndex}>{set.setIndex}</Label>
-
-                  {isOpen ? (
-                    <View style={styles.steppers}>
-                      {group.isRun ? (
-                        <>
-                          <Stepper
-                            label="KM"
-                            value={set.distanceKm}
-                            step={0.5}
-                            min={0}
-                            format={formatDistance}
-                            onChange={(distanceKm) => patch(set.id, { distanceKm })}
-                          />
-                          <Stepper
-                            label="MIN"
-                            value={set.durationMin}
-                            min={0}
-                            onChange={(durationMin) => patch(set.id, { durationMin })}
-                          />
-                        </>
-                      ) : (
-                        <>
-                          <Stepper
-                            label="REPS"
-                            value={set.reps}
-                            min={0}
-                            onChange={(reps) => patch(set.id, { reps })}
-                          />
-                          <Stepper
-                            label="PESO"
-                            value={set.weightKg}
-                            step={2.5}
-                            min={0}
-                            suffix="kg"
-                            format={formatWeight}
-                            onChange={(weightKg) => patch(set.id, { weightKg })}
-                          />
-                        </>
-                      )}
-                      <Pressable
-                        hitSlop={hitSlop}
-                        onPress={() => {
-                          removeSet(set.id).then(bumpData);
-                        }}
-                        style={styles.remove}
-                      >
-                        <TrashIcon size={16} color={colors.textSecondary} />
-                      </Pressable>
-                    </View>
-                  ) : (
-                    <View style={styles.compact}>
-                      <Body style={styles.compactValue}>
-                        {group.isRun
-                          ? `${formatDistance(set.distanceKm)} km · ${formatDuration(set.durationMin)}`
-                          : `${set.reps} × ${formatWeight(set.weightKg)} kg`}
-                      </Body>
-                      <Meta>
-                        {group.isRun
-                          ? (formatPace(set.distanceKm, set.durationMin) ?? '—')
-                          : `${formatVolume(set.reps * set.weightKg)} kg`}
-                      </Meta>
-                    </View>
-                  )}
-                </View>
-              );
-            })}
-
-            <Pressable
-              style={styles.addSet}
-              onPress={() => {
-                addSet(id, group.exerciseId).then(bumpData);
-              }}
-            >
-              <PlusIcon size={14} color={colors.textSecondary} />
-              <Label style={styles.addSetLabel}>
-                {group.isRun ? 'Outra corrida' : 'Série extra'}
-              </Label>
-            </Pressable>
-          </Card>
+        {items.map((item) => (
+          <ExerciseCard key={item.id} item={item} sessionId={session.id} />
         ))}
 
-        {groups.length === 0 ? (
-          <Meta style={styles.empty}>Nenhum exercício neste treino ainda.</Meta>
+        {items.length === 0 ? (
+          <Meta style={styles.empty}>Nenhum exercício neste dia ainda.</Meta>
         ) : null}
 
-        {/*
-          Fica no fim da lista, nao como segundo botao flutuante: "Finalizar
-          treino" continua sendo o unico, e o unico accent da tela.
-        */}
-        <Pressable style={styles.addExercise} onPress={() => setPicking(true)}>
-          <PlusIcon size={16} color={colors.textPrimary} />
-          <View style={styles.addExerciseText}>
-            <Body>Adicionar exercício</Body>
-            <Meta>
-              {routine
-                ? `entra também toda ${weekdayName(routine.weekday).toLowerCase()}`
-                : 'só neste treino — sem rotina para repetir'}
-            </Meta>
-          </View>
-        </Pressable>
+        {routineId ? (
+          <Pressable style={styles.addExercise} onPress={() => setPicking(true)}>
+            <PlusIcon size={16} color={colors.textPrimary} />
+            <View style={styles.addExerciseText}>
+              <Body>Adicionar exercício</Body>
+              <Meta>{`entra também toda ${weekdayName(weekdayOf(date)).toLowerCase()}`}</Meta>
+            </View>
+          </Pressable>
+        ) : null}
       </ScrollView>
-
-      {/* Unico accent da tela: o botao que encerra o treino. */}
-      <Pressable
-        onPress={finish}
-        style={({ pressed }) => [
-          styles.finish,
-          { bottom: insets.bottom + spacing.xl },
-          pressed && styles.finishPressed,
-        ]}
-      >
-        <Body style={styles.finishLabel}>Finalizar treino</Body>
-      </Pressable>
 
       <ExercisePicker
         visible={picking}
-        catalog={data.catalog.filter((exercise) => !usedExercises.has(exercise.id))}
-        subtitle={
-          routine
-            ? `Passa a valer toda ${weekdayName(routine.weekday).toLowerCase()}`
-            : 'Só neste treino'
-        }
+        catalog={catalog.filter((exercise) => !used.has(exercise.id))}
+        subtitle={`Passa a valer toda ${weekdayName(weekdayOf(date)).toLowerCase()}`}
         onClose={() => setPicking(false)}
         onPick={addExercise}
         onCreate={async (name) => {
@@ -337,55 +150,260 @@ export default function SessionScreen() {
   );
 }
 
-type Group = {
-  exerciseId: string;
-  name: string;
-  isRun: boolean;
-  sets: SessionSet[];
-  volume: number;
-  doneCount: number;
+/**
+ * De onde vieram os numeros que estao na tela.
+ *
+ * Nao diz se o exercicio foi feito — isso e o `done`, e quem responde por ele e
+ * a caixa de marcar. Um exercicio pode ter numeros ajustados e ainda nao ter
+ * sido levantado.
+ */
+const SOURCE_LABEL: Record<ItemSource, string> = {
+  edited: 'ajustado neste treino',
+  lastActual: 'como na última vez',
+  plan: 'ainda não treinado',
 };
 
-/** O resumo do grupo: km e tempo na corrida, series e volume na carga. */
-function groupSummary(group: Group): string {
-  if (group.isRun) {
-    const km = totalDistance(group.sets);
-    const minutes = totalDuration(group.sets);
-    const pace = formatPace(km, minutes);
-    const base = `${formatDistance(km)} km · ${formatDuration(minutes)}`;
-    return pace ? `${base} · ${pace} /km` : base;
-  }
-  return `${group.doneCount}/${group.sets.length} séries · ${formatVolume(group.volume)} kg`;
+type ItemSource = 'edited' | 'lastActual' | 'plan';
+
+type SessionExercise = {
+  /** O id do `routine_exercise`, ou o do exercicio quando ele nao esta na rotina. */
+  id: string;
+  exerciseId: string;
+  exerciseName: string;
+  exerciseKind: ExerciseKind;
+  targets: Targets;
+  /** Marcado como feito: e o que entra no peso levantado do dia. */
+  done: boolean;
+  source: ItemSource;
+  /** Um exercicio so sai da rotina se estiver nela. */
+  routineExerciseId: string | null;
+};
+
+/**
+ * Um exercicio do treino: os numeros, e a caixa que decide se eles contam.
+ *
+ * Mexer no stepper NAO grava. Antes gravava, e isso confundia duas perguntas
+ * diferentes: "quanto e" e "eu fiz". Corrigir a carga de um exercicio que o
+ * usuario acabou desistindo de fazer somava peso que ninguem levantou. Aqui o
+ * stepper so mexe no rascunho local; quem escreve no banco e a caixa.
+ *
+ * O rascunho comeca no que veio do banco e NAO e re-sincronizado depois, de
+ * proposito. A tela recarrega inteira a cada `bumpData` — inclusive por um sync
+ * que chegou de outro aparelho — e aceitar o valor do banco nessas recargas
+ * apagaria um ajuste que o usuario fez e ainda nao marcou. Ficar "atrasado" em
+ * relacao ao banco nao e problema aqui: toda escrita desta tela passa por
+ * `write`, que manda justamente este rascunho, entao os dois so divergem
+ * enquanto o exercicio esta desmarcado — que e exatamente quando o rascunho e
+ * a verdade.
+ */
+function ExerciseCard({ item, sessionId }: { item: SessionExercise; sessionId: string }) {
+  const [targets, setTargets] = useState(item.targets);
+
+  // Grava o exercicio inteiro com o estado da caixa. `bumpData` recarrega esta
+  // tela junto com as outras — e o que faz o peso do topo, o card da home e o
+  // dot-matrix acompanharem o toque.
+  const write = (next: Targets, done: boolean) => {
+    setSessionExerciseTargets(sessionId, item.exerciseId, item.exerciseKind, next, done).then(
+      bumpData,
+    );
+  };
+
+  const toggle = () => {
+    // Marcar leva junto o que estiver no stepper agora, inclusive um ajuste que
+    // o usuario acabou de fazer e nunca foi ao banco.
+    write(targets, !item.done);
+  };
+
+  return (
+    <Card>
+      <View style={styles.itemHead}>
+        <View style={styles.itemText}>
+          <Body numberOfLines={1}>{item.exerciseName}</Body>
+          <Meta>
+            {`${item.done ? 'concluído' : SOURCE_LABEL[item.source]} · ${summary(item.exerciseKind, targets)}`}
+          </Meta>
+        </View>
+
+        {item.routineExerciseId ? (
+          <Pressable
+            hitSlop={hitSlop}
+            onPress={async () => {
+              await removeRoutineExercise(item.routineExerciseId!);
+              // Zera o que estava gravado: o exercicio saiu do dia, e deixar as
+              // series vivas manteria o volume de um movimento que nao esta
+              // mais na lista. `sets: 0` nao insere linha nenhuma, entao o
+              // `done` daqui e indiferente.
+              await setSessionExerciseTargets(
+                sessionId,
+                item.exerciseId,
+                item.exerciseKind,
+                { sets: 0, reps: 0, weightKg: 0, distanceKm: 0, durationMin: 0 },
+                false,
+              );
+              bumpData();
+            }}
+          >
+            <TrashIcon size={16} color={colors.textSecondary} />
+          </Pressable>
+        ) : null}
+
+        <Pressable
+          hitSlop={hitSlop}
+          onPress={toggle}
+          // O glow precisa de um wrapper proprio, pelo mesmo motivo do `Card`:
+          // `overflow: hidden` na forma recortaria a sombra junto.
+          style={item.done ? styles.checkGlow : undefined}
+        >
+          <View style={[styles.check, item.done && styles.checkDone]}>
+            {item.done ? <CheckIcon size={15} color={colors.bg} /> : null}
+          </View>
+        </Pressable>
+      </View>
+
+      <TargetsEditor
+        value={targets}
+        kind={item.exerciseKind}
+        onCommit={(next) => {
+          setTargets(next);
+          // Ja marcado: o numero novo tem que valer na hora, senao o peso do dia
+          // ficaria com a carga antiga ate o usuario desmarcar e marcar de novo.
+          if (item.done) write(next, true);
+        }}
+        resetKey={`${sessionId}:${item.exerciseId}`}
+      />
+    </Card>
+  );
 }
 
-function groupByExercise(
-  sets: SessionSet[],
-  names: Map<string, string>,
-  runIds: Set<string>,
-): Group[] {
-  const volumes = volumeByExercise(sets);
-  const order: string[] = [];
+/** "3 × 10 · 62,5 kg · 1.875 kg" ou "5 km · 28 min" — o que a linha vale. */
+function summary(kind: ExerciseKind, targets: Targets): string {
+  const { sets, reps, weightKg, distanceKm, durationMin } = targets;
+
+  if (kind === 'run') {
+    return `${formatDistance(distanceKm)} km · ${formatDuration(durationMin)}`;
+  }
+
+  const base = `${sets} × ${reps} · ${formatWeight(weightKg)} kg`;
+  return `${base} · ${formatVolume(sets * reps * weightKg)} kg`;
+}
+
+/**
+ * O que a tela mostra: o plano da semana daquela data, com o que ja foi
+ * registrado por cima.
+ *
+ * A ordem importa. O plano vem de `targetsForWeek`, que ja resolve a cascata
+ * (ajuste da semana → ultima vez treinado → semente); o que esta gravado NESTA
+ * sessao ganha de todos eles, porque e o unico que descreve o dia em questao e
+ * nao uma previsao dele.
+ *
+ * Exercicio registrado que nao esta mais na rotina continua aparecendo, no fim
+ * da lista: tirar o movimento do dia nao pode sumir com o que ja foi levantado.
+ */
+async function loadSession(id: string) {
+  const session = await getSession(id);
+  if (!session) return { session: null } as const;
+
+  const [sets, catalog, planned] = await Promise.all([
+    listSessionSets(id),
+    listExercises(),
+    session.routineId
+      ? targetsForWeek(weekStartKey(fromDateKey(session.date)), session.routineId)
+      : Promise.resolve<WeekExercise[]>([]),
+  ]);
+
+  const recorded = recordedByExercise(sets, catalog);
+  const items: SessionExercise[] = [];
+
+  for (const item of planned) {
+    const entry = recorded.get(item.exerciseId) ?? null;
+    items.push({
+      id: item.id,
+      exerciseId: item.exerciseId,
+      exerciseName: item.exerciseName,
+      exerciseKind: item.exerciseKind,
+      // Numero gravado ganha do herdado mesmo desmarcado: e o ajuste que o
+      // usuario fez neste dia, e perde-lo ao sair da tela seria pior que
+      // mostra-lo sem contar no volume.
+      targets: entry?.targets ?? item.targets,
+      done: entry?.done ?? false,
+      source: entry ? 'edited' : item.source === 'plan' ? 'plan' : 'lastActual',
+      routineExerciseId: item.id,
+    });
+  }
+
+  const inPlan = new Set(planned.map((item) => item.exerciseId));
+  for (const [exerciseId, entry] of recorded) {
+    if (inPlan.has(exerciseId)) continue;
+    const exercise = catalog.find((candidate) => candidate.id === exerciseId);
+    items.push({
+      id: exerciseId,
+      exerciseId,
+      exerciseName: exercise?.name ?? 'Exercício',
+      exerciseKind: exercise?.kind ?? 'strength',
+      targets: entry.targets,
+      done: entry.done,
+      source: 'edited',
+      routineExerciseId: null,
+    });
+  }
+
+  return {
+    session,
+    items,
+    catalog,
+    routineId: session.routineId,
+    volume: totalVolume(sets),
+  };
+}
+
+/** O que ja existe no banco para um exercicio deste treino. */
+type Recorded = { targets: Targets; done: boolean };
+
+/**
+ * Os numeros ja gravados, um por exercicio, marcados ou nao.
+ *
+ * Olha tambem as linhas com `done = 0`, ao contrario do resto do app: elas sao
+ * exatamente o exercicio que o usuario ajustou mas ainda nao marcou como feito,
+ * e a tela precisa mostrar o numero dele. Quem filtra por `done` e o volume,
+ * nao esta leitura.
+ *
+ * As linhas de um exercicio nascem sempre uniformes — `setSessionExerciseTargets`
+ * substitui o exercicio inteiro a cada escrita — entao ler o `done` da primeira
+ * vale para o grupo.
+ *
+ * A derivacao dos numeros reusa as duas regras do resto do app: corrida soma as
+ * linhas, carga pega a ultima serie e conta quantas foram. As duas exigem
+ * `done`, por isso o `done: true` forcado abaixo — aqui a pergunta e "que
+ * numeros sao esses", nao "isso foi levantado".
+ */
+function recordedByExercise(
+  sets: readonly SessionSet[],
+  catalog: readonly { id: string; kind: ExerciseKind }[],
+): Map<string, Recorded> {
+  const kinds = new Map(catalog.map((exercise) => [exercise.id, exercise.kind]));
   const buckets = new Map<string, SessionSet[]>();
 
   for (const set of sets) {
-    if (!buckets.has(set.exerciseId)) {
-      buckets.set(set.exerciseId, []);
-      order.push(set.exerciseId);
-    }
-    buckets.get(set.exerciseId)!.push(set);
+    const bucket = buckets.get(set.exerciseId);
+    if (bucket) bucket.push(set);
+    else buckets.set(set.exerciseId, [set]);
   }
 
-  return order.map((exerciseId) => {
-    const bucket = buckets.get(exerciseId)!;
-    return {
-      exerciseId,
-      name: names.get(exerciseId) ?? 'Exercício',
-      isRun: runIds.has(exerciseId),
-      sets: bucket.sort((a, b) => a.setIndex - b.setIndex),
-      volume: volumes.get(exerciseId) ?? 0,
-      doneCount: completedSets(bucket),
-    };
-  });
+  const result = new Map<string, Recorded>();
+  for (const [exerciseId, bucket] of buckets) {
+    const targets =
+      kinds.get(exerciseId) === 'run'
+        ? runTargetsFromSets(bucket.map((set) => ({ ...set, done: true })))
+        : targetsFromSets(
+            bucket.map((set) => ({
+              setIndex: set.setIndex,
+              reps: set.reps,
+              weightKg: set.weightKg,
+            })),
+          );
+    if (targets) result.set(exerciseId, { targets, done: bucket.some((set) => set.done) });
+  }
+  return result;
 }
 
 const styles = StyleSheet.create({
@@ -397,76 +415,21 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     gap: 2,
   },
-  bar: {
-    marginTop: spacing.lg,
-  },
   list: {
     paddingHorizontal: spacing.xl,
-    gap: spacing.xl,
+    gap: spacing.lg,
   },
-  /** Um Card com padding menor: sao 5-6 por tela, e spacing.xl empurraria os numeros para fora. */
-  group: {
-    padding: spacing.lg,
-  },
-  groupHeader: {
-    paddingBottom: spacing.md,
-  },
-  groupTitle: {
-    gap: 2,
-  },
-  setRow: {
+  itemHead: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
-  },
-  check: {
-    width: 24,
-    height: 24,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.dotEmpty,
-  },
-  checkDone: {
-    backgroundColor: colors.textPrimary,
-    borderColor: colors.textPrimary,
-  },
-  setIndex: {
-    width: 14,
-  },
-  compact: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-  },
-  compactValue: {
-    fontSize: fontSize.body,
-  },
-  steppers: {
-    flex: 1,
-    flexDirection: 'row',
+    // Centralizado, nao alinhado ao topo: a caixa e um alvo de toque e precisa
+    // ficar no eixo do bloco de texto, nao pendurada na primeira linha dele.
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing.sm,
+    gap: spacing.lg,
+    marginBottom: spacing.md,
   },
-  remove: {
-    padding: spacing.xs,
-  },
-  addSet: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingTop: spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
-  },
-  addSetLabel: {
-    letterSpacing: 0.6,
+  itemText: {
+    flex: 1,
   },
   empty: {
     paddingVertical: spacing.xxxl,
@@ -486,20 +449,43 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
-  finish: {
-    position: 'absolute',
-    left: spacing.xl,
-    right: spacing.xl,
-    height: 54,
-    borderRadius: radius.pill,
-    backgroundColor: colors.accent,
+  /**
+   * Quadrado de cantos arredondados, nao circulo: e a mesma forma do dia do
+   * calendario, e o app so tem uma linguagem para "celula marcavel". Circulo
+   * aqui abriria uma segunda.
+   */
+  check: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.square,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.dotEmpty,
   },
-  finishPressed: {
-    opacity: 0.8,
+  /**
+   * Marcado: laranja solido. Sao varias caixas accent na mesma tela, o que a
+   * regra geral proibe — e a unica excecao do brief, documentada em
+   * `Design/design.md` §2 ("A unica excecao: a caixa de concluido"). Em resumo:
+   * aqui a cor nao destaca um exercicio entre os outros, marca um estado
+   * binario que se repete, e a leitura util e a agregada — quanto do treino ja
+   * foi feito, de relance.
+   *
+   * O preco da excecao e que NENHUM outro elemento desta tela pode usar accent.
+   */
+  checkDone: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
-  finishLabel: {
-    color: colors.textOnAccent,
+  /** O brilho que faz o laranja ler como neon, igual ao do card accent. */
+  checkGlow: {
+    borderRadius: radius.square,
+    backgroundColor: colors.accent,
+    shadowColor: colors.accent,
+    shadowOpacity: accentGlow.opacity,
+    shadowRadius: accentGlow.radius,
+    // Brilho para todo lado, nao sombra projetada: offset zero.
+    shadowOffset: { width: 0, height: 0 },
+    elevation: accentGlow.elevation,
   },
 });

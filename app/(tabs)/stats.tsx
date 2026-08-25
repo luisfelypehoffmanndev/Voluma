@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native'
 
 import { listBodyWeightLogs, listExerciseRecords, volumeByDate } from '@/db/repo';
 import { formatVolume, formatWeight } from '@/domain/volume';
-import { lastNDays, toDateKey } from '@/domain/week';
+import { fromDateKey, lastNDays, toDateKey } from '@/domain/week';
 import { useQuery } from '@/store/data';
 import { colors, fontSize, spacing } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
@@ -13,14 +13,21 @@ import { StatNumber } from '@/ui/StatNumber';
 import { useTabBarClearance } from '@/ui/tabBar';
 import { Body, Label, Meta } from '@/ui/Text';
 
-const WEEKS = 8;
+/**
+ * Dias no grafico de volume.
+ *
+ * Duas semanas, e nao mais: a comparacao que interessa e "hoje contra os
+ * ultimos dias", e cada barra precisa de largura para ser lida uma a uma. Num
+ * telefone comum, 14 barras ficam com ~10px cada; 30 virariam uma serra.
+ */
+const DAYS = 14;
 
 /**
  * Numeros do historico.
  *
- * O accent desta tela e a barra da semana atual no grafico de volume — o unico
- * elemento colorido. Os recordes ficam em branco: destaque demais dilui o
- * proprio destaque.
+ * O accent desta tela e a barra de hoje no grafico de volume — o unico elemento
+ * colorido. Os recordes ficam em branco: destaque demais dilui o proprio
+ * destaque.
  */
 export default function StatsScreen() {
   const clearance = useTabBarClearance();
@@ -29,22 +36,25 @@ export default function StatsScreen() {
   const { data } = useQuery(
     useCallback(async () => {
       const now = new Date();
-      const window = lastNDays(now, WEEKS * 7);
+      const window = lastNDays(now, DAYS);
       const [volumes, records, weights] = await Promise.all([
         volumeByDate(window[0], toDateKey(now)),
         listExerciseRecords(),
         listBodyWeightLogs(12),
       ]);
-      return { weeks: bucketByWeek(volumes, now), records, weights };
+      // Dia sem treino nao some do grafico: vira uma barra no piso, e e o vazio
+      // entre os treinos que da sentido a comparacao.
+      const days = window.map((key) => ({ key, volume: volumes.get(key) ?? 0 }));
+      return { days, records, weights };
     }, []),
   );
 
-  const weeks = data?.weeks ?? [];
-  const peak = Math.max(1, ...weeks.map((week) => week.volume));
+  const days = data?.days ?? [];
+  const peak = Math.max(1, ...days.map((day) => day.volume));
   const chartWidth = width - spacing.xl * 4;
-  const barWidth = Math.floor(chartWidth / (WEEKS * 2));
+  const barWidth = Math.floor(chartWidth / (DAYS * 2));
 
-  const thisWeek = weeks[weeks.length - 1]?.volume ?? 0;
+  const today = days[days.length - 1]?.volume ?? 0;
 
   return (
     <Screen>
@@ -55,28 +65,28 @@ export default function StatsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Card>
-          <Label>Volume por semana</Label>
+          <Label>Volume por dia</Label>
           <View style={styles.chartHead}>
             <StatNumber
-              value={formatVolume(thisWeek)}
+              value={formatVolume(today)}
               unit="kg"
               size={fontSize.numberMd}
             />
-            <Meta>esta semana</Meta>
+            <Meta>hoje</Meta>
           </View>
 
           <View style={[styles.chart, { height: 96 }]}>
-            {weeks.map((week, index) => {
-              const isCurrent = index === weeks.length - 1;
+            {days.map((day, index) => {
+              const isToday = index === days.length - 1;
               return (
                 <View
-                  key={week.startKey}
+                  key={day.key}
                   style={[
                     styles.bar,
                     {
                       width: barWidth,
-                      height: Math.max(2, (week.volume / peak) * 96),
-                      backgroundColor: isCurrent ? colors.accent : colors.dotEmpty,
+                      height: Math.max(2, (day.volume / peak) * 96),
+                      backgroundColor: isToday ? colors.accent : colors.dotEmpty,
                     },
                   ]}
                 />
@@ -85,8 +95,8 @@ export default function StatsScreen() {
           </View>
 
           <View style={styles.chartFoot}>
-            <Meta>{weeks[0] ? shortDate(new Date(weeks[0].startKey)) : ''}</Meta>
-            <Meta>agora</Meta>
+            <Meta>{days[0] ? shortDate(fromDateKey(days[0].key)) : ''}</Meta>
+            <Meta>hoje</Meta>
           </View>
         </Card>
 
@@ -122,24 +132,6 @@ export default function StatsScreen() {
       </ScrollView>
     </Screen>
   );
-}
-
-type WeekBucket = { startKey: string; volume: number };
-
-/** Agrupa o volume diario em semanas de 7 dias terminando hoje. */
-function bucketByWeek(volumes: ReadonlyMap<string, number>, now: Date): WeekBucket[] {
-  const days = lastNDays(now, WEEKS * 7);
-  const buckets: WeekBucket[] = [];
-
-  for (let index = 0; index < days.length; index += 7) {
-    const slice = days.slice(index, index + 7);
-    buckets.push({
-      startKey: slice[0],
-      volume: slice.reduce((sum, key) => sum + (volumes.get(key) ?? 0), 0),
-    });
-  }
-
-  return buckets;
 }
 
 const styles = StyleSheet.create({

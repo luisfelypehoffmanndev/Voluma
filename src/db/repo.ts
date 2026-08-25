@@ -15,7 +15,7 @@ import type {
 } from '@/domain/types';
 import { runTargetsFromSets } from '@/domain/run';
 import { resolveTargets, targetsFromSets } from '@/domain/targets';
-import { toDateKey, weekStartKey } from '@/domain/week';
+import { toDateKey, weekStartKey, weekdayOf } from '@/domain/week';
 
 import { getDb } from './client';
 import type { SyncedTable } from './schema';
@@ -625,6 +625,60 @@ export async function getOpenSession(): Promise<Session | null> {
 }
 
 /**
+ * O treino de uma data, criando-o se ainda nao existir.
+ *
+ * Nao materializa serie nenhuma, ao contrario de `startSession`: a tela de
+ * registro le os alvos da semana via `targetsForWeek` e so grava linha quando o
+ * usuario mexe num stepper. Materializar aqui gravaria como "levantado" um
+ * treino que o usuario apenas abriu.
+ *
+ * Nasce com `finished_at` igual ao `started_at` porque nao ha mais treino em
+ * andamento — a tela e edicao direta, nao cronometro. Sem isso o registro
+ * sumiria de `lastPerformedTargets`, que exige `finished_at IS NOT NULL`, e a
+ * cascata nunca herdaria o que acabou de ser registrado.
+ *
+ * `ensureDayRoutine` garante a rotina do dia mesmo para quem nunca abriu
+ * Ajustes: sem `routine_id` a sessao nao teria de onde tirar os exercicios.
+ */
+export async function getOrCreateSessionForDate(when = new Date()): Promise<Session> {
+  const dateKey = toDateKey(when);
+  const existing = await getSessionByDate(dateKey);
+  if (existing) return existing;
+
+  // Fora da transacao de proposito: `ensureDayRoutine` abre a sua propria, e o
+  // SQLite nao aninha.
+  const routine = await ensureDayRoutine(weekdayOf(when));
+
+  const db = await getDb();
+  const timestamp = now();
+  const session: Session = {
+    id: newId(),
+    routineId: routine.id,
+    date: dateKey,
+    startedAt: when.toISOString(),
+    finishedAt: when.toISOString(),
+    updatedAt: timestamp,
+    deletedAt: null,
+  };
+
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `INSERT INTO sessions (id, routine_id, date, started_at, finished_at, updated_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, NULL)`,
+      session.id,
+      session.routineId,
+      session.date,
+      session.startedAt,
+      session.finishedAt,
+      session.updatedAt,
+    );
+    await enqueue(db, 'sessions', session.id);
+  });
+
+  return session;
+}
+
+/**
  * Comeca um treino a partir de uma rotina, ja materializando as series-alvo
  * como linhas nao concluidas. Assim a tela de treino so precisa marcar
  * `done` e ajustar numeros, sem criar nada no meio do exercicio.
@@ -820,6 +874,73 @@ export async function addExerciseToSession(
         targets.weightKg,
         targets.distanceKm,
         targets.durationMin,
+        timestamp,
+      );
+      await enqueue(db, 'session_sets', setId);
+    }
+  });
+}
+
+/**
+ * Grava o que foi feito de UM exercicio num treino, de uma vez.
+ *
+ * O modelo da tela de registro e por exercicio, nao por serie: o usuario diz
+ * "3 x 10 a 60 kg" e nao marca cada serie. Entao a escrita substitui o
+ * exercicio inteiro — apaga as linhas que existiam e insere `targets.sets`
+ * linhas iguais — em vez de tentar casar serie a serie. Sem isso, baixar de 4
+ * para 3 series deixaria a quarta viva no historico.
+ *
+ * `done` e o que separa "anotei os numeros" de "levantei isso". Desmarcar grava
+ * as mesmas linhas com `done = 0` em vez de apaga-las: assim os numeros
+ * ajustados sobrevivem ao desmarcar, e nem o volume (`setVolume`) nem a cascata
+ * (`lastPerformedTargets`) os enxergam, porque as duas exigem `done = 1`.
+ *
+ * Corrida ocupa uma linha so, mesma regra de `startSession` — repetir a
+ * distancia em N series multiplicaria a quilometragem do dia.
+ */
+export async function setSessionExerciseTargets(
+  sessionId: string,
+  exerciseId: string,
+  kind: ExerciseKind,
+  targets: Targets,
+  done: boolean,
+): Promise<void> {
+  const db = await getDb();
+  const timestamp = now();
+  const rows = kind === 'run' ? 1 : Math.max(0, Math.floor(targets.sets));
+
+  await db.withTransactionAsync(async () => {
+    const previous = await db.getAllAsync<{ id: string }>(
+      'SELECT id FROM session_sets WHERE session_id = ? AND exercise_id = ? AND deleted_at IS NULL',
+      sessionId,
+      exerciseId,
+    );
+    for (const row of previous) {
+      await db.runAsync(
+        'UPDATE session_sets SET deleted_at = ?, updated_at = ? WHERE id = ?',
+        timestamp,
+        timestamp,
+        row.id,
+      );
+      await enqueue(db, 'session_sets', row.id);
+    }
+
+    for (let index = 1; index <= rows; index += 1) {
+      const setId = newId();
+      await db.runAsync(
+        `INSERT INTO session_sets
+           (id, session_id, exercise_id, set_index, reps, weight_kg,
+            distance_km, duration_min, done, updated_at, deleted_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+        setId,
+        sessionId,
+        exerciseId,
+        index,
+        targets.reps,
+        targets.weightKg,
+        targets.distanceKm,
+        targets.durationMin,
+        done ? 1 : 0,
         timestamp,
       );
       await enqueue(db, 'session_sets', setId);
