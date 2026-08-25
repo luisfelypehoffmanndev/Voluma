@@ -82,4 +82,43 @@ describe('o campo de luz', () => {
       expect(halo.opacity).toBeLessThan(0.1);
     }
   });
+
+  /**
+   * A curva de queda substituiu a rampa linear de dois stops porque a rampa
+   * para de mudar de golpe no fim do raio, e essa quina na derivada vira um anel
+   * na borda do halo. O que estes testes protegem e o contrato dela: comeca no
+   * pico, chega a zero, e so desce.
+   */
+  describe('a queda do halo', () => {
+    it('comeca no pico e termina em zero', () => {
+      const curve = ambient.falloff;
+      expect(curve[0]).toEqual({ offset: 0, weight: 1 });
+      expect(curve[curve.length - 1]).toEqual({ offset: 1, weight: 0 });
+    });
+
+    it('so desce, e nunca repete o mesmo peso', () => {
+      // Um trecho plano no meio da queda seria uma faixa de luminancia constante
+      // — exatamente a banda larga que a curva existe para nao criar.
+      for (let i = 1; i < ambient.falloff.length; i += 1) {
+        expect(ambient.falloff[i].weight).toBeLessThan(ambient.falloff[i - 1].weight);
+      }
+    });
+
+    it('tem offsets crescentes dentro de [0,1]', () => {
+      for (let i = 0; i < ambient.falloff.length; i += 1) {
+        const { offset } = ambient.falloff[i];
+        expect(offset).toBeGreaterThanOrEqual(0);
+        expect(offset).toBeLessThanOrEqual(1);
+        if (i > 0) expect(offset).toBeGreaterThan(ambient.falloff[i - 1].offset);
+      }
+    });
+
+    it('nao levanta o campo em ponto nenhum', () => {
+      // Peso acima de 1 faria o halo passar do pico que o teste de #202020 trava.
+      for (const point of ambient.falloff) {
+        expect(point.weight).toBeLessThanOrEqual(1);
+        expect(point.weight).toBeGreaterThanOrEqual(0);
+      }
+    });
+  });
 });

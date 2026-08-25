@@ -21,6 +21,7 @@ import { addWeeks, weekRangeLabel, weekStartKey, weekdayName, weeksBetween } fro
 import { bumpData, useQuery } from '@/store/data';
 import { colors, fontSize, hitSlop, spacing } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
+import { artSlugFor } from '@/movements/library';
 import { DEFAULT_RUN_TARGETS, DEFAULT_TARGETS, ExercisePicker } from '@/ui/ExercisePicker';
 import { FloatingGlassButton } from '@/ui/FloatingGlassButton';
 import { Header, RoundButton, Screen } from '@/ui/Screen';
@@ -159,12 +160,13 @@ export default function DayScreen() {
 
       <ExercisePicker
         visible={picking}
-        catalog={catalog.filter((exercise) => !used.has(exercise.id))}
+        catalog={catalog}
+        usedIds={used}
         subtitle={`Passa a valer toda ${weekdayName(weekday).toLowerCase()}`}
         onClose={() => setPicking(false)}
         onPick={addToDay}
-        onCreate={async (name) => {
-          const exercise = await createExercise(name);
+        onCreate={async (name, muscleGroup, kind) => {
+          const exercise = await createExercise(name, muscleGroup, kind);
           await addToDay(exercise.id);
         }}
       />
@@ -226,6 +228,7 @@ function ExerciseCard({
       <TargetsEditor
         value={item.targets}
         kind={item.exerciseKind}
+        figureSlug={artSlugFor(item.exerciseName)}
         onCommit={commit}
         resetKey={weekStart}
       />

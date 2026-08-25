@@ -20,9 +20,11 @@ import {
 } from '@/db/catalog';
 import { createExercise, deleteExercise, exerciseDayCounts, listExercises } from '@/db/repo';
 import type { Exercise } from '@/domain/types';
+import { MOVEMENT_LIBRARY, artSlugFor } from '@/movements/library';
 import { bumpData, useQuery } from '@/store/data';
 import { colors, fontSize, hitSlop, radius, spacing, surfaces } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
+import { MovementFigure } from '@/ui/MovementFigure';
 import { Header, Screen } from '@/ui/Screen';
 import { Body, Label, Meta } from '@/ui/Text';
 import { ArrowDownIcon, TrashIcon } from '@/ui/icons';
@@ -91,6 +93,17 @@ export default function CatalogScreen() {
       >
         <NewExerciseCard existing={exercises} />
 
+        {/* A saida para os 288 que o app conhece. Fica logo abaixo do campo de
+            nome de proposito: quem chegou aqui para digitar um movimento novo e
+            exatamente quem nao precisava digitar. */}
+        <Card onPress={() => router.push('/library')}>
+          <Label>Biblioteca</Label>
+          <View style={styles.commonText}>
+            <Body>{`${MOVEMENT_LIBRARY.length} movimentos`}</Body>
+            <Meta>com grupo, equipamento e figura — escolha em vez de digitar</Meta>
+          </View>
+        </Card>
+
         {/* So aparece enquanto ha o que adicionar. Um botao que nao faz nada e
             pior que nenhum, e depois de completo o catalogo comum some da tela
             para sempre. */}
@@ -157,6 +170,7 @@ function ExerciseRow({ exercise, days }: { exercise: Exercise; days: number }) {
 
   return (
     <View style={styles.row}>
+      <MovementFigure slug={artSlugFor(exercise.name)} size={40} />
       <View style={styles.rowText}>
         <Body numberOfLines={1}>{exercise.name}</Body>
         <Meta>{usageLabel(days, exercise.kind === 'run')}</Meta>

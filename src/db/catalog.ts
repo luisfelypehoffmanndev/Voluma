@@ -14,9 +14,15 @@ import { createExercise, listExercises } from './repo';
  * a regra: um nome por movimento, o mais reconhecivel, sem sinonimo. "Puxada
  * alta" e nao tambem "Pulley frente"; quem chama de outro jeito renomeia.
  *
- * A corrida nao esta aqui de proposito. Ela e o unico `kind: 'run'` do app e
- * nasce sob demanda em `ensureRunExercise`, porque a tela do dia depende de
- * existir no maximo uma.
+ * A corrida nao esta aqui de proposito: ela nasce sob demanda em
+ * `ensureRunExercise`, que e quem o botao "Adicionar corrida" da tela do dia
+ * chama. Ela e o `kind: 'run'` canonico — a biblioteca de movimentos cria
+ * outros (caminhada, bicicleta, remo), e por isso aquela busca desempata pelo
+ * nome.
+ *
+ * Esta lista nao e a biblioteca. Aqui estao os movimentos que o app SEMEIA em
+ * banco vazio; os 288 que ele CONHECE estao em `src/movements/library.ts`, sao
+ * estaticos e so viram linha quando o usuario adiciona um.
  */
 
 export type CommonExercise = {

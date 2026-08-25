@@ -35,6 +35,19 @@ import { ambient } from '@/theme/tokens';
  *    entao o grao atravessa para dentro dos cards junto com o resto do campo, e
  *    dithera tambem o gradiente que corre por baixo deles.
  *
+ *    O ruido e blue noise com distribuicao triangular, gerado uma vez por
+ *    densidade de tela para que o ladrilho caia 1:1 no pixel fisico — ver
+ *    `scripts/make-noise.js` para o porque de cada uma das tres coisas.
+ *
+ * 5. **A queda vem de `ambient.falloff`**, e nao de dois stops. Rampa linear
+ *    para de mudar de golpe no fim do raio, e essa quina na derivada vira um
+ *    anel na borda de cada halo.
+ *
+ * O que sobra de banding depois disso nao tem conserto aqui: sao tres `Rect`
+ * empilhados, entao ha tres composicoes de 8 bits acumulando erro, e o
+ * `react-native-svg` nunca liga `Paint.setDither` no shader do gradiente. O
+ * grao ataca o resultado final ja composto, que e o lugar certo.
+ *
  * Fica atras de tudo, sem capturar toque.
  */
 export function Ambient() {
@@ -57,8 +70,14 @@ export function Ambient() {
               cy={halo.cy}
               r={halo.r}
             >
-              <Stop offset="0" stopColor={ambient.color} stopOpacity={halo.opacity} />
-              <Stop offset="1" stopColor={ambient.color} stopOpacity={0} />
+              {ambient.falloff.map((point) => (
+                <Stop
+                  key={point.offset}
+                  offset={point.offset}
+                  stopColor={ambient.color}
+                  stopOpacity={halo.opacity * point.weight}
+                />
+              ))}
             </RadialGradient>
           ))}
         </Defs>

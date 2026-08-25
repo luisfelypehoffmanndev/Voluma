@@ -5,6 +5,22 @@ import { colors, fontSize, fonts, hitSlop, radius } from '@/theme/tokens';
 import { MinusIcon, PlusIcon } from './icons';
 import { Label, Mono } from './Text';
 
+/** Lado do botao redondo de + e -, tambem o alvo de toque minimo confortavel. */
+const BUTTON_SIZE = 32;
+
+/** Largura minima da caixa do numero: cabe "137,5" sem o campo pular de tamanho. */
+const VALUE_WIDTH = 74;
+
+/**
+ * O que a coluna de controles ocupa numa linha `layout="row"`.
+ *
+ * Exportado porque quem desenha ao lado de um stepper precisa saber quanto sobra
+ * — hoje a figura do movimento em `TargetsEditor`. Derivado das constantes
+ * abaixo em vez de escrito a mao nos dois lugares: mudar o botao de tamanho tem
+ * que mover a figura junto, nao deixar ela por cima.
+ */
+export const CONTROLS_WIDTH = BUTTON_SIZE * 2 + VALUE_WIDTH;
+
 type Props = {
   label: string;
   value: number;
@@ -25,6 +41,15 @@ type Props = {
    * salto pode ser grande (carga), nunca em reps, onde o passo unico ja resolve.
    */
   editable?: boolean;
+  /**
+   * Largura do rotulo, medida, so no layout `row`.
+   *
+   * Existe porque quem desenha no vao de uma linha precisa saber onde a coluna
+   * dos rotulos termina, e `space-between` nao cria coluna nenhuma para
+   * consultar. Medir e o que evita chutar um numero que muda com o rotulo mais
+   * longo de cada modalidade e com a fonte do sistema.
+   */
+  onLabelWidth?: (width: number) => void;
   onChange: (value: number) => void;
 };
 
@@ -49,6 +74,7 @@ export function Stepper({
   format = String,
   layout = 'stacked',
   editable = false,
+  onLabelWidth,
   onChange,
 }: Props) {
   const clamp = (next: number) => Math.min(max, Math.max(min, next));
@@ -124,7 +150,7 @@ export function Stepper({
   if (layout === 'row') {
     return (
       <View style={styles.rowContainer}>
-        <Label>{label}</Label>
+        <Label onLayout={(event) => onLabelWidth?.(event.nativeEvent.layout.width)}>{label}</Label>
         {controls}
       </View>
     );
@@ -158,8 +184,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   button: {
-    width: 32,
-    height: 32,
+    width: BUTTON_SIZE,
+    height: BUTTON_SIZE,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
@@ -170,7 +196,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   valueBox: {
-    minWidth: 74,
+    minWidth: VALUE_WIDTH,
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'center',

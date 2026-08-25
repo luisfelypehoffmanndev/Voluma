@@ -180,6 +180,27 @@ export const ambient = {
     { id: 'direita', cx: '88%', cy: '42%', r: '55%', opacity: 0.06 },
     { id: 'base', cx: '10%', cy: '88%', r: '60%', opacity: 0.05 },
   ],
+  /**
+   * Como cada halo cai, em fracao da opacidade de pico.
+   *
+   * Substitui a rampa linear de dois stops que havia antes. O ganho nao e
+   * "suavidade" no sentido vago: a rampa linear **para de mudar de golpe** em
+   * `offset = 1`, e essa quina na derivada e lida pelo olho como um anel nitido
+   * na borda do halo — independente de quantizacao, e pior justamente onde o
+   * halo deveria estar sumindo.
+   *
+   * A curva abaixo aproxima uma gaussiana e chega em zero pela tangente, sem
+   * quina. O peso 1 no offset 0 mantem o pico intocado: `composite.test.ts`
+   * exige que o campo chegue a #202020 e nao passe disso.
+   */
+  falloff: [
+    { offset: 0, weight: 1 },
+    { offset: 0.25, weight: 0.78 },
+    { offset: 0.5, weight: 0.45 },
+    { offset: 0.7, weight: 0.22 },
+    { offset: 0.85, weight: 0.09 },
+    { offset: 1, weight: 0 },
+  ],
 } as const;
 
 /** Raio consistente por nivel de hierarquia — nunca raios aleatorios entre irmaos. */
