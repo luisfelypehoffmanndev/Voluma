@@ -66,11 +66,14 @@ export default function SettingsScreen() {
           })}
         </Card>
 
-        <Card>
+        <Card onPress={() => router.push('/catalog')}>
           <Label>Catálogo</Label>
-          <View style={styles.rowText}>
-            <Body style={styles.catalogCount}>{data?.exercises.length ?? 0} movimentos</Body>
-            <Meta>criados a partir dos dias</Meta>
+          <View style={styles.row}>
+            <View style={styles.rowText}>
+              <Body style={styles.catalogCount}>{data?.exercises.length ?? 0} movimentos</Body>
+              <Meta>adicionar, apagar e organizar por grupo</Meta>
+            </View>
+            <ChevronRightIcon size={16} color={colors.textSecondary} />
           </View>
         </Card>
 

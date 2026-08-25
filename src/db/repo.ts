@@ -115,6 +115,27 @@ export async function ensureRunExercise(): Promise<Exercise> {
   return createExercise('Corrida', 'Cardio', 'run');
 }
 
+/**
+ * Em quantos dias da semana cada exercicio aparece.
+ *
+ * O catalogo usa isso para avisar antes de apagar: um movimento que esta em
+ * tres dias some dos tres de uma vez, e o soft delete nao pergunta.
+ *
+ * Conta dias distintos e nao linhas de `routine_exercises` porque e o dia que o
+ * usuario reconhece — "esta na segunda e na sexta", nao "tem 2 vinculos".
+ */
+export async function exerciseDayCounts(): Promise<Map<string, number>> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ exercise_id: string; days: number }>(
+    `SELECT re.exercise_id AS exercise_id, COUNT(DISTINCT r.weekday) AS days
+       FROM routine_exercises re
+       JOIN routines r ON r.id = re.routine_id
+      WHERE re.deleted_at IS NULL AND r.deleted_at IS NULL
+      GROUP BY re.exercise_id`,
+  );
+  return new Map(rows.map((row) => [row.exercise_id, row.days]));
+}
+
 export async function renameExercise(id: string, name: string): Promise<void> {
   const db = await getDb();
   await db.withTransactionAsync(async () => {
