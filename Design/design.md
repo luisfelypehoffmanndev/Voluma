@@ -20,7 +20,7 @@ Pense em painel de instrumento (velocímetro, equalizador, terminal), não em "a
 | `--glass-specular` | gradiente branco `0.28 → 0.04` | brilho na borda superior do vidro — luz raspando a quina |
 | `--card-specular` | gradiente branco `0.18 → 0.05` | o mesmo brilho, mais contido: são 5–6 cards por tela, não um elemento solitário |
 | `--ambient` | 3 halos brancos radiais a `0.09` / `0.06` / `0.05` | o campo de luz atrás de tudo, que as superfícies amostram |
-| `--grain` | ruído branco de ~1 nível, ladrilhado | dither do campo de luz — sem ele o gradiente vira anéis |
+| `--grain` | *blue noise* triangular de ~2 níveis, ladrilhado | máscara do banding do campo de luz |
 | `--border` | `rgba(255,255,255,0.08)` | bordas de 1px, nunca mais grossas |
 | `--divider` | `rgba(255,255,255,0.12)` | divisores dentro de um card |
 | `--text-primary` | `#F5F5F5` | texto principal |
@@ -89,7 +89,7 @@ border-image: linear-gradient(rgba(255,255,255,0.18), rgba(255,255,255,0.05)) 1;
 
 **A conta que fixa os alphas.** Branco com alpha `A` sobre um valor `B` resulta em `B + A·(255−B)`. É o que garante que o vidro não clareia o app: a 6% sobre o fundo sem halo, o card cai em `#191919` — praticamente o `#161616` dos cards sólidos que vieram antes. O vidro não reescreve o baseline; ele só faz a superfície *amostrar* o que passa por trás. A conta vive em `src/theme/composite.ts`, com teste, justamente para que ninguém mexa num alpha sem ver onde ele foi parar.
 
-**O grão não é textura decorativa.** Um campo que anda 22 níveis de cinza ao longo da tela inteira gasta dezenas de pixels por degrau, e cada degrau aparece como um anel: é *banding*, quantização de 8 bits, e nenhuma dose de suavidade ou de stops a mais resolve. Por cima do campo vai um ruído branco de ~1 nível (`assets/noise@3x.png`, gerado por `scripts/make-noise.js`), que dissolve a fronteira entre um degrau e o seguinte. Ele fica **acima** dos halos de propósito: como as superfícies do app são translúcidas, o grão atravessa para dentro dos cards e dithera também o gradiente que corre por baixo deles.
+**O grão não é textura decorativa.** Um campo que anda 22 níveis de cinza ao longo da tela inteira gasta dezenas de pixels por degrau, e cada degrau aparece como um anel: é *banding*, quantização de 8 bits, e nenhuma dose de suavidade ou de stops a mais resolve. Por cima do campo vai um ruído (`assets/noise*.png`, gerado por `scripts/make-noise.js`) que dissolve a fronteira entre um degrau e o seguinte. **Ele não é dither, é máscara** — e a diferença define quanta amplitude ele precisa: dither soma antes do arredondamento, mas aqui o `react-native-svg` já quantizou o gradiente e o grão entra depois, então a estrutura de bandas já está gravada e o ruído só a disfarça. Disfarçar custa mais que ditherar, e é por isso que a amplitude subiu de ~1 para ~2 níveis contra a primeira intenção deste brief. Ligar o `Paint.setDither` do Android, que resolveria na origem, exigiria sair do Expo Go: o `react-native-svg` nativo vem embutido nele. Três detalhes desse ruído não são preciosismo, e a primeira versão errou os três: ele é **blue noise**, não branco — branco tem energia nas baixas frequências, onde o olho enxerga melhor, e lê como mancha em vez de dissolver a borda; a amplitude é **triangular**, não uniforme, que é a distribuição que o dither pede; e existe **uma variante por densidade de tela**, todas com a mesma pegada em dp, porque um único arquivo `@3x` obriga o Metro a reescalar em qualquer aparelho que não seja 3x, e a interpolação bilinear dilui justamente a variância que faz o dither funcionar. Ele fica **acima** dos halos de propósito: como as superfícies do app são translúcidas, o grão atravessa para dentro dos cards e dithera também o gradiente que corre por baixo deles.
 
 O **brilho especular** na borda superior é o que separa "vidro Apple" de "retângulo translúcido". Ele é gradiente, não linha de cor sólida — a luz é mais forte na quina e some descendo. É o que dá **direção** à luz, e é obrigatório em todo nível.
 
@@ -121,7 +121,7 @@ Marcada, a célula é laranja **sólido** com glow (`--accent` + a mesma sombra 
 - Glow/blur colorido atrás de ícones ou cards.
 - **Vidro sem campo de luz por trás** — translucidez sobre fundo chapado é o "app slop" translúcido genérico. O erro nunca foi o vidro estar em superfície que não flutua; é não ter nada para atravessar.
 - Vidro **colorido** (roxo, ciano). Aqui é branco puro, do campo à borda — é o que mais separa este material do slop.
-- Grão ou ruído como "textura" decorativa, à procura de vibe analógica. O único ruído permitido é o dither do campo de luz, a ~1 nível — ele existe para corrigir banding, e se aparecer como textura subiu demais.
+- Grão ou ruído como "textura" decorativa, à procura de vibe analógica. O único ruído permitido é o do campo de luz, hoje a ~2 níveis — ele existe para mascarar banding, e se aparecer como textura subiu demais. Se ~2 níveis ainda não bastarem, a resposta não é subir mais: é trocar a arquitetura do campo.
 - Emojis como substituto de ícone.
 - Sombra pesada (`box-shadow` grande e difusa) em todo card — usar no máximo uma sombra sutil e só quando o card realmente flutua.
 - Mais de uma cor de destaque na mesma tela (a caixa de concluído é a exceção documentada em §2 — e é a única).

@@ -1,13 +1,16 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import type { Exercise, Targets } from '@/domain/types';
+import { normalizeName } from '@/db/catalog';
+import type { Exercise, ExerciseKind, Targets } from '@/domain/types';
+import { artSlugFor, filterMovements } from '@/movements/library';
 import { colors, fontSize, fonts, radius, spacing, surfaces } from '@/theme/tokens';
 
 import { GlassSurface } from './GlassSurface';
+import { MovementFigure } from './MovementFigure';
 import { Header } from './Screen';
-import { Body, Meta } from './Text';
+import { Body, Label, Meta } from './Text';
 import { ArrowDownIcon, PlusIcon } from './icons';
 
 /** Alvos iniciais de um exercicio recem-adicionado, ajustaveis logo em seguida. */
@@ -28,15 +31,34 @@ export const DEFAULT_RUN_TARGETS: Targets = {
   durationMin: 30,
 };
 
+/**
+ * Quantos movimentos da biblioteca a lista mostra sem termo de busca.
+ *
+ * Sao 288, e despejar todos abaixo do catalogo do usuario transformaria a
+ * rolagem numa parede. Com busca o teto sai do caminho — quem digitou "afundo"
+ * quer ver os oito.
+ */
+const LIBRARY_PREVIEW = 12;
+
 type Props = {
   visible: boolean;
-  /** Catalogo ja filtrado pelo chamador (ex: sem os que a rotina ja tem). */
+  /**
+   * O catalogo INTEIRO, nao o filtrado.
+   *
+   * A filtragem mora aqui porque a lista de escolha e a de dedupe da biblioteca
+   * sao duas leituras diferentes do mesmo catalogo: a primeira esconde o que o
+   * dia ja usa, a segunda precisa enxergar tudo. Recebendo so o filtrado, um
+   * movimento que o usuario tem e que ja esta no dia reapareceria como oferta
+   * da biblioteca, e adiciona-lo criaria uma segunda linha do mesmo exercicio.
+   */
   catalog: readonly Exercise[];
+  /** Os exercicios que a rotina ou a sessao ja tem, e por isso nao se escolhe de novo. */
+  usedIds?: ReadonlySet<string>;
   /** Texto sob o titulo, para dizer o que a escolha vai causar. */
   subtitle?: string;
   onClose: () => void;
   onPick: (exerciseId: string) => void;
-  onCreate: (name: string) => void;
+  onCreate: (name: string, muscleGroup?: string, kind?: ExerciseKind) => void;
 };
 
 /**
@@ -47,10 +69,16 @@ type Props = {
  *
  * O painel e de vidro: ele flutua sobre a lista da tela de origem, que continua
  * visivel atras. E o caso que o brief descreve como vidro legitimo.
+ *
+ * Abaixo do catalogo vem a biblioteca (`src/movements/library.ts`): os
+ * movimentos que o app conhece mas o usuario ainda nao tem. Adicionar dali cria
+ * a linha em `exercises` com nome, grupo e tipo prontos, que e a diferenca
+ * entre "Afundo para tras" e o que sairia de digitar as pressas.
  */
 export function ExercisePicker({
   visible,
   catalog,
+  usedIds,
   subtitle,
   onClose,
   onPick,
@@ -59,11 +87,39 @@ export function ExercisePicker({
   const [search, setSearch] = useState('');
   const insets = useSafeAreaInsets();
 
-  const term = search.trim().toLowerCase();
+  // Sem acento e sem caixa, igual ao catalogo: quem digita "triceps" no teclado
+  // do celular tem que achar "Tríceps corda". A biblioteca vai um passo alem e
+  // casa tambem grupo e equipamento (ver `filterMovements`), entao "biceps" la
+  // devolve as roscas mesmo sem a palavra aparecer em nenhum nome.
+  const term = normalizeName(search);
+
+  const available = useMemo(
+    () => (usedIds ? catalog.filter((exercise) => !usedIds.has(exercise.id)) : catalog),
+    [catalog, usedIds],
+  );
+
   const matches = term
-    ? catalog.filter((exercise) => exercise.name.toLowerCase().includes(term))
-    : catalog;
-  const canCreate = term.length > 0 && !matches.some((e) => e.name.toLowerCase() === term);
+    ? available.filter((exercise) => normalizeName(exercise.name).includes(term))
+    : available;
+
+  // Contra o catalogo inteiro, de proposito — ver o comentario de `catalog`.
+  const known = useMemo(
+    () => new Set(catalog.map((exercise) => normalizeName(exercise.name))),
+    [catalog],
+  );
+
+  // A biblioteca so oferece o que o usuario ainda nao tem em lugar nenhum.
+  const library = useMemo(() => {
+    const all = filterMovements({ search }).filter(
+      (movement) => !known.has(normalizeName(movement.name)),
+    );
+    return term ? all : all.slice(0, LIBRARY_PREVIEW);
+  }, [known, search, term]);
+
+  const canCreate =
+    term.length > 0 &&
+    !matches.some((exercise) => normalizeName(exercise.name) === term) &&
+    !library.some((movement) => normalizeName(movement.name) === term);
 
   const close = () => {
     setSearch('');
@@ -105,6 +161,7 @@ export function ExercisePicker({
 
               {matches.map((exercise) => (
                 <Pressable key={exercise.id} style={styles.row} onPress={() => onPick(exercise.id)}>
+                  <MovementFigure slug={artSlugFor(exercise.name)} size={32} />
                   <Body style={styles.name} numberOfLines={1}>
                     {exercise.name}
                   </Body>
@@ -116,7 +173,25 @@ export function ExercisePicker({
                 </Pressable>
               ))}
 
-              {matches.length === 0 && !canCreate ? (
+              {library.length > 0 ? (
+                <Label style={styles.section}>Da biblioteca</Label>
+              ) : null}
+
+              {library.map((movement) => (
+                <Pressable
+                  key={movement.slug}
+                  style={styles.row}
+                  onPress={() => onCreate(movement.name, movement.muscleGroup, movement.kind)}
+                >
+                  <MovementFigure slug={movement.illustrated ? movement.slug : null} size={32} />
+                  <Body style={styles.name} numberOfLines={1}>
+                    {movement.name}
+                  </Body>
+                  <Meta>{movement.equipment}</Meta>
+                </Pressable>
+              ))}
+
+              {matches.length === 0 && library.length === 0 && !canCreate ? (
                 <Meta style={styles.empty}>Catálogo vazio. Digite um nome para criar.</Meta>
               ) : null}
             </ScrollView>
@@ -163,9 +238,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.md,
-    paddingVertical: spacing.lg,
+    paddingVertical: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
+  },
+  /**
+   * A divisa entre o catalogo e a biblioteca.
+   *
+   * Precisa existir: sem ela, tocar num nome as vezes escolhe um exercicio que
+   * ja e do usuario e as vezes cria um novo, e nada na tela diz qual.
+   */
+  section: {
+    paddingTop: spacing.xxl,
+    paddingBottom: spacing.sm,
   },
   name: {
     flex: 1,

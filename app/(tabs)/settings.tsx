@@ -78,6 +78,8 @@ export default function SettingsScreen() {
         </Card>
 
         <SyncCard />
+
+        <CreditsCard />
       </ScrollView>
     </Screen>
   );
@@ -161,6 +163,25 @@ function SyncCard() {
           <Meta>apaga os dados deste aparelho</Meta>
         </View>
       </Pressable>
+    </Card>
+  );
+}
+
+/**
+ * Credito da arte dos movimentos.
+ *
+ * Nao e enfeite: as figuras sao CC BY-SA 4.0, e BY quer dizer que o credito tem
+ * que estar visivel para quem usa o app, nao so no repositorio. Fica no fim de
+ * Ajustes, que e onde credito costuma morar e onde ninguem tropeca nele.
+ */
+function CreditsCard() {
+  return (
+    <Card>
+      <Label>Créditos</Label>
+      <View style={styles.rowText}>
+        <Body>Figuras dos exercícios</Body>
+        <Meta>Bryl Lim · workout-guide, derivado de Everkinetic · CC BY-SA 4.0</Meta>
+      </View>
     </Card>
   );
 }

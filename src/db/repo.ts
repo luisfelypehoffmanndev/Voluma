@@ -98,18 +98,24 @@ export async function createExercise(
 /**
  * O exercicio de corrida, criando-o se ainda nao existir.
  *
- * A corrida e um item fixo do catalogo, nao um tipo que qualquer exercicio
- * possa ter: existe uma linha so, com `kind = 'run'`, e e ela que aparece no
- * seletor com os campos de distancia e tempo.
+ * A corrida e um item fixo do catalogo: e ela que o botao "Adicionar corrida"
+ * da tela do dia poe na rotina, com os campos de distancia e tempo.
  *
  * Nasce sob demanda em vez de vir na migracao porque a migracao teria que
  * inventar um uuid em SQL puro, e porque assim ela some de vez se o usuario
  * apagar — sem reaparecer no proximo boot.
+ *
+ * O desempate por nome existe porque `kind = 'run'` deixou de ser exclusivo da
+ * corrida: a biblioteca (`src/movements/library.ts`) tambem cria caminhada,
+ * bicicleta e remo assim, que sao os movimentos medidos em distancia e tempo.
+ * Sem ele, quem adicionasse a caminhada primeiro veria o botao de corrida
+ * colocar caminhada no dia.
  */
 export async function ensureRunExercise(): Promise<Exercise> {
   const db = await getDb();
   const existing = await db.getFirstAsync<ExerciseRow>(
-    "SELECT * FROM exercises WHERE kind = 'run' AND deleted_at IS NULL ORDER BY updated_at, id LIMIT 1",
+    `SELECT * FROM exercises WHERE kind = 'run' AND deleted_at IS NULL
+     ORDER BY (name = 'Corrida') DESC, updated_at, id LIMIT 1`,
   );
   if (existing) return toExercise(existing);
   return createExercise('Corrida', 'Cardio', 'run');

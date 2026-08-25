@@ -23,6 +23,7 @@ import { bumpData, useQuery } from '@/store/data';
 import { useAuth } from '@/sync/auth';
 import { accentGlow, colors, fontSize, hitSlop, radius, spacing } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
+import { artSlugFor } from '@/movements/library';
 import { DEFAULT_RUN_TARGETS, DEFAULT_TARGETS, ExercisePicker } from '@/ui/ExercisePicker';
 import { shortDate } from '@/ui/relative';
 import { Header, Screen } from '@/ui/Screen';
@@ -137,12 +138,13 @@ export default function SessionScreen() {
 
       <ExercisePicker
         visible={picking}
-        catalog={catalog.filter((exercise) => !used.has(exercise.id))}
+        catalog={catalog}
+        usedIds={used}
         subtitle={`Passa a valer toda ${weekdayName(weekdayOf(date)).toLowerCase()}`}
         onClose={() => setPicking(false)}
         onPick={addExercise}
-        onCreate={async (name) => {
-          const exercise = await createExercise(name);
+        onCreate={async (name, muscleGroup, kind) => {
+          const exercise = await createExercise(name, muscleGroup, kind);
           await addExercise(exercise.id);
         }}
       />
@@ -203,9 +205,14 @@ function ExerciseCard({ item, sessionId }: { item: SessionExercise; sessionId: s
   // tela junto com as outras — e o que faz o peso do topo, o card da home e o
   // dot-matrix acompanharem o toque.
   const write = (next: Targets, done: boolean) => {
-    setSessionExerciseTargets(sessionId, item.exerciseId, item.exerciseKind, next, done).then(
-      bumpData,
-    );
+    setSessionExerciseTargets(sessionId, item.exerciseId, item.exerciseKind, next, done)
+      .then(bumpData)
+      // Sem isto uma falha de escrita sumia sem deixar rastro: a tela nao
+      // recarregava e o usuario via a caixa nao reagir, sem nada em lugar nenhum
+      // dizendo por que.
+      .catch((error) => {
+        console.warn('[CleanGym] falha ao gravar', item.exerciseName, error);
+      });
   };
 
   const toggle = () => {
@@ -263,6 +270,7 @@ function ExerciseCard({ item, sessionId }: { item: SessionExercise; sessionId: s
       <TargetsEditor
         value={targets}
         kind={item.exerciseKind}
+        figureSlug={artSlugFor(item.exerciseName)}
         onCommit={(next) => {
           setTargets(next);
           // Ja marcado: o numero novo tem que valer na hora, senao o peso do dia
