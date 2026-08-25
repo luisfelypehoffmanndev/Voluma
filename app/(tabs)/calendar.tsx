@@ -3,11 +3,11 @@ import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import {
+  getOrCreateSessionForDate,
   getSessionByDate,
   listExercises,
   listRoutines,
   listSessionSets,
-  startSession,
   targetsForWeek,
   trainedDates,
   volumeByDate,
@@ -29,7 +29,7 @@ import {
 import { bumpData, useQuery } from '@/store/data';
 import { colors, fontSize, fonts, radius, spacing, surfaces } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
-import { duration, shortDate } from '@/ui/relative';
+import { shortDate } from '@/ui/relative';
 import { Header, RoundButton, Screen } from '@/ui/Screen';
 import { useTabBarClearance } from '@/ui/tabBar';
 import { Body, Label, Meta, Mono } from '@/ui/Text';
@@ -171,8 +171,8 @@ export default function CalendarScreen() {
         <DayDetail
           dateKey={selected}
           detail={day.data}
-          onStart={async (routineId) => {
-            const session = await startSession(routineId, fromDateKey(selected));
+          onStart={async () => {
+            const session = await getOrCreateSessionForDate(fromDateKey(selected));
             bumpData();
             router.push(`/session/${session.id}`);
           }}
@@ -199,7 +199,7 @@ function DayDetail({
 }: {
   dateKey: string;
   detail: DayDetailData | null;
-  onStart: (routineId: string | null) => void;
+  onStart: () => void;
   onOpen: (sessionId: string) => void;
 }) {
   const date = fromDateKey(dateKey);
@@ -216,12 +216,9 @@ function DayDetail({
         <Label>{shortDate(date)}</Label>
         <View style={styles.detailHead}>
           <Body>{dayTitle(planned?.name ?? '', planned?.items.length ?? 0, 'Treino livre')}</Body>
-          <Meta>
-            {formatVolume(totalVolume(sets))} kg
-            {session.finishedAt
-              ? ` · ${duration(session.startedAt, session.finishedAt)}`
-              : ' · em andamento'}
-          </Meta>
+          {/* So o volume: nao ha mais treino em andamento nem cronometro — o
+              registro nasce pronto e a duracao seria sempre zero. */}
+          <Meta>{formatVolume(totalVolume(sets))} kg</Meta>
         </View>
 
         {[...byExercise.entries()].map(([exerciseId, volume]) => (
@@ -240,7 +237,7 @@ function DayDetail({
   const trains = items.length > 0;
 
   return (
-    <Card onPress={isFuture ? undefined : () => onStart(planned?.id ?? null)}>
+    <Card onPress={isFuture ? undefined : onStart}>
       <Label>{shortDate(date)}</Label>
       <View style={styles.detailHead}>
         <Body>{dayTitle(planned?.name ?? '', items.length, 'Descanso')}</Body>
