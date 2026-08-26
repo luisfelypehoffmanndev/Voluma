@@ -6,6 +6,8 @@
  * accent, um deles esta errado.
  */
 
+import { grayOf } from './composite';
+
 export const colors = {
   /** fundo base, quase preto — nunca #000 puro (mata a profundidade) */
   bg: '#0A0A0A',
@@ -202,6 +204,81 @@ export const ambient = {
     { offset: 1, weight: 0 },
   ],
 } as const;
+
+/**
+ * O mesmo campo de luz, na forma que o React Native desenha nativamente.
+ *
+ * Nao e uma segunda fonte de verdade: os halos e a queda continuam sendo os de
+ * `ambient` acima, e este export so os traduz. Trocar um numero la muda os dois
+ * caminhos, que e o unico jeito de isto nao apodrecer.
+ *
+ * Por que existe: desenhado por `react-native-svg`, o campo passa por um bitmap
+ * de *software* (`SvgView.java` faz `new Canvas(bitmap)`, que nunca e HWUI) e a
+ * lib nao liga `setDither` em lugar nenhum da arvore Android. Sao tres `Rect`
+ * empilhados, entao a mesma rampa e quantizada em 8 bits tres vezes, na CPU,
+ * sem dither — e e dai que vem o banding.
+ *
+ * Como camada de fundo nativa, `BackgroundDrawable` funde as tres num unico
+ * `ComposeShader` e desenha de uma vez so no canvas acelerado da View: uma
+ * quantizacao, na GPU, no pipeline que dithera gradiente.
+ *
+ * Duas armadilhas, ambas silenciosas:
+ *
+ * 1. `RadialGradient.parse` devolve `null` — descartando o gradiente sem erro
+ *    nenhum — se `position` nao tiver (`top` ou `bottom`) E (`left` ou
+ *    `right`). Os dois vao sempre juntos aqui.
+ * 2. A ordem da lista e a ordem de composicao (`SRC_OVER`), igual ao empilhado
+ *    dos `Rect` que havia antes. Nao reordene sem olhar o resultado.
+ *
+ * O tipo publico de `experimental_backgroundImage` no RN 0.81 ainda so descreve
+ * `linear-gradient`, embora o runtime e o lado nativo aceitem radial — por isso
+ * o formato vive aqui, tipado de verdade, e o cast fica num lugar so, em
+ * `Ambient.tsx`.
+ */
+/**
+ * O campo e branco puro, e o app inteiro e neutro — a mesma premissa que
+ * `composite.ts` assume ao trabalhar com um canal so.
+ */
+const AMBIENT_CHANNEL = grayOf(ambient.color);
+
+export type RadialGradientLayer = {
+  type: 'radial-gradient';
+  shape: 'ellipse';
+  size: { x: string; y: string };
+  position: { top: string; left: string };
+  colorStops: { color: string; position: string }[];
+};
+
+/**
+ * A forma linear do mesmo mecanismo, para quem precisa pintar um trecho do
+ * campo em vez de deixa-lo passar (ver `field.ts` e a tab bar).
+ *
+ * `positions` e plural e e um array de propositio: e assim que
+ * `processBackgroundImage` le os stops. O `.d.ts` do RN 0.81 declara
+ * `ReadonlyArray<string[]>` — um nivel de array a mais do que o runtime aceita —
+ * entao aqui, como no radial, o tipo de verdade mora neste arquivo e o cast
+ * fica num lugar so, no site de uso.
+ */
+export type LinearGradientLayer = {
+  type: 'linear-gradient';
+  direction: string;
+  colorStops: { color: string; positions: string[] }[];
+};
+
+export const ambientBackground: RadialGradientLayer[] = ambient.halos.map((halo) => ({
+  type: 'radial-gradient',
+  shape: 'ellipse',
+  // `r` sai de unidades de bounding box do SVG, onde 85% ja quer dizer
+  // 0,85*largura por 0,85*altura — que e exatamente o par (x, y) daqui.
+  size: { x: halo.r, y: halo.r },
+  position: { top: halo.cy, left: halo.cx },
+  colorStops: ambient.falloff.map((point) => ({
+    color: `rgba(${AMBIENT_CHANNEL}, ${AMBIENT_CHANNEL}, ${AMBIENT_CHANNEL}, ${
+      halo.opacity * point.weight
+    })`,
+    position: `${point.offset * 100}%`,
+  })),
+}));
 
 /** Raio consistente por nivel de hierarquia — nunca raios aleatorios entre irmaos. */
 export const radius = {

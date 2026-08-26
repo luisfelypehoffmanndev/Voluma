@@ -2,13 +2,18 @@ import { Tabs } from 'expo-router';
 import { StyleSheet } from 'react-native';
 
 import { colors, radius } from '@/theme/tokens';
-import { GlassSurface } from '@/ui/GlassSurface';
 import { CalendarIcon, ChartIcon, GridIcon, SlidersIcon } from '@/ui/icons';
 import { useTabBarGeometry } from '@/ui/tabBar';
+import { TabBarSurface } from '@/ui/TabBarSurface';
 
 /**
  * Tab bar flutuante — e o caso mais claro da regra do brief: ela paira sobre
  * conteudo rolavel, entao e vidro.
+ *
+ * O fundo vem do `TabBarSurface`, e nao do `GlassSurface`: sem blur no Android
+ * o vidro de nivel 3 virava uma laje opaca que nao amostrava o campo de luz —
+ * a unica superficie do app que nao amostrava. Ver o cabecalho daquele arquivo
+ * para a saida.
  *
  * Sem rotulos de texto: os quatro icones outline bastam, e texto embaixo de
  * icone e o visual generico que o brief manda evitar.
@@ -47,9 +52,7 @@ export default function TabsLayout() {
         // deixa de ter altura fixa de 28px e passa a ocupar a caixa inteira,
         // onde o icone ja se centraliza sozinho.
         tabBarIconStyle: { flex: 1 },
-        tabBarBackground: () => (
-          <GlassSurface borderRadius={radius.pill} style={StyleSheet.absoluteFill} />
-        ),
+        tabBarBackground: () => <TabBarSurface />,
         sceneStyle: { backgroundColor: colors.bg },
       }}
     >
@@ -77,7 +80,7 @@ const styles = StyleSheet.create({
   bar: {
     position: 'absolute',
     borderRadius: radius.pill,
-    // A borda, o preenchimento e o brilho especular vem todos do GlassSurface
+    // A borda, o preenchimento e o brilho especular vem todos do TabBarSurface
     // renderizado em tabBarBackground; aqui a barra e so transparente.
     backgroundColor: 'transparent',
     borderTopWidth: 0,
