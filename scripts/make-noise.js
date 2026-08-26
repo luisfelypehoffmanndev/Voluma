@@ -72,7 +72,7 @@ const TILE_DP = 64;
  * a essa altura o grao vira textura, que o brief proibe. E trocar de
  * arquitetura.
  */
-const MAX_ALPHA = 30; // DIAGNOSTICO — voltar para 4
+const MAX_ALPHA = 4;
 
 const DENSITIES = [
   { scale: 1, suffix: '' },
