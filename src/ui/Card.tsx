@@ -1,13 +1,8 @@
 import type { ReactNode } from 'react';
-import {
-  Pressable,
-  StyleSheet,
-  View,
-  type StyleProp,
-  type ViewStyle,
-} from 'react-native';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { accentGlow, colors, radius, spacing, surfaces } from '@/theme/tokens';
+import { PressableSurface } from './PressableSurface';
 
 type Props = {
   children: ReactNode;
@@ -26,12 +21,11 @@ type Props = {
  * proibe sombra difusa como separador.
  *
  * **Nao usa o `GlassSurface`, de proposito.** Aquele e o vidro de nivel 3, o
- * chrome que flutua e precisa esconder o que passa por baixo; no Android ele e
- * quase opaco justamente para isso. Reusar ali entregaria cards praticamente
- * solidos, o oposto do que este componente existe para fazer. Tambem nao ha
- * `BlurView` aqui: o que passa por tras e um degrade suave, e borrar um degrade
- * suave devolve o mesmo degrade suave — no iOS seria invisivel e ainda custaria
- * GPU por card em lista rolavel.
+ * chrome que flutua e precisa esconder o que passa por baixo. Reusar ali
+ * entregaria cards que ocultam o campo de luz, o oposto do que este componente
+ * existe para fazer. Tambem nao ha `BlurView` aqui: o que passa por tras e um
+ * degrade suave, e borrar um degrade suave devolve o mesmo degrade suave —
+ * seria invisivel e ainda custaria GPU por card em lista rolavel.
  *
  * O card accent continua solido: laranja translucido perderia o soco do unico
  * elemento de cor da tela, e o glow precisa de uma forma opaca de onde o iOS
@@ -47,18 +41,18 @@ export function Card({ children, onPress, accent = false, style }: Props) {
   const inner = !onPress ? (
     <View style={surface}>{children}</View>
   ) : (
-    <Pressable
+    // O card de vidro *acende*; o accent, solido, apaga. Baixar a opacidade
+    // de uma superficie translucida apagaria o texto junto com ela e o card
+    // quase sumiria — nao e o mesmo gesto. Os dois idiomas vivem em
+    // `PressableSurface`; aqui so se escolhe qual.
+    <PressableSurface
       onPress={onPress}
-      // O card de vidro *acende*; o accent, solido, apaga. Baixar a opacidade
-      // de uma superficie translucida apagaria o texto junto com ela e o card
-      // quase sumiria — nao e o mesmo gesto.
-      style={({ pressed }) => [
-        surface,
-        pressed && (accent ? styles.pressedAccent : styles.pressedGlass),
-      ]}
+      feedback={accent ? 'solid' : 'card'}
+      pressedOpacity={0.72}
+      style={surface}
     >
       {children}
-    </Pressable>
+    </PressableSurface>
   );
 
   if (!accent) return inner;
@@ -98,11 +92,5 @@ const styles = StyleSheet.create({
     // Brilho para todo lado, nao sombra projetada: offset zero.
     shadowOffset: { width: 0, height: 0 },
     elevation: accentGlow.elevation,
-  },
-  pressedGlass: {
-    backgroundColor: surfaces.cardPressed,
-  },
-  pressedAccent: {
-    opacity: 0.72,
   },
 });

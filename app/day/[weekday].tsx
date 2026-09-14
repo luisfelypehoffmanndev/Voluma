@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import Animated, { LayoutAnimationConfig } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -24,6 +25,7 @@ import { Card } from '@/ui/Card';
 import { artSlugFor } from '@/movements/library';
 import { DEFAULT_RUN_TARGETS, DEFAULT_TARGETS, ExercisePicker } from '@/ui/ExercisePicker';
 import { FloatingGlassButton } from '@/ui/FloatingGlassButton';
+import { useListMotion } from '@/ui/motion';
 import { Header, RoundButton, Screen } from '@/ui/Screen';
 import { TargetsEditor } from '@/ui/TargetsEditor';
 import { Body, Label, Meta } from '@/ui/Text';
@@ -32,12 +34,19 @@ import { ArrowDownIcon, ChevronLeftIcon, ChevronRightIcon, TrashIcon } from '@/u
 /** Tempo de mao parada antes de gravar o rotulo do dia. */
 const NAME_COMMIT_DELAY = 400;
 
-/** De onde veio o numero que esta na tela. Sem isso o usuario nao sabe se o
- *  valor e uma escolha dele ou uma heranca do historico. */
+/**
+ * De onde veio o numero que esta na tela. Sem isso o usuario nao sabe se o
+ * valor e uma escolha dele ou uma heranca do historico.
+ *
+ * Mesmo vocabulario do `SOURCE_LABEL` da tela de treino, de proposito: e o
+ * mesmo conceito nas duas, e nomea-lo diferente faria parecer coisas
+ * diferentes. O "nesta semana" saiu do `override` porque a navegacao por semana
+ * no cabecalho ja da esse contexto.
+ */
 const SOURCE_LABEL: Record<TargetSource, string> = {
-  override: 'ajustado nesta semana',
-  lastActual: 'como na última vez',
-  plan: 'ainda não treinado',
+  override: 'ajustado',
+  lastActual: 'última vez',
+  plan: 'do plano',
 };
 
 /**
@@ -58,6 +67,7 @@ export default function DayScreen() {
 
   const weekday = Number(params.weekday) as Weekday;
   const [weekStart, setWeekStart] = useState(() => weekStartKey(new Date()));
+  const listMotion = useListMotion();
   const [picking, setPicking] = useState(false);
 
   const { data, loading, reload } = useQuery(
@@ -100,12 +110,27 @@ export default function DayScreen() {
   };
 
   return (
-    <Screen>
+    // O botao vai por `overlay`, e nao entre os filhos: ele e vidro, e vidro
+    // dentro do alvo de blur se leria a si mesmo. Ver `Screen`.
+    <Screen
+      overlay={
+        <FloatingGlassButton
+          label="Adicionar exercício"
+          onPress={() => setPicking(true)}
+          bottom={insets.bottom + spacing.xl}
+        />
+      }
+    >
       <Header
         title={weekdayName(weekday)}
         action={{ icon: <ArrowDownIcon size={20} />, onPress: () => router.back() }}
       />
 
+      {/* `skipEntering` so vale para a PRIMEIRA renderizacao: sem ele a lista
+          inteira entraria em cascata toda vez que a tela abre. Trocar de semana
+          nao remonta os itens — a `key` e o id do routine_exercise, que nao
+          muda com a semana —, entao a navegacao por semana nao dispara entrada. */}
+      <LayoutAnimationConfig skipEntering>
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
@@ -139,24 +164,16 @@ export default function DayScreen() {
         </Card>
 
         {items.map((item) => (
-          <ExerciseCard
-            key={item.id}
-            item={item}
-            weekStart={weekStart}
-            onChanged={reload}
-          />
+          <Animated.View key={item.id} {...listMotion}>
+            <ExerciseCard item={item} weekStart={weekStart} onChanged={reload} />
+          </Animated.View>
         ))}
 
         {items.length === 0 ? (
           <Meta style={styles.empty}>Nenhum exercício neste dia. Descanso.</Meta>
         ) : null}
       </ScrollView>
-
-      <FloatingGlassButton
-        label="Adicionar exercício"
-        onPress={() => setPicking(true)}
-        bottom={insets.bottom + spacing.xl}
-      />
+      </LayoutAnimationConfig>
 
       <ExercisePicker
         visible={picking}

@@ -7,6 +7,7 @@ import type { Exercise, ExerciseKind, Targets } from '@/domain/types';
 import { artSlugFor, filterMovements } from '@/movements/library';
 import { colors, fontSize, fonts, radius, spacing, surfaces } from '@/theme/tokens';
 
+import { WithoutBlurTarget } from './blurTarget';
 import { GlassSurface } from './GlassSurface';
 import { MovementFigure } from './MovementFigure';
 import { Header } from './Screen';
@@ -128,76 +129,81 @@ export function ExercisePicker({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={close} transparent>
-      <View style={styles.backdrop}>
-        <GlassSurface
-          borderRadius={radius.card}
-          style={[styles.panel, { paddingTop: insets.top + spacing.sm }]}
-        >
-          <Header title="Exercícios" action={{ icon: <ArrowDownIcon size={20} />, onPress: close }} />
+      {/* Um `Modal` do RN e uma janela propria no Android, e o alvo de blur da
+          janela principal nao alcanca aqui — o painel fica fosco la, como
+          sempre esteve. No iOS o material nativo nao le alvo e nada muda. */}
+      <WithoutBlurTarget>
+        <View style={styles.backdrop}>
+          <GlassSurface
+            borderRadius={radius.card}
+            style={[styles.panel, { paddingTop: insets.top + spacing.sm }]}
+          >
+            <Header title="Exercícios" action={{ icon: <ArrowDownIcon size={20} />, onPress: close }} />
 
-          <View style={styles.body}>
-            {subtitle ? <Meta style={styles.subtitle}>{subtitle}</Meta> : null}
+            <View style={styles.body}>
+              {subtitle ? <Meta style={styles.subtitle}>{subtitle}</Meta> : null}
 
-            <TextInput
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Buscar ou criar"
-              placeholderTextColor={colors.textSecondary}
-              style={styles.search}
-              autoCorrect={false}
-            />
+              <TextInput
+                value={search}
+                onChangeText={setSearch}
+                placeholder="Buscar ou criar"
+                placeholderTextColor={colors.textSecondary}
+                style={styles.search}
+                autoCorrect={false}
+              />
 
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xxl }}
-              keyboardShouldPersistTaps="handled"
-            >
-              {canCreate ? (
-                <Pressable style={styles.row} onPress={() => onCreate(search.trim())}>
-                  <PlusIcon size={16} color={colors.textSecondary} />
-                  <Body style={styles.name}>Criar “{search.trim()}”</Body>
-                </Pressable>
-              ) : null}
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xxl }}
+                keyboardShouldPersistTaps="handled"
+              >
+                {canCreate ? (
+                  <Pressable style={styles.row} onPress={() => onCreate(search.trim())}>
+                    <PlusIcon size={16} color={colors.textSecondary} />
+                    <Body style={styles.name}>Criar “{search.trim()}”</Body>
+                  </Pressable>
+                ) : null}
 
-              {matches.map((exercise) => (
-                <Pressable key={exercise.id} style={styles.row} onPress={() => onPick(exercise.id)}>
-                  <MovementFigure slug={artSlugFor(exercise.name)} size={32} />
-                  <Body style={styles.name} numberOfLines={1}>
-                    {exercise.name}
-                  </Body>
-                  {exercise.kind === 'run' ? (
-                    <Meta>km</Meta>
-                  ) : exercise.muscleGroup ? (
-                    <Meta>{exercise.muscleGroup}</Meta>
-                  ) : null}
-                </Pressable>
-              ))}
+                {matches.map((exercise) => (
+                  <Pressable key={exercise.id} style={styles.row} onPress={() => onPick(exercise.id)}>
+                    <MovementFigure slug={artSlugFor(exercise.name)} size={32} />
+                    <Body style={styles.name} numberOfLines={1}>
+                      {exercise.name}
+                    </Body>
+                    {exercise.kind === 'run' ? (
+                      <Meta>km</Meta>
+                    ) : exercise.muscleGroup ? (
+                      <Meta>{exercise.muscleGroup}</Meta>
+                    ) : null}
+                  </Pressable>
+                ))}
 
-              {library.length > 0 ? (
-                <Label style={styles.section}>Da biblioteca</Label>
-              ) : null}
+                {library.length > 0 ? (
+                  <Label style={styles.section}>Da biblioteca</Label>
+                ) : null}
 
-              {library.map((movement) => (
-                <Pressable
-                  key={movement.slug}
-                  style={styles.row}
-                  onPress={() => onCreate(movement.name, movement.muscleGroup, movement.kind)}
-                >
-                  <MovementFigure slug={movement.illustrated ? movement.slug : null} size={32} />
-                  <Body style={styles.name} numberOfLines={1}>
-                    {movement.name}
-                  </Body>
-                  <Meta>{movement.equipment}</Meta>
-                </Pressable>
-              ))}
+                {library.map((movement) => (
+                  <Pressable
+                    key={movement.slug}
+                    style={styles.row}
+                    onPress={() => onCreate(movement.name, movement.muscleGroup, movement.kind)}
+                  >
+                    <MovementFigure slug={movement.illustrated ? movement.slug : null} size={32} />
+                    <Body style={styles.name} numberOfLines={1}>
+                      {movement.name}
+                    </Body>
+                    <Meta>{movement.equipment}</Meta>
+                  </Pressable>
+                ))}
 
-              {matches.length === 0 && library.length === 0 && !canCreate ? (
-                <Meta style={styles.empty}>Catálogo vazio. Digite um nome para criar.</Meta>
-              ) : null}
-            </ScrollView>
-          </View>
-        </GlassSurface>
-      </View>
+                {matches.length === 0 && library.length === 0 && !canCreate ? (
+                  <Meta style={styles.empty}>Catálogo vazio. Digite um nome para criar.</Meta>
+                ) : null}
+              </ScrollView>
+            </View>
+          </GlassSurface>
+        </View>
+      </WithoutBlurTarget>
     </Modal>
   );
 }

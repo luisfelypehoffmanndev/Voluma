@@ -511,35 +511,41 @@ export async function targetsForWeek(
   const bySlot = new Map<string, WeekTarget>();
   for (const row of overrides) bySlot.set(row.routine_exercise_id, toWeekTarget(row));
 
-  const resolved: WeekExercise[] = [];
-  for (const item of planned) {
-    const override = bySlot.get(item.id) ?? null;
-    const performed = override
-      ? null // ja tem decisao explicita; nao gasta consulta com o historico
-      : await lastPerformedTargets(db, item.exerciseId, item.exerciseKind, routineId, weekStart);
+  // Uma consulta por exercicio, mas em PARALELO — nao uma esperando a
+  // anterior. Esta funcao roda de novo a cada `bumpData` (todo `write` de
+  // checkbox chama um), entao um treino de sete exercicios em serie somava
+  // sete idas e voltas ao SQLite a cada toque; em paralelo o tempo total vira
+  // o da mais lenta, nao a soma de todas.
+  const resolved: WeekExercise[] = await Promise.all(
+    planned.map(async (item) => {
+      const override = bySlot.get(item.id) ?? null;
+      const performed = override
+        ? null // ja tem decisao explicita; nao gasta consulta com o historico
+        : await lastPerformedTargets(db, item.exerciseId, item.exerciseKind, routineId, weekStart);
 
-    const overrideTargets = override
-      ? {
-          sets: override.targetSets,
-          reps: override.targetReps,
-          weightKg: override.targetWeightKg,
-          distanceKm: override.targetDistanceKm,
-          durationMin: override.targetDurationMin,
-        }
-      : null;
+      const overrideTargets = override
+        ? {
+            sets: override.targetSets,
+            reps: override.targetReps,
+            weightKg: override.targetWeightKg,
+            distanceKm: override.targetDistanceKm,
+            durationMin: override.targetDurationMin,
+          }
+        : null;
 
-    resolved.push({
-      ...item,
-      source: overrideTargets ? 'override' : performed ? 'lastActual' : 'plan',
-      targets: resolveTargets(overrideTargets, performed, {
-        sets: item.targetSets,
-        reps: item.targetReps,
-        weightKg: item.targetWeightKg,
-        distanceKm: item.targetDistanceKm,
-        durationMin: item.targetDurationMin,
-      }),
-    });
-  }
+      return {
+        ...item,
+        source: overrideTargets ? 'override' : performed ? 'lastActual' : 'plan',
+        targets: resolveTargets(overrideTargets, performed, {
+          sets: item.targetSets,
+          reps: item.targetReps,
+          weightKg: item.targetWeightKg,
+          distanceKm: item.targetDistanceKm,
+          durationMin: item.targetDurationMin,
+        }),
+      };
+    }),
+  );
 
   return resolved;
 }
@@ -975,10 +981,29 @@ export async function setSessionExerciseTargets(
   });
 }
 
-/** Serie extra, alem do que a rotina planejava. Copia os valores da ultima. */
-export async function addSet(sessionId: string, exerciseId: string): Promise<void> {
+/**
+ * Serie extra, alem do que a rotina planejava. Copia os valores da ultima.
+ *
+ * `done` nasce `false` por padrao — o caso comum e adicionar antes de marcar o
+ * exercicio. Quando o exercicio ja esta concluido (o editor por serie da tela
+ * de sessao chama isto com `done: true`), a serie nova precisa nascer marcada:
+ * do contrario o exercicio ficaria com uma serie "pendente" no meio de um
+ * grupo que a UI ja mostra como feito.
+ *
+ * Devolve a linha recem-criada porque quem chama (o rascunho local da tela)
+ * precisa do `id` real para poder editar essa serie logo em seguida — sem ele,
+ * um toque no peso dela um segundo depois de adicionada nao teria onde
+ * gravar.
+ */
+export async function addSet(
+  sessionId: string,
+  exerciseId: string,
+  done = false,
+): Promise<{ id: string; setIndex: number; reps: number; weightKg: number }> {
   const db = await getDb();
   const id = newId();
+
+  let created!: { id: string; setIndex: number; reps: number; weightKg: number };
 
   await db.withTransactionAsync(async () => {
     const last = await db.getFirstAsync<{
@@ -994,27 +1019,110 @@ export async function addSet(sessionId: string, exerciseId: string): Promise<voi
       sessionId,
       exerciseId,
     );
+    const setIndex = (last?.set_index ?? 0) + 1;
+    const reps = last?.reps ?? 10;
+    const weightKg = last?.weight_kg ?? 0;
+
     await db.runAsync(
       `INSERT INTO session_sets
          (id, session_id, exercise_id, set_index, reps, weight_kg,
           distance_km, duration_min, done, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, NULL)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
       id,
       sessionId,
       exerciseId,
-      (last?.set_index ?? 0) + 1,
-      last?.reps ?? 10,
-      last?.weight_kg ?? 0,
+      setIndex,
+      reps,
+      weightKg,
       last?.distance_km ?? 0,
       last?.duration_min ?? 0,
+      done ? 1 : 0,
       now(),
     );
     await enqueue(db, 'session_sets', id);
+    created = { id, setIndex, reps, weightKg };
   });
+
+  return created;
 }
 
 export async function removeSet(id: string): Promise<void> {
   await softDelete('session_sets', id);
+}
+
+/**
+ * Grava o que foi feito de UM exercicio de musculacao num treino, serie a
+ * serie.
+ *
+ * Irma de `setSessionExerciseTargets`, mas aceita reps/carga divergentes por
+ * serie — o modelo uniforme daquela funcao (um par repetido em todas as
+ * linhas) nao comporta rampa de aquecimento nem carga que varia ao longo do
+ * exercicio. Mesma estrategia de escrita, pelo mesmo motivo: apaga as linhas
+ * do exercicio e reinsere, em vez de casar serie a serie por id — do
+ * contrario baixar de 4 para 3 series deixaria a quarta viva no historico, e
+ * casar por posicao arriscaria escrever a carga da serie 2 na 3 se uma delas
+ * tivesse sido removida no meio.
+ *
+ * So serve exercicio de carga: corrida continua por `setSessionExerciseTargets`,
+ * que soma distancia e tempo numa linha so — fatiar isso em "serie" nao faz
+ * sentido para ela.
+ *
+ * Devolve as linhas recem-inseridas, na mesma ordem de `rows`. Quem chama
+ * precisa disso para trocar o rascunho local (que ainda tem `id: null` nas
+ * series que nunca foram gravadas) pelos ids reais — sem isso, editar uma
+ * serie logo depois de marcar o exercicio concluido nao encontraria linha
+ * nenhuma para atualizar.
+ */
+export async function setSessionExerciseSets(
+  sessionId: string,
+  exerciseId: string,
+  rows: readonly { reps: number; weightKg: number }[],
+  done: boolean,
+): Promise<{ id: string; setIndex: number; reps: number; weightKg: number }[]> {
+  const db = await getDb();
+  const timestamp = now();
+  const inserted: { id: string; setIndex: number; reps: number; weightKg: number }[] = [];
+
+  await db.withTransactionAsync(async () => {
+    const previous = await db.getAllAsync<{ id: string }>(
+      'SELECT id FROM session_sets WHERE session_id = ? AND exercise_id = ? AND deleted_at IS NULL',
+      sessionId,
+      exerciseId,
+    );
+    for (const row of previous) {
+      await db.runAsync(
+        'UPDATE session_sets SET deleted_at = ?, updated_at = ? WHERE id = ?',
+        timestamp,
+        timestamp,
+        row.id,
+      );
+      await enqueue(db, 'session_sets', row.id);
+    }
+
+    for (let index = 0; index < rows.length; index += 1) {
+      const setId = newId();
+      const setIndex = index + 1;
+      const row = rows[index];
+      await db.runAsync(
+        `INSERT INTO session_sets
+           (id, session_id, exercise_id, set_index, reps, weight_kg,
+            distance_km, duration_min, done, updated_at, deleted_at)
+         VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?, NULL)`,
+        setId,
+        sessionId,
+        exerciseId,
+        setIndex,
+        row.reps,
+        row.weightKg,
+        done ? 1 : 0,
+        timestamp,
+      );
+      await enqueue(db, 'session_sets', setId);
+      inserted.push({ id: setId, setIndex, reps: row.reps, weightKg: row.weightKg });
+    }
+  });
+
+  return inserted;
 }
 
 // ----------------------------------------------------------- peso corporal

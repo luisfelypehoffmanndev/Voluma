@@ -15,6 +15,16 @@ type Props = {
    * suja — vira o marrom acinzentado que aparecia no card de volume.
    */
   dimUnit?: boolean;
+  /**
+   * Deixa o numero encolher para caber na largura disponivel.
+   *
+   * Ligado por padrao — a maioria dos call sites mostra valor de largura
+   * imprevisivel dentro de um card estreito. Desligue onde o texto MUDA a cada
+   * frame: no Android o `adjustsFontSizeToFit` remede o texto com busca binaria
+   * de tamanho a cada troca de conteudo, e numa contagem de 700ms isso vira
+   * dezenas de layouts completos de texto. Ver `CountingStat`.
+   */
+  fit?: boolean;
   style?: StyleProp<TextStyle>;
 };
 
@@ -31,6 +41,7 @@ export function StatNumber({
   size = fontSize.numberLg,
   color = colors.textPrimary,
   dimUnit = true,
+  fit = true,
   style,
 }: Props) {
   const unitSize = Math.max(12, Math.round(size * 0.28));
@@ -39,7 +50,7 @@ export function StatNumber({
     <View style={styles.row}>
       <Text
         numberOfLines={1}
-        adjustsFontSizeToFit
+        adjustsFontSizeToFit={fit}
         style={[
           styles.value,
           { fontSize: size, lineHeight: size * 1.02, color },

@@ -25,6 +25,8 @@ import { bumpData, useQuery } from '@/store/data';
 import { colors, fontSize, hitSlop, radius, spacing, surfaces } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
 import { MovementFigure } from '@/ui/MovementFigure';
+import { confirm } from '@/ui/haptics';
+import { PressableSurface } from '@/ui/PressableSurface';
 import { Header, Screen } from '@/ui/Screen';
 import { Body, Label, Meta } from '@/ui/Text';
 import { ArrowDownIcon, TrashIcon } from '@/ui/icons';
@@ -208,6 +210,7 @@ function NewExerciseCard({ existing }: { existing: readonly Exercise[] }) {
 
   const add = async () => {
     if (!canAdd) return;
+    confirm();
     await createExercise(trimmed, group);
     setName('');
     bumpData();
@@ -245,19 +248,17 @@ function NewExerciseCard({ existing }: { existing: readonly Exercise[] }) {
 
       {/* Unico accent da tela. Apagado enquanto nao ha nome valido: um botao
           aceso que nao faz nada mente sobre o proprio estado. */}
-      <Pressable
+      <PressableSurface
         onPress={add}
         disabled={!canAdd}
-        style={({ pressed }) => [
-          styles.add,
-          !canAdd && styles.addDisabled,
-          pressed && canAdd && styles.addPressed,
-        ]}
+        pressedOpacity={0.8}
+        borderRadius={radius.pill}
+        style={[styles.add, !canAdd && styles.addDisabled]}
       >
         <Body style={canAdd ? styles.addLabel : styles.addLabelDisabled}>
           {duplicate ? 'Já existe no catálogo' : 'Adicionar'}
         </Body>
-      </Pressable>
+      </PressableSurface>
     </Card>
   );
 }
@@ -333,9 +334,6 @@ const styles = StyleSheet.create({
   },
   addDisabled: {
     backgroundColor: surfaces.raised,
-  },
-  addPressed: {
-    opacity: 0.8,
   },
   addLabel: {
     color: colors.textOnAccent,

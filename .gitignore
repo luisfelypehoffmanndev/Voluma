@@ -10,3 +10,9 @@ Design/*.exe
 
 expo-env.d.ts
 # @end expo-cli
+# Nativo gerado por `expo prebuild` — este projeto e CNG (Continuous Native
+# Generation): a fonte de verdade e o app.json + os config plugins, e estes
+# diretorios sao saida reproduzivel. Versiona-los faria o build divergir em
+# silencio de quem rodasse prebuild de novo.
+/android
+/ios

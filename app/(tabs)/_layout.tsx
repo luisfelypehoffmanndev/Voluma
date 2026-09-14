@@ -2,18 +2,14 @@ import { Tabs } from 'expo-router';
 import { StyleSheet } from 'react-native';
 
 import { colors, radius } from '@/theme/tokens';
+import { GlassSurface } from '@/ui/GlassSurface';
 import { CalendarIcon, ChartIcon, GridIcon, SlidersIcon } from '@/ui/icons';
+import { TabIcon } from '@/ui/TabIcon';
 import { useTabBarGeometry } from '@/ui/tabBar';
-import { TabBarSurface } from '@/ui/TabBarSurface';
 
 /**
  * Tab bar flutuante — e o caso mais claro da regra do brief: ela paira sobre
  * conteudo rolavel, entao e vidro.
- *
- * O fundo vem do `TabBarSurface`, e nao do `GlassSurface`: sem blur no Android
- * o vidro de nivel 3 virava uma laje opaca que nao amostrava o campo de luz —
- * a unica superficie do app que nao amostrava. Ver o cabecalho daquele arquivo
- * para a saida.
  *
  * Sem rotulos de texto: os quatro icones outline bastam, e texto embaixo de
  * icone e o visual generico que o brief manda evitar.
@@ -26,8 +22,11 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: false,
+        // As duas iguais: o estado agora vem da opacidade do `TabIcon`, nao
+        // da cor. Deixar o inativo em `textSecondary` aplicaria os dois
+        // efeitos um sobre o outro e o icone apagado sumiria.
         tabBarActiveTintColor: colors.textPrimary,
-        tabBarInactiveTintColor: colors.textSecondary,
+        tabBarInactiveTintColor: colors.textPrimary,
         tabBarStyle: [
           styles.bar,
           {
@@ -52,25 +51,56 @@ export default function TabsLayout() {
         // deixa de ter altura fixa de 28px e passa a ocupar a caixa inteira,
         // onde o icone ja se centraliza sozinho.
         tabBarIconStyle: { flex: 1 },
-        tabBarBackground: () => <TabBarSurface />,
+        // No Android o vidro so borra se estiver FORA da sub-arvore que ele le
+        // (ver `src/ui/blurTarget.tsx`). Aqui isso sai de graca: o
+        // `tabBarBackground` mora na barra, e a barra e irma das telas dentro
+        // do navegador — nunca filha delas. Nao mova este vidro para dentro de
+        // um `Screen`.
+        tabBarBackground: () => (
+          <GlassSurface borderRadius={radius.pill} style={StyleSheet.absoluteFill} />
+        ),
         sceneStyle: { backgroundColor: colors.bg },
       }}
     >
       <Tabs.Screen
         name="index"
-        options={{ tabBarIcon: ({ color }) => <GridIcon color={color} /> }}
+        options={{
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon focused={focused}>
+              <GridIcon color={color} />
+            </TabIcon>
+          ),
+        }}
       />
       <Tabs.Screen
         name="calendar"
-        options={{ tabBarIcon: ({ color }) => <CalendarIcon color={color} /> }}
+        options={{
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon focused={focused}>
+              <CalendarIcon color={color} />
+            </TabIcon>
+          ),
+        }}
       />
       <Tabs.Screen
         name="stats"
-        options={{ tabBarIcon: ({ color }) => <ChartIcon color={color} /> }}
+        options={{
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon focused={focused}>
+              <ChartIcon color={color} />
+            </TabIcon>
+          ),
+        }}
       />
       <Tabs.Screen
         name="settings"
-        options={{ tabBarIcon: ({ color }) => <SlidersIcon color={color} /> }}
+        options={{
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon focused={focused}>
+              <SlidersIcon color={color} />
+            </TabIcon>
+          ),
+        }}
       />
     </Tabs>
   );
@@ -80,7 +110,7 @@ const styles = StyleSheet.create({
   bar: {
     position: 'absolute',
     borderRadius: radius.pill,
-    // A borda, o preenchimento e o brilho especular vem todos do TabBarSurface
+    // A borda, o preenchimento e o brilho especular vem todos do GlassSurface
     // renderizado em tabBarBackground; aqui a barra e so transparente.
     backgroundColor: 'transparent',
     borderTopWidth: 0,
