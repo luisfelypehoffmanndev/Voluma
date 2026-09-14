@@ -32,6 +32,7 @@ import { Card } from '@/ui/Card';
 import { shortDate } from '@/ui/relative';
 import { Header, RoundButton, Screen } from '@/ui/Screen';
 import { useTabBarClearance } from '@/ui/tabBar';
+import { TabScene } from '@/ui/TabScene';
 import { Body, Label, Meta, Mono } from '@/ui/Text';
 import { ChevronLeftIcon, ChevronRightIcon } from '@/ui/icons';
 
@@ -102,84 +103,86 @@ export default function CalendarScreen() {
   const todayKey = toDateKey(today);
 
   return (
-    <Screen>
-      <Header title="Calendário" />
+    <TabScene>
+      <Screen>
+        <Header title="Calendário" />
 
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.monthBar}>
-          <RoundButton
-            icon={<ChevronLeftIcon size={18} />}
-            onPress={() => shiftMonth(-1)}
-          />
-          <View style={styles.monthTitle}>
-            <Body>{monthLabel(cursor.getMonth())}</Body>
-            <Meta>{cursor.getFullYear()}</Meta>
-          </View>
-          <RoundButton
-            icon={<ChevronRightIcon size={18} />}
-            onPress={() => shiftMonth(1)}
-          />
-        </View>
-
-        <Card>
-          <View style={styles.weekdays}>
-            {weekdayInitials().map((initial, index) => (
-              <Label key={index} style={styles.weekday}>
-                {initial}
-              </Label>
-            ))}
-          </View>
-
-          {monthKeys.map((week, weekIndex) => (
-            <View key={weekIndex} style={styles.week}>
-              {week.map((dateKey, dayIndex) => {
-                if (!dateKey) return <View key={dayIndex} style={styles.dayCell} />;
-
-                const trained = month.data?.trained.has(dateKey) ?? false;
-                const isSelected = dateKey === selected;
-                const isToday = dateKey === todayKey;
-
-                return (
-                  <Pressable
-                    key={dateKey}
-                    style={styles.dayCell}
-                    onPress={() => setSelected(dateKey)}
-                  >
-                    <View
-                      style={[
-                        styles.dayInner,
-                        isToday && styles.dayToday,
-                        isSelected && styles.daySelected,
-                        isSelected && isToday && styles.daySelectedToday,
-                      ]}
-                    >
-                      <Mono style={[styles.dayNumber, !trained && styles.dayNumberIdle]}>
-                        {fromDateKey(dateKey).getDate()}
-                      </Mono>
-                    </View>
-                    <View style={[styles.dayDot, trained && styles.dayDotFilled]} />
-                  </Pressable>
-                );
-              })}
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.monthBar}>
+            <RoundButton
+              icon={<ChevronLeftIcon size={18} />}
+              onPress={() => shiftMonth(-1)}
+            />
+            <View style={styles.monthTitle}>
+              <Body>{monthLabel(cursor.getMonth())}</Body>
+              <Meta>{cursor.getFullYear()}</Meta>
             </View>
-          ))}
-        </Card>
+            <RoundButton
+              icon={<ChevronRightIcon size={18} />}
+              onPress={() => shiftMonth(1)}
+            />
+          </View>
 
-        <DayDetail
-          dateKey={selected}
-          detail={day.data}
-          onStart={async () => {
-            const session = await getOrCreateSessionForDate(fromDateKey(selected));
-            bumpData();
-            router.push(`/session/${session.id}`);
-          }}
-          onOpen={(sessionId) => router.push(`/session/${sessionId}`)}
-        />
-      </ScrollView>
-    </Screen>
+          <Card>
+            <View style={styles.weekdays}>
+              {weekdayInitials().map((initial, index) => (
+                <Label key={index} style={styles.weekday}>
+                  {initial}
+                </Label>
+              ))}
+            </View>
+
+            {monthKeys.map((week, weekIndex) => (
+              <View key={weekIndex} style={styles.week}>
+                {week.map((dateKey, dayIndex) => {
+                  if (!dateKey) return <View key={dayIndex} style={styles.dayCell} />;
+
+                  const trained = month.data?.trained.has(dateKey) ?? false;
+                  const isSelected = dateKey === selected;
+                  const isToday = dateKey === todayKey;
+
+                  return (
+                    <Pressable
+                      key={dateKey}
+                      style={styles.dayCell}
+                      onPress={() => setSelected(dateKey)}
+                    >
+                      <View
+                        style={[
+                          styles.dayInner,
+                          isToday && styles.dayToday,
+                          isSelected && styles.daySelected,
+                          isSelected && isToday && styles.daySelectedToday,
+                        ]}
+                      >
+                        <Mono style={[styles.dayNumber, !trained && styles.dayNumberIdle]}>
+                          {fromDateKey(dateKey).getDate()}
+                        </Mono>
+                      </View>
+                      <View style={[styles.dayDot, trained && styles.dayDotFilled]} />
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ))}
+          </Card>
+
+          <DayDetail
+            dateKey={selected}
+            detail={day.data}
+            onStart={async () => {
+              const session = await getOrCreateSessionForDate(fromDateKey(selected));
+              bumpData();
+              router.push(`/session/${session.id}`);
+            }}
+            onOpen={(sessionId) => router.push(`/session/${sessionId}`)}
+          />
+        </ScrollView>
+      </Screen>
+    </TabScene>
   );
 }
 

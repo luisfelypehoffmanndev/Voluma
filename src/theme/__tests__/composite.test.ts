@@ -1,5 +1,5 @@
-import { alphaOf, grayHex, grayOf, over, stack } from '../composite';
-import { ambient, colors, glass, surfaces } from '../tokens';
+import { alphaOf, grayHex, grayOf, over, overlayAlpha, stack } from '../composite';
+import { ambient, colors, glass, surfaces, tabIcon } from '../tokens';
 
 const BG = grayOf(colors.bg);
 
@@ -46,6 +46,100 @@ describe('a escada de densidade', () => {
     // O chrome de nivel 3 esconde o que passa por baixo; e outra ordem de
     // grandeza, nao o proximo degrau.
     expect(alphaOf(glass.fillNoBlur)).toBeGreaterThan(0.8);
+  });
+
+  /**
+   * O `fillNoBlur` e a unica superficie do app com cor propria, entao e a unica
+   * que pode errar de *tom* — e ja errou duas vezes, sempre para o mesmo lado:
+   * clara demais, lendo como uma laje cinza colada sobre o fundo quase preto.
+   * O resto da escada e branco translucido e nao tem como cair nessa.
+   *
+   * Este e o corpo do vidro onde nao ha blur atras: Android 11 e abaixo, e o
+   * painel dentro de um `Modal`. O caminho com blur usa `fill` e nao passa por
+   * aqui — ver `GlassSurface`.
+   */
+  describe('o preenchimento sem blur', () => {
+    const fill = glass.fillNoBlur.match(/rgba\((\d+),\s*(\d+),\s*(\d+)/);
+    const [r, g, b] = fill!.slice(1).map(Number);
+
+    it('e neutro, como toda superficie do app', () => {
+      // Um viés de matiz aqui destoa de tudo: nao ha uma so cor no app fora do
+      // accent, e um cinza azulado le como material de outro sistema.
+      expect(r).toBe(g);
+      expect(g).toBe(b);
+    });
+
+    it('nivela com o card, e nunca passa dele', () => {
+      // O erro concreto que este teste trava: um fill em 34 compunha a barra em
+      // #1F, praticamente o pico do campo de luz inteiro (#202020), em qualquer
+      // posicao da tela — mais clara que os cards que passam por baixo dela, e
+      // lendo como uma laje cinza colada sobre o fundo quase preto.
+      //
+      // Nivel 3 se define por OCULTAR, nao por brilhar: quem separa a barra do
+      // fundo e a aresta especular, nao o preenchimento. Entao o alvo e o
+      // proprio valor do card — passar dele e o erro acima; ficar muito abaixo
+      // le como escura demais contra o resto do app.
+      const alpha = alphaOf(glass.fillNoBlur);
+      const onBg = alpha * r + (1 - alpha) * BG;
+      const card = over(alphaOf(surfaces.card), BG);
+
+      expect(onBg).toBeLessThanOrEqual(card);
+      // A margem de baixo e o que impede de "consertar" escurecendo demais:
+      // dentro de 3 niveis de cinza do card, a barra le como a mesma materia.
+      expect(card - onBg).toBeLessThan(3);
+    });
+  });
+
+  /**
+   * A camada de toque tem que POUSAR no estado pressionado dos tokens, e nao
+   * perto dele. Empilhar ingenuamente a diferenca (0,11 − 0,06 = 0,05) erra,
+   * porque a segunda camada so pinta o que a primeira deixou passar.
+   */
+  describe('a camada de toque', () => {
+    it('reproduz exatamente o estado pressionado, em qualquer ponto do campo', () => {
+      for (const [rest, active] of [
+        [surfaces.card, surfaces.cardPressed],
+        [surfaces.control, surfaces.controlPressed],
+      ] as const) {
+        const from = alphaOf(rest);
+        const to = alphaOf(active);
+        const layer = overlayAlpha(from, to);
+
+        // Do preto chapado ao pico do campo: o alpha da camada nao depende do
+        // que passa por tras, e e isso que deixa usar um valor fixo.
+        for (const halo of [0, 0.05, HALO_PEAK]) {
+          const field = over(halo, BG);
+          expect(over(layer, over(from, field))).toBeCloseTo(over(to, field), 6);
+        }
+      }
+    });
+
+    it('a diferenca ingenua erraria — e por isso que a conta existe', () => {
+      const from = alphaOf(surfaces.card);
+      const to = alphaOf(surfaces.cardPressed);
+
+      expect(overlayAlpha(from, to)).toBeGreaterThan(to - from);
+    });
+  });
+
+  /**
+   * O icone da aba deixou de ter duas cores e passou a ter dois brilhos. Em
+   * repouso ele NAO pode mudar de aparencia: `idleOpacity` existe para pousar
+   * no mesmo cinza que o inativo tinha como cor.
+   */
+  it('poe o icone de aba apagado no mesmo #8A8A8A que ele tinha como cor', () => {
+    const alpha = alphaOf(glass.fillNoBlur);
+    const fill = Number(glass.fillNoBlur.match(/rgba\((\d+)/)![1]);
+    // O corpo da barra sem blur: a laje quase opaca sobre o campo de luz. Onde
+    // o vidro borra o corpo e outro, e o icone apagado pousa em outro cinza —
+    // e o pior caso que este teste trava, porque a laje e o corpo mais escuro
+    // dos dois.
+    const bar = alpha * fill + (1 - alpha) * BG;
+
+    const ativo = grayOf(colors.textPrimary);
+    const apagado = bar + tabIcon.idleOpacity * (ativo - bar);
+
+    expect(grayHex(apagado)).toBe(colors.textSecondary.toUpperCase());
   });
 
   it('acende ao ser pressionado, em vez de apagar', () => {

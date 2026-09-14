@@ -15,8 +15,10 @@ import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { usePrefs } from '@/store/prefs';
 import { useSyncLifecycle } from '@/sync/auth';
 import { colors } from '@/theme/tokens';
+import { BlurTargetProvider } from '@/ui/blurTarget';
 
 // O splash fica ate as fontes carregarem: sem elas o app pisca em Helvetica e
 // os numeros grandes reflowam, o que estraga justamente o "ar de instrumento".
@@ -34,6 +36,12 @@ export default function RootLayout() {
 
   useSyncLifecycle();
 
+  // Le a preferencia de vibracao uma vez, na raiz. Ate o disco responder o
+  // padrao vale, entao nada aqui bloqueia a montagem.
+  useEffect(() => {
+    void usePrefs.getState().load();
+  }, []);
+
   useEffect(() => {
     if (ready) SplashScreen.hideAsync().catch(() => {});
   }, [ready]);
@@ -44,21 +52,28 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
       <SafeAreaProvider>
         <StatusBar style="light" />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: colors.bg },
-            animation: 'slide_from_right',
-          }}
-        >
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="session/[id]" options={{ animation: 'slide_from_bottom' }} />
-          <Stack.Screen name="day/[weekday]" />
-          <Stack.Screen name="catalog" />
-          <Stack.Screen name="library" />
-          <Stack.Screen name="bodyweight" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="login" options={{ presentation: 'modal' }} />
-        </Stack>
+        {/*
+          Registra qual tela o vidro deve borrar no Android. Fica na raiz porque
+          a tab bar vive fora das telas e precisa alcancar o alvo da que esta em
+          foco — ver src/ui/blurTarget.tsx.
+        */}
+        <BlurTargetProvider>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: colors.bg },
+              animation: 'slide_from_right',
+            }}
+          >
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="session/[id]" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="day/[weekday]" />
+            <Stack.Screen name="catalog" />
+            <Stack.Screen name="library" />
+            <Stack.Screen name="bodyweight" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="login" options={{ presentation: 'modal' }} />
+          </Stack>
+        </BlurTargetProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

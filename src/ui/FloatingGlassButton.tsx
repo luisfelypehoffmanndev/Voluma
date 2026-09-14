@@ -1,8 +1,9 @@
-import { Pressable, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 
-import { spacing } from '@/theme/tokens';
+import { radius, spacing } from '@/theme/tokens';
 
 import { GlassSurface } from './GlassSurface';
+import { PressableSurface } from './PressableSurface';
 import { Body } from './Text';
 
 type Props = {
@@ -22,14 +23,18 @@ type Props = {
  */
 export function FloatingGlassButton({ label, onPress, bottom }: Props) {
   return (
-    <Pressable
+    // O raio acompanha o do GlassSurface: sem ele a camada de toque seria um
+    // retangulo com quinas para fora do pill.
+    <PressableSurface
       onPress={onPress}
-      style={({ pressed }) => [styles.floating, { bottom }, pressed && styles.pressed]}
+      pressedOpacity={0.8}
+      borderRadius={radius.pill}
+      style={[styles.floating, { bottom }]}
     >
       <GlassSurface style={styles.floatingSurface}>
         <Body>{label}</Body>
       </GlassSurface>
-    </Pressable>
+    </PressableSurface>
   );
 }
 
@@ -43,8 +48,5 @@ const styles = StyleSheet.create({
     height: 54,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  pressed: {
-    opacity: 0.8,
   },
 });

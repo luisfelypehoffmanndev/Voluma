@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, hitSlop, radius, spacing, surfaces } from '@/theme/tokens';
 import { Ambient } from './Ambient';
+import { BlurTarget } from './blurTarget';
+import { PressableSurface } from './PressableSurface';
 import { Title } from './Text';
 
 /**
@@ -14,13 +16,24 @@ import { Title } from './Text';
  * filho absoluto se posiciona a partir da borda de padding do pai, entao com o
  * `paddingTop` na raiz o campo comecaria abaixo da barra de status e deixaria
  * uma faixa preta no topo.
+ *
+ * `overlay` existe por causa do Android. O chrome de vidro que flutua sobre a
+ * tela (o botao fixo do rodape) NAO pode morar em `children`: o `BlurTarget` e
+ * a sub-arvore que o vidro le para se borrar, e um vidro la dentro se leria a
+ * si mesmo. O slot separado e o que o mantem fora do alvo. A caixa de
+ * posicionamento nao muda com isso — `content` nao tem padding lateral nem
+ * inferior, entao um filho absoluto com `bottom`/`left`/`right` cai no mesmo
+ * lugar nos dois pais.
  */
-export function Screen({ children }: { children: ReactNode }) {
+export function Screen({ children, overlay }: { children: ReactNode; overlay?: ReactNode }) {
   const insets = useSafeAreaInsets();
   return (
     <View style={styles.screen}>
-      <Ambient />
-      <View style={[styles.content, { paddingTop: insets.top }]}>{children}</View>
+      <BlurTarget style={styles.field}>
+        <Ambient />
+        <View style={[styles.content, { paddingTop: insets.top }]}>{children}</View>
+      </BlurTarget>
+      {overlay}
     </View>
   );
 }
@@ -46,14 +59,18 @@ export function Header({ title, action, secondaryAction }: HeaderProps) {
 }
 
 export function RoundButton({ icon, onPress }: { icon: ReactNode; onPress: () => void }) {
+  // Acende, como os cards: opacidade sobre superficie translucida apagaria o
+  // icone junto.
   return (
-    <Pressable
+    <PressableSurface
       hitSlop={hitSlop}
       onPress={onPress}
-      style={({ pressed }) => [styles.round, pressed && styles.pressed]}
+      feedback="control"
+      borderRadius={radius.pill}
+      style={styles.round}
     >
       {icon}
-    </Pressable>
+    </PressableSurface>
   );
 }
 
@@ -61,6 +78,10 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.bg,
+  },
+  /** O alvo de blur ocupa a tela toda: o campo de luz e o conteudo rolavel. */
+  field: {
+    flex: 1,
   },
   content: {
     flex: 1,
@@ -89,9 +110,5 @@ const styles = StyleSheet.create({
     borderLeftColor: surfaces.specularSide,
     borderRightColor: surfaces.specularSide,
     borderBottomColor: surfaces.specularBottom,
-  },
-  /** Acende, como os cards: opacidade sobre superficie translucida apagaria o icone junto. */
-  pressed: {
-    backgroundColor: surfaces.controlPressed,
   },
 });

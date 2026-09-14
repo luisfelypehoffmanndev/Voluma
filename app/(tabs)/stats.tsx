@@ -11,6 +11,7 @@ import { shortDate } from '@/ui/relative';
 import { Header, Screen } from '@/ui/Screen';
 import { StatNumber } from '@/ui/StatNumber';
 import { useTabBarClearance } from '@/ui/tabBar';
+import { TabScene } from '@/ui/TabScene';
 import { Body, Label, Meta } from '@/ui/Text';
 
 /**
@@ -57,80 +58,82 @@ export default function StatsScreen() {
   const today = days[days.length - 1]?.volume ?? 0;
 
   return (
-    <Screen>
-      <Header title="Números" />
+    <TabScene>
+      <Screen>
+        <Header title="Números" />
 
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
-        showsVerticalScrollIndicator={false}
-      >
-        <Card>
-          <Label>Volume por dia</Label>
-          <View style={styles.chartHead}>
-            <StatNumber
-              value={formatVolume(today)}
-              unit="kg"
-              size={fontSize.numberMd}
-            />
-            <Meta>hoje</Meta>
-          </View>
-
-          <View style={[styles.chart, { height: 96 }]}>
-            {days.map((day, index) => {
-              const isToday = index === days.length - 1;
-              return (
-                <View
-                  key={day.key}
-                  style={[
-                    styles.bar,
-                    {
-                      width: barWidth,
-                      height: Math.max(2, (day.volume / peak) * 96),
-                      backgroundColor: isToday ? colors.accent : colors.dotEmpty,
-                    },
-                  ]}
-                />
-              );
-            })}
-          </View>
-
-          <View style={styles.chartFoot}>
-            <Meta>{days[0] ? shortDate(fromDateKey(days[0].key)) : ''}</Meta>
-            <Meta>hoje</Meta>
-          </View>
-        </Card>
-
-        <Card>
-          <Label>Recordes por movimento</Label>
-          {(data?.records ?? []).slice(0, 10).map((record) => (
-            <View key={record.exerciseId} style={styles.row}>
-              <Body numberOfLines={1} style={styles.rowName}>
-                {record.exerciseName}
-              </Body>
-              <Meta>
-                {formatWeight(record.heaviestKg)} kg · {formatVolume(record.bestVolume)} kg
-              </Meta>
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <Card>
+            <Label>Volume por dia</Label>
+            <View style={styles.chartHead}>
+              <StatNumber
+                value={formatVolume(today)}
+                unit="kg"
+                size={fontSize.numberMd}
+              />
+              <Meta>hoje</Meta>
             </View>
-          ))}
-          {(data?.records.length ?? 0) === 0 ? (
-            <Meta style={styles.empty}>Nenhuma série registrada ainda.</Meta>
-          ) : null}
-        </Card>
 
-        <Card>
-          <Label>Peso corporal</Label>
-          {(data?.weights ?? []).map((log) => (
-            <View key={log.id} style={styles.row}>
-              <Body style={styles.rowName}>{formatWeight(log.weightKg)} kg</Body>
-              <Meta>{shortDate(new Date(log.loggedAt))}</Meta>
+            <View style={[styles.chart, { height: 96 }]}>
+              {days.map((day, index) => {
+                const isToday = index === days.length - 1;
+                return (
+                  <View
+                    key={day.key}
+                    style={[
+                      styles.bar,
+                      {
+                        width: barWidth,
+                        height: Math.max(2, (day.volume / peak) * 96),
+                        backgroundColor: isToday ? colors.accent : colors.dotEmpty,
+                      },
+                    ]}
+                  />
+                );
+              })}
             </View>
-          ))}
-          {(data?.weights.length ?? 0) === 0 ? (
-            <Meta style={styles.empty}>Nenhum registro de peso.</Meta>
-          ) : null}
-        </Card>
-      </ScrollView>
-    </Screen>
+
+            <View style={styles.chartFoot}>
+              <Meta>{days[0] ? shortDate(fromDateKey(days[0].key)) : ''}</Meta>
+              <Meta>hoje</Meta>
+            </View>
+          </Card>
+
+          <Card>
+            <Label>Recordes por movimento</Label>
+            {(data?.records ?? []).slice(0, 10).map((record) => (
+              <View key={record.exerciseId} style={styles.row}>
+                <Body numberOfLines={1} style={styles.rowName}>
+                  {record.exerciseName}
+                </Body>
+                <Meta>
+                  {formatWeight(record.heaviestKg)} kg · {formatVolume(record.bestVolume)} kg
+                </Meta>
+              </View>
+            ))}
+            {(data?.records.length ?? 0) === 0 ? (
+              <Meta style={styles.empty}>Nenhuma série registrada ainda.</Meta>
+            ) : null}
+          </Card>
+
+          <Card>
+            <Label>Peso corporal</Label>
+            {(data?.weights ?? []).map((log) => (
+              <View key={log.id} style={styles.row}>
+                <Body style={styles.rowName}>{formatWeight(log.weightKg)} kg</Body>
+                <Meta>{shortDate(new Date(log.loggedAt))}</Meta>
+              </View>
+            ))}
+            {(data?.weights.length ?? 0) === 0 ? (
+              <Meta style={styles.empty}>Nenhum registro de peso.</Meta>
+            ) : null}
+          </Card>
+        </ScrollView>
+      </Screen>
+    </TabScene>
   );
 }
 

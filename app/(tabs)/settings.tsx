@@ -9,9 +9,13 @@ import { useQuery } from '@/store/data';
 import { useAuth } from '@/sync/auth';
 import { isCloudConfigured } from '@/sync/supabase';
 import { colors, fontSize, spacing } from '@/theme/tokens';
+import { usePrefs } from '@/store/prefs';
 import { Card } from '@/ui/Card';
+import { CheckCell } from '@/ui/CheckCell';
+import { preview } from '@/ui/haptics';
 import { Header, Screen } from '@/ui/Screen';
 import { useTabBarClearance } from '@/ui/tabBar';
+import { TabScene } from '@/ui/TabScene';
 import { Body, Label, Meta } from '@/ui/Text';
 import { ChevronRightIcon, SyncIcon } from '@/ui/icons';
 
@@ -37,51 +41,92 @@ export default function SettingsScreen() {
   const counts = data?.counts ?? [];
 
   return (
-    <Screen>
-      {/* Sem acao de criar: os sete dias sao permanentes, nao se criam nem se
-          apagam. */}
-      <Header title="Ajustes" />
+    <TabScene>
+      <Screen>
+        {/* Sem acao de criar: os sete dias sao permanentes, nao se criam nem se
+            apagam. */}
+        <Header title="Ajustes" />
 
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
-        showsVerticalScrollIndicator={false}
-      >
-        <Card>
-          <Label>Plano da semana</Label>
-          {days.map((day, weekday) => {
-            const count = counts[weekday] ?? 0;
-            return (
-              <Pressable
-                key={weekday}
-                style={styles.row}
-                onPress={() => router.push({ pathname: '/day/[weekday]', params: { weekday } })}
-              >
-                <View style={styles.rowText}>
-                  <Body numberOfLines={1}>{weekdayName(weekday as Weekday)}</Body>
-                  <Meta>{daysummary(day?.name ?? '', count)}</Meta>
-                </View>
-                <ChevronRightIcon size={16} color={colors.textSecondary} />
-              </Pressable>
-            );
-          })}
-        </Card>
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <Card>
+            <Label>Plano da semana</Label>
+            {days.map((day, weekday) => {
+              const count = counts[weekday] ?? 0;
+              return (
+                <Pressable
+                  key={weekday}
+                  style={styles.row}
+                  onPress={() => router.push({ pathname: '/day/[weekday]', params: { weekday } })}
+                >
+                  <View style={styles.rowText}>
+                    <Body numberOfLines={1}>{weekdayName(weekday as Weekday)}</Body>
+                    <Meta>{daysummary(day?.name ?? '', count)}</Meta>
+                  </View>
+                  <ChevronRightIcon size={16} color={colors.textSecondary} />
+                </Pressable>
+              );
+            })}
+          </Card>
 
-        <Card onPress={() => router.push('/catalog')}>
-          <Label>Catálogo</Label>
-          <View style={styles.row}>
-            <View style={styles.rowText}>
-              <Body style={styles.catalogCount}>{data?.exercises.length ?? 0} movimentos</Body>
-              <Meta>adicionar, apagar e organizar por grupo</Meta>
+          <Card onPress={() => router.push('/catalog')}>
+            <Label>Catálogo</Label>
+            <View style={styles.row}>
+              <View style={styles.rowText}>
+                <Body style={styles.catalogCount}>{data?.exercises.length ?? 0} movimentos</Body>
+                <Meta>adicionar, apagar e organizar por grupo</Meta>
+              </View>
+              <ChevronRightIcon size={16} color={colors.textSecondary} />
             </View>
-            <ChevronRightIcon size={16} color={colors.textSecondary} />
-          </View>
-        </Card>
+          </Card>
 
-        <SyncCard />
+          <MotionCard />
 
-        <CreditsCard />
-      </ScrollView>
-    </Screen>
+          <SyncCard />
+
+          <CreditsCard />
+        </ScrollView>
+      </Screen>
+    </TabScene>
+  );
+}
+
+/**
+ * Vibracao ao confirmar.
+ *
+ * A caixa e a mesma `CheckCell` do registro de treino, e nao um `Switch`: o §7
+ * do brief proibe toggle redondo, e o §6 diz que o app tem UMA linguagem para
+ * celula marcavel. Um switch de plataforma aqui seria a segunda.
+ *
+ * O accent repetido nao infringe a regra de "um por tela": esta e a unica caixa
+ * desta tela, e nenhum outro elemento daqui usa accent.
+ */
+function MotionCard() {
+  const haptics = usePrefs((state) => state.haptics);
+  const setHaptics = usePrefs((state) => state.setHaptics);
+
+  return (
+    <Card>
+      <Label>Vibração</Label>
+      <View style={styles.row}>
+        <View style={styles.rowText}>
+          <Body>Ao confirmar</Body>
+          <Meta>um toque ao marcar concluído · nunca ao navegar</Meta>
+        </View>
+        <CheckCell
+          checked={haptics}
+          onPress={() => {
+            // Vibra ao LIGAR, para o toque ser a propria demonstracao do que
+            // acabou de ser ativado. Ao desligar, silencio — vibrar para dizer
+            // "nao vou mais vibrar" seria contraditorio.
+            if (!haptics) preview();
+            setHaptics(!haptics);
+          }}
+        />
+      </View>
+    </Card>
   );
 }
 

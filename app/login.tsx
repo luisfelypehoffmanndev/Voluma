@@ -12,6 +12,7 @@ import {
 
 import { useAuth } from '@/sync/auth';
 import { colors, fontSize, fonts, radius, spacing, surfaces } from '@/theme/tokens';
+import { PressableSurface } from '@/ui/PressableSurface';
 import { Header, Screen } from '@/ui/Screen';
 import { Body, Label, Meta } from '@/ui/Text';
 import { ArrowDownIcon } from '@/ui/icons';
@@ -87,17 +88,19 @@ export default function LoginScreen() {
         {/* Erro em texto branco, nao em vermelho: o brief proibe segunda cor. */}
         {error ? <Body style={styles.error}>{error}</Body> : null}
 
-        <Pressable
+        <PressableSurface
           disabled={busy}
           onPress={() => submit('in')}
-          style={({ pressed }) => [styles.primary, pressed && styles.pressed]}
+          pressedOpacity={0.8}
+          borderRadius={radius.pill}
+          style={styles.primary}
         >
           {busy ? (
             <ActivityIndicator color={colors.bg} />
           ) : (
             <Body style={styles.primaryLabel}>Entrar</Body>
           )}
-        </Pressable>
+        </PressableSurface>
 
         <Pressable disabled={busy} onPress={() => submit('up')} style={styles.secondary}>
           <Meta>Criar conta com este e-mail</Meta>
@@ -137,9 +140,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: spacing.sm,
-  },
-  pressed: {
-    opacity: 0.8,
   },
   primaryLabel: {
     color: colors.bg,

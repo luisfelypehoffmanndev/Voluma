@@ -10,6 +10,7 @@ import { bumpData, useQuery } from '@/store/data';
 import { colors, fontSize, radius, spacing, surfaces } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
 import { MovementFigure } from '@/ui/MovementFigure';
+import { PressableSurface } from '@/ui/PressableSurface';
 import { Header, Screen } from '@/ui/Screen';
 import { Body, Label, Meta } from '@/ui/Text';
 import { ArrowDownIcon, CheckIcon, PlusIcon } from '@/ui/icons';
@@ -173,12 +174,14 @@ function MovementRow({
           <CheckIcon size={14} color={colors.textSecondary} />
         </View>
       ) : (
-        <Pressable
+        <PressableSurface
           onPress={onAdd}
-          style={({ pressed }) => [styles.add, pressed && styles.addPressed]}
+          feedback="control"
+          borderRadius={radius.pill}
+          style={styles.add}
         >
           <PlusIcon size={14} color={colors.textPrimary} />
-        </Pressable>
+        </PressableSurface>
       )}
     </View>
   );
@@ -234,9 +237,6 @@ const styles = StyleSheet.create({
     backgroundColor: surfaces.control,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  addPressed: {
-    backgroundColor: surfaces.controlPressed,
   },
   /** Mesma caixa do botao, sem fundo: a linha nao pode pular de altura. */
   owned: {

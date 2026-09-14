@@ -99,6 +99,11 @@ Neste app o blur é privilégio do iOS. O `experimentalBlurMethod="dimezisBlurVi
 
 Então o `backdrop-filter` **não é o mecanismo aqui**. O efeito vem de translucidez + campo de luz + aresta especular, e é por isso que ele existe igual nos dois sistemas. Nos cards não há blur em plataforma nenhuma, de propósito: o que passa atrás deles é um degradê suave, e borrar um degradê suave devolve o mesmo degradê suave — no iOS seria invisível e ainda custaria GPU por card em lista rolável.
 
+Duas grandezas do vidro de nível 3, porém, **não** podem ser as mesmas nas duas plataformas, e as duas pelo mesmo motivo: sem blur o corpo do vidro é uma laje quase opaca, e tudo que se lê *em relação ao corpo* muda de leitura junto.
+
+- **O preenchimento** precisa fechar mais, para ocultar o que passa por baixo sem o blur fazer esse trabalho (`--glass-fill-noblur`, `rgba(26,26,26,0.90)`).
+- **O especular** precisa ceder. O `0.28 → 0.04` desta tabela pressupõe o material borrado: no iOS o backdrop levanta o corpo para ~`#3E3E3E` e a aresta fica 1,3x acima dele, que é luz raspando a quina. No Android o corpo cai em `#191919` e a mesma aresta fica 3,3x acima — deixa de ler como luz e vira uma linha branca desenhada em volta do pill. A variante sem blur é `0.16 → 0.03`, mirando ~2x: a aresta ainda define a forma, já que sem blur é só ela que separa o chrome do fundo, sem virar contorno. As três paradas caem na mesma proporção, para preservar a direção da luz que esta seção chama de obrigatória.
+
 ## 6. Visualização de dados (o elemento assinatura)
 
 Este é o ponto onde o app deve ser reconhecível. Baseado nas refs:
@@ -135,7 +140,58 @@ Marcada, a célula é laranja **sólido** com glow (`--accent` + a mesma sombra 
 
 Direto, técnico, sem "vozinha animadora de app de fitness". Ex: `"Volume lifted"`, `"Body weight"`, `"Last 7 days"` — substantivo + dado, sem frase motivacional. Timestamps relativos e objetivos (`31 min ago`, `Yesterday · 14 Aug`).
 
-## 9. Checklist antes de finalizar uma tela
+## 10. Movimento
+
+Esta seção foi escrita depois das outras, quando o app ganhou as primeiras animações. Ela não inventa uma linguagem nova: deriva do §1, que já decide tudo que importa aqui.
+
+> Pense em painel de instrumento (velocímetro, equalizador, terminal), não em "app de bem-estar fofinho".
+
+Ponteiro de instrumento é **criticamente amortecido**: vai até a leitura e para. Não passa do ponto, não volta, não quica. Toda animação do app é uma de duas coisas — **um valor se acomodando** (cor, opacidade) ou **um elemento entrando/saindo do layout**. Nada além disso.
+
+### A regra da forma
+
+**Movimento nunca muda forma nem tamanho.** É a frase do §6 sobre a célula marcável, estendida ao tempo: se o quadrado tem a mesma caixa em todos os *estados*, ele também tem a mesma caixa em toda a *transição* entre eles.
+
+Isso proíbe, de uma vez: `scale` em feedback de toque, o "pop" na caixa de concluído, e pulso em qualquer coisa. O checkbox que estufa é a animação mais tentadora da lista e a que mais denuncia app genérico.
+
+### A curva única
+
+Uma curva no app inteiro: desaceleração pura, derivada final zero, **zero overshoot**. Sem `elastic`, `bounce` ou `back`.
+
+**Nenhuma mola.** Só interpolação por tempo. Mola overshoota por definição, e sua duração é emergente — não dá para defender num comentário, que é como o resto desta base trabalha. Mola com bounce é a linguagem do app fofinho que o §1 rejeita pelo nome.
+
+### Os dois gestos de toque, agora com tempo
+
+Já existem e não mudam de significado: **"acende"** (superfície translúcida clareia) e **"apaga"** (chrome sólido baixa opacidade). Baixar opacidade de superfície translúcida apagaria o texto junto — não é o mesmo gesto, e é por isso que existem dois.
+
+O que o movimento acrescenta é só que os dois **interpolam** na volta — e o gesto é **assimétrico**:
+
+> **Confirmação de toque nunca tem rampa.** O dedo desce e a superfície responde no mesmo frame, como antes de existir animação. Só a subida do dedo relaxa.
+
+Isso não é preguiça, é a correção de um erro que já aconteceu. A primeira versão animava a descida em 90ms; um toque rápido dura menos que isso, então a interpolação era interrompida no meio, a superfície acendia pela metade e voltava. O retorno ficava tão fraco que foi reportado como **hitbox menor que o botão** — que nunca foi. O dedo já está lá: qualquer duração na descida é latência pura, e a única coisa que ela pode fazer é chegar atrasada.
+
+### O que não se anima
+
+O §7 no eixo do tempo:
+
+- Número contando/rolando. O número grande é o protagonista e muda a cada toque; animá-lo faria a tela nunca parar quieta, e um odômetro fala de si mesmo em vez de falar do dado.
+- Gráfico preenchendo ou barras subindo em cascata na entrada da tela. É a assinatura de dashboard genérico.
+- Shimmer/skeleton de carregamento.
+- Glow pulsando — o §2 permite um sinal de atenção por tela, não um piscando.
+- Campo de luz (`--ambient`) em movimento. O campo é arquitetura, não efeito.
+- `ripple` do Android, que contradiz acende/apaga e faria o Android parecer outro app.
+
+### Reduzir movimento é obrigatório
+
+Toda animação fica atrás da preferência de sistema, sem exceção. O contrato é: **quem pediu menos movimento não pediu menos interface** — o estado final continua correto (a caixa fica laranja, o chip fica aceso), só a transição desaparece.
+
+### Háptico
+
+Só em **confirmação** — um gesto que escreve no banco. Nunca em navegação, rolagem, troca de aba, stepper ou seleção: o stepper sozinho dispararia dezenas de pulsos por exercício, e é isso que faz háptico parecer barato.
+
+Um toque seco, do tipo que lê como interruptor mecânico. Nada da família de "sucesso/erro" — háptico de notificação é a versão tátil da cor de estado que o §7 proíbe. Não existe buzz verde de "ok".
+
+## 11. Checklist antes de finalizar uma tela
 
 - [ ] Só uma cor de destaque apareceu nesta tela? (Exceção única: as caixas de concluído do registro de treino, §2 — e nessa tela nada mais pode usar accent.)
 - [ ] Toda célula marcável é quadrado de cantos arredondados, com a mesma caixa em todos os estados?
@@ -147,3 +203,5 @@ Direto, técnico, sem "vozinha animadora de app de fitness". Ex: `"Volume lifted
 - [ ] Ao rolar, os cards mudam de tom ao atravessar os halos? (Se não mudam, o campo está fraco demais e o vidro virou retângulo cinza.)
 - [ ] O raio dos cantos é consistente entre elementos do mesmo nível?
 - [ ] O copy é direto e usa dado real, sem frase de "app motivacional"?
+- [ ] Nenhuma animação desta tela muda forma ou tamanho? (§10)
+- [ ] Tudo que se move está atrás de "reduzir movimento", e o estado final continua correto sem ele? (§10)

@@ -8,6 +8,8 @@ import { formatWeight } from '@/domain/volume';
 import { bumpData, useQuery } from '@/store/data';
 import { colors, fontSize, hitSlop, radius, spacing } from '@/theme/tokens';
 import { relativeTime } from '@/ui/relative';
+import { confirm } from '@/ui/haptics';
+import { PressableSurface } from '@/ui/PressableSurface';
 import { Header, Screen } from '@/ui/Screen';
 import { StatNumber } from '@/ui/StatNumber';
 import { Body, Label, Meta } from '@/ui/Text';
@@ -35,6 +37,7 @@ export default function BodyWeightScreen() {
     setDraft(Math.max(0, Math.round((value + delta) * 10) / 10));
 
   const save = async () => {
+    confirm();
     await logBodyWeight(value);
     bumpData();
     router.back();
@@ -50,37 +53,43 @@ export default function BodyWeightScreen() {
       <View style={styles.dial}>
         <Label>Quilos</Label>
         <View style={styles.dialRow}>
-          <Pressable
+          <PressableSurface
             hitSlop={hitSlop}
             onPress={() => nudge(-STEP)}
-            style={({ pressed }) => [styles.nudge, pressed && styles.pressed]}
+            pressedOpacity={0.6}
+            borderRadius={radius.pill}
+            style={styles.nudge}
           >
             <MinusIcon size={18} color={colors.textSecondary} />
-          </Pressable>
+          </PressableSurface>
 
           <StatNumber value={formatWeight(value)} size={fontSize.numberXl} />
 
-          <Pressable
+          <PressableSurface
             hitSlop={hitSlop}
             onPress={() => nudge(STEP)}
-            style={({ pressed }) => [styles.nudge, pressed && styles.pressed]}
+            pressedOpacity={0.6}
+            borderRadius={radius.pill}
+            style={styles.nudge}
           >
             <PlusIcon size={18} color={colors.textSecondary} />
-          </Pressable>
+          </PressableSurface>
         </View>
 
         <View style={styles.coarse}>
           {[-1, -0.5, 0.5, 1].map((delta) => (
-            <Pressable
+            <PressableSurface
               key={delta}
               onPress={() => nudge(delta)}
-              style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
+              pressedOpacity={0.6}
+              borderRadius={radius.pill}
+              style={styles.chip}
             >
               <Label>
                 {delta > 0 ? '+' : '−'}
                 {formatWeight(Math.abs(delta))}
               </Label>
-            </Pressable>
+            </PressableSurface>
           ))}
         </View>
       </View>
@@ -115,16 +124,14 @@ export default function BodyWeightScreen() {
         ) : null}
       </ScrollView>
 
-      <Pressable
+      <PressableSurface
         onPress={save}
-        style={({ pressed }) => [
-          styles.save,
-          { bottom: insets.bottom + spacing.xl },
-          pressed && styles.pressed,
-        ]}
+        pressedOpacity={0.6}
+        borderRadius={radius.pill}
+        style={[styles.save, { bottom: insets.bottom + spacing.xl }]}
       >
         <Body style={styles.saveLabel}>Registrar</Body>
-      </Pressable>
+      </PressableSurface>
     </Screen>
   );
 }
@@ -181,9 +188,6 @@ const styles = StyleSheet.create({
   },
   empty: {
     paddingVertical: spacing.xxl,
-  },
-  pressed: {
-    opacity: 0.6,
   },
   save: {
     position: 'absolute',

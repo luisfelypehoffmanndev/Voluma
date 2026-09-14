@@ -1,4 +1,4 @@
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useIsFocused } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
 
@@ -40,13 +40,27 @@ export type QueryResult<T> = {
  */
 export function useQuery<T>(query: () => Promise<T>): QueryResult<T> {
   const version = useDataVersion((state) => state.version);
+  const isFocused = useIsFocused();
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [localVersion, setLocalVersion] = useState(0);
   const settled = useRef(false);
   const focused = useRef(false);
 
+  // Lido dentro do efeito sem entrar nas deps dele: um `bumpData` de OUTRA
+  // tela nao pode disparar consulta aqui enquanto esta esta fora de foco (a
+  // aba de baixo ja fica montada depois da primeira visita, e sem este
+  // corte toda escrita no app faria as quatro abas consultarem o SQLite ao
+  // mesmo tempo, competindo pelo mesmo banco por telas que ninguem ve agora).
+  // O efeito de foco logo abaixo ja recarrega ao voltar, `bumpData` ou nao —
+  // entao nao e preciso lembrar que ficou desatualizada, so nao correr atras
+  // enquanto ninguem olha.
+  const isFocusedRef = useRef(isFocused);
+  isFocusedRef.current = isFocused;
+
   useEffect(() => {
+    if (!isFocusedRef.current) return;
+
     let cancelled = false;
 
     // `loading` so vale para a primeira consulta. Nas recargas o dado anterior

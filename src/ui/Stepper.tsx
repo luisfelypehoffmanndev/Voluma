@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { colors, fontSize, fonts, hitSlop, radius } from '@/theme/tokens';
 import { MinusIcon, PlusIcon } from './icons';
+import { PressableSurface } from './PressableSurface';
 import { Label, Mono } from './Text';
 
 /** Lado do botao redondo de + e -, tambem o alvo de toque minimo confortavel. */
@@ -106,13 +107,15 @@ export function Stepper({
 
   const controls = (
     <View style={styles.row}>
-      <Pressable
+      <PressableSurface
         hitSlop={hitSlop}
         onPress={() => onChange(clamp(round(value - step)))}
-        style={({ pressed }) => [styles.button, pressed && styles.pressed]}
+        pressedOpacity={0.5}
+        borderRadius={radius.pill}
+        style={styles.button}
       >
         <MinusIcon size={16} color={colors.textSecondary} />
-      </Pressable>
+      </PressableSurface>
 
       <Pressable
         onPress={editable ? startEditing : undefined}
@@ -137,13 +140,15 @@ export function Stepper({
         {suffix ? <Label style={styles.suffix}>{suffix}</Label> : null}
       </Pressable>
 
-      <Pressable
+      <PressableSurface
         hitSlop={hitSlop}
         onPress={() => onChange(clamp(round(value + step)))}
-        style={({ pressed }) => [styles.button, pressed && styles.pressed]}
+        pressedOpacity={0.5}
+        borderRadius={radius.pill}
+        style={styles.button}
       >
         <PlusIcon size={16} color={colors.textSecondary} />
-      </Pressable>
+      </PressableSurface>
     </View>
   );
 
@@ -191,9 +196,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-  },
-  pressed: {
-    opacity: 0.5,
   },
   valueBox: {
     minWidth: VALUE_WIDTH,

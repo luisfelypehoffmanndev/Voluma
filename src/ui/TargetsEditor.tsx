@@ -10,8 +10,12 @@ import { CONTROLS_WIDTH, Stepper } from './Stepper';
 import { Meta } from './Text';
 
 /** Tempo de mao parada antes de gravar. Curto o bastante para nao se perder ao
- *  sair da tela, longo o bastante para um ajuste de 3 toques virar uma escrita. */
-const COMMIT_DELAY = 400;
+ *  sair da tela, longo o bastante para um ajuste de 3 toques virar uma escrita.
+ *
+ *  Exportado porque o editor de series da tela de sessao reusa o mesmo numero
+ *  para o proprio debounce por serie — o mesmo motivo de existir, so que um
+ *  timer por linha em vez de um so para o exercicio inteiro. */
+export const COMMIT_DELAY = 400;
 
 const formatWeight = (value: number): string =>
   Number.isInteger(value) ? String(value) : value.toFixed(1).replace('.', ',');

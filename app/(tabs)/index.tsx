@@ -43,6 +43,7 @@ import { relativeTime } from '@/ui/relative';
 import { Header, Screen } from '@/ui/Screen';
 import { StatNumber } from '@/ui/StatNumber';
 import { useTabBarClearance } from '@/ui/tabBar';
+import { TabScene } from '@/ui/TabScene';
 import { Body, Label, Meta, Mono } from '@/ui/Text';
 
 /**
@@ -85,130 +86,134 @@ export default function HomeScreen() {
 
   if (loading || !data) {
     return (
-      <Screen>
-        <Header title="Treinos" />
-        <ActivityIndicator color={colors.textSecondary} />
-      </Screen>
+      <TabScene>
+        <Screen>
+          <Header title="Treinos" />
+          <ActivityIndicator color={colors.textSecondary} />
+        </Screen>
+      </TabScene>
     );
   }
 
   const { today, upcoming, weekVolume, weekDistance, bodyWeight, dots, streak } = data;
 
   return (
-    <Screen>
-      <Header title="Treinos" />
+    <TabScene>
+      <Screen>
+        <Header title="Treinos" />
 
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* O card mais importante da tela. Ganha destaque por tamanho e posicao,
-            nao por cor: o accent da tela ja esta gasto no card de volume, e
-            inverter uma LISTA para laranja solido daria um bloco de texto
-            colorido — o oposto do que o brief pede para o card invertido, que e
-            reservado a um NUMERO. */}
-        <Card onPress={openWorkout}>
-          <View style={styles.todayHead}>
-            <View style={styles.todayText}>
-              <Label>{`HOJE · ${weekdayName(today.weekday).toUpperCase()}`}</Label>
-              <Body numberOfLines={1} style={styles.todayName}>
-                {today.name}
-              </Body>
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* O card mais importante da tela. Ganha destaque por tamanho e posicao,
+              nao por cor: o accent da tela ja esta gasto no card de volume, e
+              inverter uma LISTA para laranja solido daria um bloco de texto
+              colorido — o oposto do que o brief pede para o card invertido, que e
+              reservado a um NUMERO. */}
+          <Card onPress={openWorkout}>
+            <View style={styles.todayHead}>
+              <View style={styles.todayText}>
+                <Label>{`HOJE · ${weekdayName(today.weekday).toUpperCase()}`}</Label>
+                <Body numberOfLines={1} style={styles.todayName}>
+                  {today.name}
+                </Body>
+              </View>
+              <ProgressRing progress={today.progress} value={String(today.plannedSets)} />
             </View>
-            <ProgressRing progress={today.progress} value={String(today.plannedSets)} />
+
+            {today.exercises.slice(0, MAX_TODAY_ROWS).map((item) => (
+              <View key={item.id} style={styles.exerciseRow}>
+                <Body numberOfLines={1} style={styles.exerciseName}>
+                  {item.exerciseName}
+                </Body>
+                <Mono style={styles.exerciseTargets}>{targetsLabel(item)}</Mono>
+              </View>
+            ))}
+
+            {today.exercises.length > MAX_TODAY_ROWS ? (
+              <Meta style={styles.moreRow}>
+                {`+${today.exercises.length - MAX_TODAY_ROWS} exercícios`}
+              </Meta>
+            ) : null}
+
+            {today.exercises.length === 0 ? (
+              <Meta style={styles.moreRow}>Sem exercícios hoje — toque para treino livre.</Meta>
+            ) : null}
+          </Card>
+
+          <View style={styles.row}>
+            <Card style={styles.half} onPress={() => router.push('/bodyweight')}>
+              <StatNumber
+                value={bodyWeight ? formatWeight(bodyWeight.weightKg) : '—'}
+                unit="kg"
+                size={fontSize.numberMd}
+              />
+              <View style={styles.cardFoot}>
+                <Body>Peso corporal</Body>
+                <Meta>{bodyWeight ? relativeTime(bodyWeight.loggedAt) : 'sem registro'}</Meta>
+              </View>
+            </Card>
+
+            {/* Sem accent: o orcamento de cor da tela ja esta no card de volume.
+                Distancia e volume sao numeros de unidades diferentes — km e kg
+                nao somam — entao cada um tem o seu, nunca um total misturado. */}
+            <Card style={styles.half} onPress={() => router.push('/stats')}>
+              <StatNumber
+                value={formatDistance(weekDistance)}
+                unit="km"
+                size={fontSize.numberMd}
+              />
+              <View style={styles.cardFoot}>
+                <Body>Distância</Body>
+                <Meta>Últimos 7 dias</Meta>
+              </View>
+            </Card>
           </View>
 
-          {today.exercises.slice(0, MAX_TODAY_ROWS).map((item) => (
-            <View key={item.id} style={styles.exerciseRow}>
-              <Body numberOfLines={1} style={styles.exerciseName}>
-                {item.exerciseName}
-              </Body>
-              <Mono style={styles.exerciseTargets}>{targetsLabel(item)}</Mono>
+          <Card>
+            <DotMatrix dots={dots} width={matrixWidth} showRecord={false} />
+            <View style={styles.matrixFoot}>
+              <ProgressRing progress={streak > 0 ? 1 : 0} value={String(streak)} size={40} />
+              <View style={styles.matrixText}>
+                <Body numberOfLines={1}>{streak === 1 ? 'dia seguido' : 'dias seguidos'}</Body>
+                <Meta>{`últimos ${MATRIX_MONTHS} meses`}</Meta>
+              </View>
             </View>
-          ))}
+          </Card>
 
-          {today.exercises.length > MAX_TODAY_ROWS ? (
-            <Meta style={styles.moreRow}>
-              {`+${today.exercises.length - MAX_TODAY_ROWS} exercícios`}
-            </Meta>
-          ) : null}
-
-          {today.exercises.length === 0 ? (
-            <Meta style={styles.moreRow}>Sem exercícios hoje — toque para treino livre.</Meta>
-          ) : null}
-        </Card>
-
-        <View style={styles.row}>
-          <Card style={styles.half} onPress={() => router.push('/bodyweight')}>
+          {/* O unico elemento accent da tela. */}
+          <Card accent style={styles.volumeCard} onPress={() => router.push('/stats')}>
+            <View>
+              <Body style={styles.volumeLabel}>Volume levantado</Body>
+              <Label style={styles.volumeSub}>Últimos 7 dias</Label>
+            </View>
             <StatNumber
-              value={bodyWeight ? formatWeight(bodyWeight.weightKg) : '—'}
+              value={formatVolume(weekVolume)}
               unit="kg"
               size={fontSize.numberMd}
+              color={colors.textOnAccent}
+              dimUnit={false}
             />
-            <View style={styles.cardFoot}>
-              <Body>Peso corporal</Body>
-              <Meta>{bodyWeight ? relativeTime(bodyWeight.loggedAt) : 'sem registro'}</Meta>
-            </View>
           </Card>
 
-          {/* Sem accent: o orcamento de cor da tela ja esta no card de volume.
-              Distancia e volume sao numeros de unidades diferentes — km e kg
-              nao somam — entao cada um tem o seu, nunca um total misturado. */}
-          <Card style={styles.half} onPress={() => router.push('/stats')}>
-            <StatNumber
-              value={formatDistance(weekDistance)}
-              unit="km"
-              size={fontSize.numberMd}
-            />
-            <View style={styles.cardFoot}>
-              <Body>Distância</Body>
-              <Meta>Últimos 7 dias</Meta>
-            </View>
+          <Card>
+            <Label>Próximos</Label>
+            {upcoming.map((day) => (
+              <View key={day.weekday} style={styles.upcomingRow}>
+                <Body numberOfLines={1} style={styles.exerciseName}>
+                  {day.name}
+                </Body>
+                <Meta>{weekdayName(day.weekday)}</Meta>
+              </View>
+            ))}
+            {upcoming.length === 0 ? (
+              <Meta style={styles.moreRow}>Nenhum treino nos próximos dias.</Meta>
+            ) : null}
           </Card>
-        </View>
-
-        <Card>
-          <DotMatrix dots={dots} width={matrixWidth} showRecord={false} />
-          <View style={styles.matrixFoot}>
-            <ProgressRing progress={streak > 0 ? 1 : 0} value={String(streak)} size={40} />
-            <View style={styles.matrixText}>
-              <Body numberOfLines={1}>{streak === 1 ? 'dia seguido' : 'dias seguidos'}</Body>
-              <Meta>{`últimos ${MATRIX_MONTHS} meses`}</Meta>
-            </View>
-          </View>
-        </Card>
-
-        {/* O unico elemento accent da tela. */}
-        <Card accent style={styles.volumeCard} onPress={() => router.push('/stats')}>
-          <View>
-            <Body style={styles.volumeLabel}>Volume levantado</Body>
-            <Label style={styles.volumeSub}>Últimos 7 dias</Label>
-          </View>
-          <StatNumber
-            value={formatVolume(weekVolume)}
-            unit="kg"
-            size={fontSize.numberMd}
-            color={colors.textOnAccent}
-            dimUnit={false}
-          />
-        </Card>
-
-        <Card>
-          <Label>Próximos</Label>
-          {upcoming.map((day) => (
-            <View key={day.weekday} style={styles.upcomingRow}>
-              <Body numberOfLines={1} style={styles.exerciseName}>
-                {day.name}
-              </Body>
-              <Meta>{weekdayName(day.weekday)}</Meta>
-            </View>
-          ))}
-          {upcoming.length === 0 ? (
-            <Meta style={styles.moreRow}>Nenhum treino nos próximos dias.</Meta>
-          ) : null}
-        </Card>
-      </ScrollView>
-    </Screen>
+        </ScrollView>
+      </Screen>
+    </TabScene>
   );
 }
 
@@ -310,22 +315,34 @@ async function nextDays(
   from: Date,
   count: number,
 ): Promise<{ weekday: Weekday; name: string; exerciseCount: number }[]> {
-  const found: { weekday: Weekday; name: string; exerciseCount: number }[] = [];
+  const candidates: { weekday: Weekday; routine: Routine }[] = [];
 
-  for (let daysAhead = 1; daysAhead <= 7 && found.length < count; daysAhead += 1) {
+  for (let daysAhead = 1; daysAhead <= 7; daysAhead += 1) {
     const date = new Date(from);
     date.setDate(date.getDate() + daysAhead);
     const weekday = weekdayOf(date);
 
     const routine = routineForWeekday(routines, weekday);
-    if (!routine) continue;
+    if (routine) candidates.push({ weekday, routine });
+  }
 
-    const items = await listRoutineExercises(routine.id);
+  // As consultas rodam em paralelo, nao uma atras da outra: o card de
+  // "Proximos" nao precisa esperar ate sete idas e voltas ao SQLite em serie
+  // so para descobrir quais dias tem exercicio — o tempo total vira o da mais
+  // lenta, nao a soma de todas.
+  const itemsByCandidate = await Promise.all(
+    candidates.map((candidate) => listRoutineExercises(candidate.routine.id)),
+  );
+
+  const found: { weekday: Weekday; name: string; exerciseCount: number }[] = [];
+
+  for (let i = 0; i < candidates.length && found.length < count; i += 1) {
+    const items = itemsByCandidate[i];
     if (items.length === 0) continue;
 
     found.push({
-      weekday,
-      name: dayTitle(routine.name, items.length),
+      weekday: candidates[i].weekday,
+      name: dayTitle(candidates[i].routine.name, items.length),
       exerciseCount: items.length,
     });
   }
