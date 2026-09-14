@@ -1,5 +1,5 @@
 /**
- * Modelo de dominio do CleanGym.
+ * Modelo de dominio do Voluma.
  *
  * O mesmo formato vale para o SQLite local e para o Postgres do Supabase.
  * Toda entidade sincronizavel carrega `id` (uuid gerado no cliente),

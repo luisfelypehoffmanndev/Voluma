@@ -50,6 +50,6 @@ export function preview(): void {
 // aponta para o aparelho; um aviso aponta para o codigo.
 function tap(): void {
   void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid).catch((error) => {
-    if (__DEV__) console.warn('[CleanGym] haptico recusado', error);
+    if (__DEV__) console.warn('[Voluma] haptico recusado', error);
   });
 }

@@ -1,19 +1,19 @@
 {
   "expo": {
-    "name": "CleanGym",
-    "slug": "cleangym",
+    "name": "Voluma",
+    "slug": "voluma",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "cleangym",
+    "scheme": "voluma",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0A0A0A",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.luisf.cleangym"
+      "bundleIdentifier": "com.luisf.voluma"
     },
     "android": {
-      "package": "com.luisf.cleangym",
+      "package": "com.luisf.voluma",
       "adaptiveIcon": {
         "backgroundColor": "#0A0A0A",
         "foregroundImage": "./assets/android-icon-foreground.png",
