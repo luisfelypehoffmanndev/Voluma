@@ -1,4 +1,4 @@
--- CleanGym — schema do Supabase.
+-- Voluma — schema do Supabase.
 --
 -- Cole este arquivo inteiro no SQL Editor do projeto e rode uma vez.
 -- E idempotente: rodar de novo nao quebra nada.

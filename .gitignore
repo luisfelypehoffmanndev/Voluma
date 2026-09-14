@@ -16,3 +16,6 @@ expo-env.d.ts
 # silencio de quem rodasse prebuild de novo.
 /android
 /ios
+
+# macOS
+.DS_Store

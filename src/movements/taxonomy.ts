@@ -3,7 +3,7 @@ import type { ExerciseKind } from '@/domain/types';
 import type { MuscleGroup } from '@/db/catalog';
 
 /**
- * O vocabulario do workout-guide traduzido para o do CleanGym.
+ * O vocabulario do workout-guide traduzido para o do Voluma.
  *
  * A biblioteca de la classifica por musculo (20 valores) e equipamento (17). O
  * app tem nove grupos, e eles nao sao anatomia: sao a ordem em que as pessoas

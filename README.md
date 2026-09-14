@@ -1,4 +1,4 @@
-# CleanGym
+# Voluma
 
 App de academia minimalista para uso pessoal. Expo (iOS + Android), testável no
 Expo Go. Interface em português, estética definida em [`Design/design.md`](Design/design.md).

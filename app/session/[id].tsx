@@ -355,7 +355,7 @@ function RunExerciseCard({ item, sessionId }: { item: SessionExercise; sessionId
       // caixa ficaria marcada mentindo sobre um treino que nao foi gravado.
       .catch((error) => {
         setDone(!nextDone);
-        console.warn('[CleanGym] falha ao gravar', item.exerciseName, error);
+        console.warn('[Voluma] falha ao gravar', item.exerciseName, error);
       })
       .finally(() => {
         writing.current = false;
@@ -448,7 +448,7 @@ function StrengthExerciseCard({ item, sessionId }: { item: SessionExercise; sess
     writingCount.current += 1;
     updateSet(id, patch)
       .then(bumpData)
-      .catch((error) => console.warn('[CleanGym] falha ao gravar série', item.exerciseName, error))
+      .catch((error) => console.warn('[Voluma] falha ao gravar série', item.exerciseName, error))
       .finally(() => {
         writingCount.current -= 1;
       });
@@ -512,7 +512,7 @@ function StrengthExerciseCard({ item, sessionId }: { item: SessionExercise; sess
       })
       .catch((error) => {
         setDone(!nextDone);
-        console.warn('[CleanGym] falha ao gravar', item.exerciseName, error);
+        console.warn('[Voluma] falha ao gravar', item.exerciseName, error);
       })
       .finally(() => {
         writingCount.current -= 1;
@@ -545,7 +545,7 @@ function StrengthExerciseCard({ item, sessionId }: { item: SessionExercise; sess
           bumpData();
         })
         .catch((error) =>
-          console.warn('[CleanGym] falha ao adicionar série', item.exerciseName, error),
+          console.warn('[Voluma] falha ao adicionar série', item.exerciseName, error),
         )
         .finally(() => {
           writingCount.current -= 1;
@@ -575,7 +575,7 @@ function StrengthExerciseCard({ item, sessionId }: { item: SessionExercise; sess
       removeSet(row.id)
         .then(bumpData)
         .catch((error) =>
-          console.warn('[CleanGym] falha ao remover série', item.exerciseName, error),
+          console.warn('[Voluma] falha ao remover série', item.exerciseName, error),
         )
         .finally(() => {
           writingCount.current -= 1;

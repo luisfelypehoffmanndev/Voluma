@@ -38,7 +38,7 @@ export const usePrefs = create<PrefsState>((set) => ({
     // disco para acender a caixa reintroduziria o atraso do banco.
     set({ haptics: on });
     void AsyncStorage.setItem(HAPTICS_KEY, on ? '1' : '0').catch((error) => {
-      console.warn('[CleanGym] falha ao gravar preferencia de vibracao', error);
+      console.warn('[Voluma] falha ao gravar preferencia de vibracao', error);
     });
   },
 
@@ -48,7 +48,7 @@ export const usePrefs = create<PrefsState>((set) => ({
       set({ haptics: stored === null ? true : stored === '1', ready: true });
     } catch (error) {
       // Preferencia ilegivel nao pode derrubar o app: fica no padrao.
-      console.warn('[CleanGym] falha ao ler preferencia de vibracao', error);
+      console.warn('[Voluma] falha ao ler preferencia de vibracao', error);
       set({ ready: true });
     }
   },
