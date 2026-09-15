@@ -719,6 +719,8 @@ export async function getOrCreateSessionForDate(when = new Date()): Promise<Sess
     date: dateKey,
     startedAt: when.toISOString(),
     finishedAt: when.toISOString(),
+    skippedExerciseIds: [],
+    completedAt: null,
     updatedAt: timestamp,
     deletedAt: null,
   };
@@ -753,6 +755,8 @@ export async function startSession(routineId: string | null, when = new Date()):
     date: toDateKey(when),
     startedAt: when.toISOString(),
     finishedAt: null,
+    skippedExerciseIds: [],
+    completedAt: null,
     updatedAt: now(),
     deletedAt: null,
   };
@@ -830,6 +834,57 @@ export async function finishSession(id: string): Promise<void> {
       );
       await enqueue(db, 'session_sets', orphan.id);
     }
+  });
+}
+
+/**
+ * Tira um exercicio SO deste treino ("Pular hoje"). O plano da semana nao muda.
+ *
+ * O que ja estava gravado dele nesta sessao e DESMARCADO, nao apagado. Pular e
+ * dizer "nao fiz", entao nada dele pode continuar somando no volume ou virar
+ * "ultima vez" na cascata — e as duas leituras ja exigem `done = 1`. Apagar
+ * resolveria o mesmo, mas quebraria o "Desfazer" de um exercicio que so existe
+ * nesta sessao (adicionado "so hoje"): sem series e fora do plano, ele nao
+ * teria de onde voltar.
+ */
+export async function skipSessionExercise(sessionId: string, exerciseId: string): Promise<void> {
+  await updateSkipped(sessionId, (ids) => (ids.includes(exerciseId) ? ids : [...ids, exerciseId]));
+
+  const db = await getDb();
+  const timestamp = now();
+  await db.withTransactionAsync(async () => {
+    const where = 'session_id = ? AND exercise_id = ? AND done = 1 AND deleted_at IS NULL';
+    await enqueueWhere(db, 'session_sets', where, [sessionId, exerciseId], timestamp);
+    await db.runAsync(
+      `UPDATE session_sets SET done = 0, updated_at = ? WHERE ${where}`,
+      timestamp,
+      sessionId,
+      exerciseId,
+    );
+  });
+}
+
+/** O "Desfazer" de `skipSessionExercise`. */
+export async function unskipSessionExercise(sessionId: string, exerciseId: string): Promise<void> {
+  await updateSkipped(sessionId, (ids) => ids.filter((id) => id !== exerciseId));
+}
+
+async function updateSkipped(
+  sessionId: string,
+  change: (ids: string[]) => string[],
+): Promise<void> {
+  const db = await getDb();
+  await db.withTransactionAsync(async () => {
+    const row = await db.getFirstAsync<SessionRow>('SELECT * FROM sessions WHERE id = ?', sessionId);
+    if (!row) return;
+    const timestamp = now();
+    await db.runAsync(
+      'UPDATE sessions SET skipped_exercise_ids = ?, updated_at = ? WHERE id = ?',
+      JSON.stringify(change(toSession(row).skippedExerciseIds)),
+      timestamp,
+      sessionId,
+    );
+    await enqueue(db, 'sessions', sessionId);
   });
 }
 

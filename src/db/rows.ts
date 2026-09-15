@@ -67,6 +67,8 @@ export type SessionRow = {
   date: string;
   started_at: string;
   finished_at: string | null;
+  skipped_exercise_ids: string;
+  completed_at: string | null;
   updated_at: string;
   deleted_at: string | null;
 };
@@ -146,9 +148,26 @@ export const toSession = (row: SessionRow): Session => ({
   date: row.date,
   startedAt: row.started_at,
   finishedAt: row.finished_at,
+  skippedExerciseIds: parseIdList(row.skipped_exercise_ids),
+  completedAt: row.completed_at,
   updatedAt: row.updated_at,
   deletedAt: row.deleted_at,
 });
+
+/**
+ * A lista JSON de `skipped_exercise_ids`. Lixo vira lista vazia: um valor
+ * corrompido pelo sync nao pode derrubar a tela do treino — no pior caso um
+ * exercicio pulado reaparece.
+ */
+function parseIdList(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
 
 export const toSessionSet = (row: SessionSetRow): SessionSet => ({
   id: row.id,

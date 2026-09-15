@@ -91,6 +91,10 @@ export type Session = Syncable & {
   date: string;
   startedAt: string;
   finishedAt: string | null;
+  /** Exercicios tirados so deste treino ("Pular hoje"); o plano nao muda. */
+  skippedExerciseIds: string[];
+  /** Quando o usuario tocou em "Finalizar treino". Nulo = nunca finalizado. */
+  completedAt: string | null;
 };
 
 export type SessionSet = Syncable & {
