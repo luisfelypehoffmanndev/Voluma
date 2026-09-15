@@ -136,12 +136,12 @@ export function ArrowDownIcon(props: IconProps) {
   );
 }
 
-export function ArrowRightIcon(props: IconProps) {
+export function ArrowLeftIcon(props: IconProps) {
   const { size, common } = base(props);
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Line x1={4} y1={12} x2={19} y2={12} {...common} />
-      <Polyline points="13,6 19,12 13,18" {...common} />
+      <Line x1={5} y1={12} x2={20} y2={12} {...common} />
+      <Polyline points="11,6 5,12 11,18" {...common} />
     </Svg>
   );
 }

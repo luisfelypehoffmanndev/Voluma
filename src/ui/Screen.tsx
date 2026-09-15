@@ -8,7 +8,7 @@ import { Ambient } from './Ambient';
 import { BlurTarget } from './blurTarget';
 import { PressableSurface } from './PressableSurface';
 import { Meta, Title } from './Text';
-import { ArrowRightIcon } from './icons';
+import { ArrowLeftIcon } from './icons';
 
 /**
  * Base de toda tela. O `Ambient` fica atras de tudo: e o campo de luz que as
@@ -45,7 +45,7 @@ type HeaderProps = {
   /** Linha de dado sob o titulo — "Segunda · 14 set". Nunca frase de boas-vindas. */
   subtitle?: string;
   /**
-   * Botao de voltar: uma seta para a direita, sempre no canto superior direito.
+   * Botao de voltar: uma seta para a esquerda, sempre no canto superior direito.
    *
    * Um icone e um lugar so, em toda tela que sai — push ou modal. Antes cada
    * tela escolhia o proprio (chevron, seta para baixo) e o lugar mudava; agora
@@ -76,7 +76,7 @@ export function Header({ title, subtitle, back, onBack, action, secondaryAction 
         {action ? <RoundButton {...action} /> : null}
         {back ? (
           <RoundButton
-            icon={<ArrowRightIcon size={20} />}
+            icon={<ArrowLeftIcon size={20} />}
             onPress={onBack ?? (() => router.back())}
             accessibilityLabel="Voltar"
           />
