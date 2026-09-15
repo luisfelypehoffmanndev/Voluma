@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { colors, spacing } from '@/theme/tokens';
@@ -35,7 +35,10 @@ type Props = {
  * "Remover do plano" parecem sinonimos, e confundir os dois era exatamente o
  * problema da lixeira que este menu substitui.
  *
- * Fechar o menu — tocar fora, Cancelar — nao executa nada.
+ * Fechar o menu — tocar fora, Cancelar — nao executa nada. A acao escolhida so
+ * roda depois que o painel saiu da tela (ver `onDismissed` em `Sheet`): pular ou
+ * remover tira o card da lista, e desmontar o dono de um `Modal` que ainda esta
+ * saindo podia travar os toques no iOS.
  */
 export function ActionSheet({ visible, title, actions, onClose }: Props) {
   const [confirming, setConfirming] = useState<SheetAction | null>(null);
@@ -46,13 +49,23 @@ export function ActionSheet({ visible, title, actions, onClose }: Props) {
     if (!visible) setConfirming(null);
   }, [visible]);
 
+  const chosen = useRef<SheetAction | null>(null);
+
   const run = (action: SheetAction) => {
+    chosen.current = action;
     onClose();
-    action.onPress();
   };
 
   return (
-    <Sheet visible={visible} onClose={onClose}>
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      onDismissed={() => {
+        const action = chosen.current;
+        chosen.current = null;
+        action?.onPress();
+      }}
+    >
       {confirming?.confirm ? (
         <ConfirmContent
           title={confirming.confirm.title}

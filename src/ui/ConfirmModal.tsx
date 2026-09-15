@@ -1,9 +1,10 @@
+import { useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { fontSize, spacing } from '@/theme/tokens';
 
 import { Button } from './Button';
-import { Sheet } from './Sheet';
+import { Sheet, SheetPanel } from './Sheet';
 import { Body, Meta } from './Text';
 
 type ContentProps = {
@@ -17,14 +18,15 @@ type ContentProps = {
   onConfirm: () => void;
 };
 
-type Props = ContentProps & {
+type Props = Omit<ContentProps, 'onCancel'> & {
   visible: boolean;
+  /** Esconde o painel. Toque fora, "Cancelar" e as duas respostas passam por aqui. */
+  onClose: () => void;
   /**
-   * Chamado ao tocar fora do painel. Sem ele, fora conta como `onCancel` — o
-   * certo para "Remover?", mas errado para uma ESCOLHA ("So hoje" / "Toda
-   * segunda"), em que a esquerda tambem e uma resposta e nao um recuo.
+   * O que o botao da esquerda FAZ, alem de fechar. Numa confirmacao nao faz
+   * nada; numa escolha ("So hoje" / "Toda segunda") e uma resposta.
    */
-  onDismiss?: () => void;
+  onCancel?: () => void;
 };
 
 /**
@@ -33,17 +35,58 @@ type Props = ContentProps & {
  * Os dois botoes sao `secondary`: o destrutivo nao ganha vermelho (cor de
  * estado, §7) nem accent (o accent e da tela, nao de um modal que aparece por
  * cima dela). O que diz o que acontece e o rotulo.
+ *
+ * A resposta so roda DEPOIS que o painel saiu da tela (ver `onDismissed` em
+ * `Sheet`): fechar e agir no mesmo quadro — trocar de rota, recarregar a
+ * lista — podia travar os toques do app inteiro no iOS.
  */
-export function ConfirmModal({ visible, onDismiss, ...content }: Props) {
+export function ConfirmModal({ visible, onClose, onCancel, onConfirm, ...content }: Props) {
+  const answer = useRef<(() => void) | null>(null);
+
+  const respond = (action: (() => void) | undefined) => {
+    answer.current = action ?? null;
+    onClose();
+  };
+
   return (
-    <Sheet visible={visible} onClose={onDismiss ?? content.onCancel}>
-      <ConfirmContent {...content} />
+    <Sheet
+      visible={visible}
+      onClose={() => respond(undefined)}
+      onDismissed={() => {
+        const action = answer.current;
+        answer.current = null;
+        action?.();
+      }}
+    >
+      <ConfirmContent
+        {...content}
+        onCancel={() => respond(onCancel)}
+        onConfirm={() => respond(onConfirm)}
+      />
     </Sheet>
   );
 }
 
 /**
- * O miolo da pergunta, sem o modal em volta — para quem ja esta dentro de um
+ * A mesma pergunta como camada, sem `Modal` — para quem ja esta dentro de um
+ * (o `ExercisePicker`). Ai a resposta roda na hora: o unico `Modal` que fecha e
+ * o de fora, e nao ha dois saindo juntos.
+ */
+export function ConfirmOverlay({ visible, onClose, onCancel, onConfirm, ...content }: Props) {
+  if (!visible) return null;
+  return (
+    <SheetPanel onClose={onClose}>
+      <ConfirmContent
+        {...content}
+        onCancel={() => (onCancel ? onCancel() : onClose())}
+        onConfirm={onConfirm}
+      />
+    </SheetPanel>
+  );
+}
+
+/**
+ * O miolo da pergunta, sem o painel em volta — para quem ja esta dentro de um
  * `Sheet` (o `ActionSheet`) e nao pode abrir um segundo.
  */
 export function ConfirmContent({
