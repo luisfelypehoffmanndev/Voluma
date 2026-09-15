@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,6 +8,7 @@ import { Ambient } from './Ambient';
 import { BlurTarget } from './blurTarget';
 import { PressableSurface } from './PressableSurface';
 import { Title } from './Text';
+import { ArrowDownIcon, ChevronLeftIcon } from './icons';
 
 /**
  * Base de toda tela. O `Ambient` fica atras de tudo: e o campo de luz que as
@@ -40,16 +42,41 @@ export function Screen({ children, overlay }: { children: ReactNode; overlay?: R
 
 type HeaderProps = {
   title: string;
+  /**
+   * Como a tela saiu, e portanto como volta:
+   * - `push` entrou da direita — volta com ‹ (dia, catalogo, biblioteca).
+   * - `modal` subiu de baixo — desce com ↓ (treino, peso, conta, resultado).
+   *
+   * Mora aqui, e nao em cada tela, porque a seta tem que concordar com o
+   * movimento da transicao. Antes toda tela escolhia o proprio icone, e varias
+   * que entravam da direita saiam com uma seta para baixo.
+   */
+  back?: 'push' | 'modal';
+  /** Quem nao e rota (o painel do `ExercisePicker`) fecha por conta propria. */
+  onBack?: () => void;
   /** Acao a direita: um unico botao redondo, como nos mockups. */
-  action?: { icon: ReactNode; onPress: () => void };
-  secondaryAction?: { icon: ReactNode; onPress: () => void };
+  action?: { icon: ReactNode; onPress: () => void; accessibilityLabel?: string };
+  secondaryAction?: { icon: ReactNode; onPress: () => void; accessibilityLabel?: string };
 };
 
-/** Cabecalho de tela: titulo a esquerda, acoes redondas a direita. */
-export function Header({ title, action, secondaryAction }: HeaderProps) {
+/** Cabecalho de tela: voltar e titulo a esquerda, acoes redondas a direita. */
+export function Header({ title, back, onBack, action, secondaryAction }: HeaderProps) {
+  const router = useRouter();
+
   return (
     <View style={styles.header}>
-      <Title>{title}</Title>
+      <View style={styles.lead}>
+        {back ? (
+          <RoundButton
+            icon={back === 'push' ? <ChevronLeftIcon size={20} /> : <ArrowDownIcon size={20} />}
+            onPress={onBack ?? (() => router.back())}
+            accessibilityLabel={back === 'push' ? 'Voltar' : 'Fechar'}
+          />
+        ) : null}
+        <Title numberOfLines={1} style={styles.title}>
+          {title}
+        </Title>
+      </View>
       <View style={styles.actions}>
         {secondaryAction ? <RoundButton {...secondaryAction} /> : null}
         {action ? <RoundButton {...action} /> : null}
@@ -58,7 +85,15 @@ export function Header({ title, action, secondaryAction }: HeaderProps) {
   );
 }
 
-export function RoundButton({ icon, onPress }: { icon: ReactNode; onPress: () => void }) {
+export function RoundButton({
+  icon,
+  onPress,
+  accessibilityLabel,
+}: {
+  icon: ReactNode;
+  onPress: () => void;
+  accessibilityLabel?: string;
+}) {
   // Acende, como os cards: opacidade sobre superficie translucida apagaria o
   // icone junto.
   return (
@@ -68,6 +103,7 @@ export function RoundButton({ icon, onPress }: { icon: ReactNode; onPress: () =>
       feedback="control"
       borderRadius={radius.pill}
       style={styles.round}
+      accessibilityLabel={accessibilityLabel}
     >
       {icon}
     </PressableSurface>
@@ -93,6 +129,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.md,
     paddingBottom: spacing.xl,
+  },
+  lead: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  title: {
+    flexShrink: 1,
   },
   actions: {
     flexDirection: 'row',

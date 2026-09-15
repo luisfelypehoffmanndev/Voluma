@@ -3,7 +3,7 @@ import { StyleSheet } from 'react-native';
 
 import { colors, radius } from '@/theme/tokens';
 import { GlassSurface } from '@/ui/GlassSurface';
-import { CalendarIcon, ChartIcon, GridIcon, SlidersIcon } from '@/ui/icons';
+import { ChartIcon, ListIcon, PersonIcon, PlayIcon } from '@/ui/icons';
 import { TabIcon } from '@/ui/TabIcon';
 import { useTabBarGeometry } from '@/ui/tabBar';
 
@@ -13,6 +13,11 @@ import { useTabBarGeometry } from '@/ui/tabBar';
  *
  * Sem rotulos de texto: os quatro icones outline bastam, e texto embaixo de
  * icone e o visual generico que o brief manda evitar.
+ *
+ * Mas sem rotulo VISIVEL nao quer dizer sem nome: `tabBarAccessibilityLabel`
+ * em todas, senao o leitor de tela anuncia "aba, 1 de 4" e nada mais. E cada
+ * icone diz a ACAO da aba (comecar, montar, ver, voce), nao uma forma abstrata
+ * — a grade e os sliders de antes nao diziam o que havia atras deles.
  */
 export default function TabsLayout() {
   const bar = useTabBarGeometry();
@@ -65,26 +70,29 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
+          tabBarAccessibilityLabel: 'Hoje',
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused}>
-              <GridIcon color={color} />
+              <PlayIcon color={color} />
             </TabIcon>
           ),
         }}
       />
       <Tabs.Screen
-        name="calendar"
+        name="plan"
         options={{
+          tabBarAccessibilityLabel: 'Plano',
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused}>
-              <CalendarIcon color={color} />
+              <ListIcon color={color} />
             </TabIcon>
           ),
         }}
       />
       <Tabs.Screen
-        name="stats"
+        name="history"
         options={{
+          tabBarAccessibilityLabel: 'Histórico',
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused}>
               <ChartIcon color={color} />
@@ -93,11 +101,12 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="settings"
+        name="profile"
         options={{
+          tabBarAccessibilityLabel: 'Perfil',
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused}>
-              <SlidersIcon color={color} />
+              <PersonIcon color={color} />
             </TabIcon>
           ),
         }}

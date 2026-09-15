@@ -13,7 +13,7 @@ import { PressableSurface } from '@/ui/PressableSurface';
 import { Header, Screen } from '@/ui/Screen';
 import { StatNumber } from '@/ui/StatNumber';
 import { Body, Label, Meta } from '@/ui/Text';
-import { ArrowDownIcon, MinusIcon, PlusIcon, TrashIcon } from '@/ui/icons';
+import { MinusIcon, PlusIcon, TrashIcon } from '@/ui/icons';
 
 const STEP = 0.1;
 
@@ -47,7 +47,7 @@ export default function BodyWeightScreen() {
     <Screen>
       <Header
         title="Peso"
-        action={{ icon: <ArrowDownIcon size={20} />, onPress: () => router.back() }}
+        back="modal"
       />
 
       <View style={styles.dial}>

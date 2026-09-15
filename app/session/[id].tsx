@@ -52,7 +52,7 @@ import { COMMIT_DELAY, TargetsEditor } from '@/ui/TargetsEditor';
 import { Body, Label, Meta } from '@/ui/Text';
 import { ActionSheet } from '@/ui/ActionSheet';
 import { UndoToast, type UndoOffer } from '@/ui/UndoToast';
-import { ArrowDownIcon, MoreIcon, PlusIcon } from '@/ui/icons';
+import { MoreIcon, PlusIcon } from '@/ui/icons';
 
 /**
  * Registro do treino de um dia.
@@ -64,7 +64,7 @@ import { ArrowDownIcon, MoreIcon, PlusIcon } from '@/ui/icons';
  *
  * Corrida continua por exercicio inteiro, sem expandir: distancia e tempo nao
  * fazem sentido fatiados em "serie", e a mecanica antiga — os mesmos steppers
- * empilhados da tela do dia em Ajustes, o mesmo debounce — segue valendo para
+ * empilhados da tela do dia no Plano, o mesmo debounce — segue valendo para
  * ela sem mudanca (ver `RunExerciseCard`).
  *
  * Nada aqui precisa ser "finalizado". Cada exercicio grava sozinho quando a mao
@@ -179,7 +179,7 @@ export default function SessionScreen() {
       <Screen>
         <Header
           title="Treino"
-          action={{ icon: <ArrowDownIcon size={20} />, onPress: () => router.back() }}
+          back="modal"
         />
         <ActivityIndicator color={colors.textSecondary} />
       </Screen>
@@ -223,7 +223,7 @@ export default function SessionScreen() {
     >
       <Header
         title="Treino"
-        action={{ icon: <ArrowDownIcon size={20} />, onPress: () => router.back() }}
+        back="modal"
       />
 
       {/* O `Header` fica FORA do fade — ele ja estava na tela durante o

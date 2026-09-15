@@ -30,7 +30,7 @@ import { PressableSurface } from '@/ui/PressableSurface';
 import { Reveal } from '@/ui/Reveal';
 import { Header, Screen } from '@/ui/Screen';
 import { Body, Label, Meta } from '@/ui/Text';
-import { ChevronLeftIcon, TrashIcon } from '@/ui/icons';
+import { TrashIcon } from '@/ui/icons';
 
 /** Onde cai um exercicio que nao tem grupo, ou tem um fora da lista conhecida. */
 const UNGROUPED = 'Outros';
@@ -39,7 +39,7 @@ const UNGROUPED = 'Outros';
  * O catalogo de movimentos.
  *
  * E a unica tela que trata exercicio como coisa em si, e nao como item de um
- * dia: em Ajustes/Dia o exercicio so existe dentro de uma rotina, e no treino
+ * dia: no Plano/Dia o exercicio so existe dentro de uma rotina, e no treino
  * so existe dentro de uma sessao. Aqui ele e a entidade.
  *
  * Por isso apagar mora aqui e nao la: a lixeira da tela do dia tira o
@@ -86,7 +86,7 @@ export default function CatalogScreen() {
     <Screen>
       <Header
         title="Catálogo"
-        action={{ icon: <ChevronLeftIcon size={20} />, onPress: () => router.back() }}
+        back="push"
       />
 
       <ScrollView

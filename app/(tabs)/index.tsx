@@ -163,7 +163,7 @@ export default function HomeScreen() {
             {/* Sem accent: o orcamento de cor da tela ja esta no card de volume.
                 Distancia e volume sao numeros de unidades diferentes — km e kg
                 nao somam — entao cada um tem o seu, nunca um total misturado. */}
-            <Card style={styles.half} onPress={() => router.push('/stats')}>
+            <Card style={styles.half} onPress={() => router.push('/history?view=numbers')}>
               <StatNumber
                 value={formatDistance(weekDistance)}
                 unit="km"
@@ -188,7 +188,7 @@ export default function HomeScreen() {
           </Card>
 
           {/* O unico elemento accent da tela. */}
-          <Card accent style={styles.volumeCard} onPress={() => router.push('/stats')}>
+          <Card accent style={styles.volumeCard} onPress={() => router.push('/history?view=numbers')}>
             <View>
               <Body style={styles.volumeLabel}>Volume levantado</Body>
               <Label style={styles.volumeSub}>Últimos 7 dias</Label>

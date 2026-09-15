@@ -13,7 +13,7 @@ import { useModalAnimation } from './motion';
 import { MovementFigure } from './MovementFigure';
 import { Header } from './Screen';
 import { Body, Label, Meta } from './Text';
-import { ArrowDownIcon, PlusIcon } from './icons';
+import { PlusIcon } from './icons';
 
 /** Alvos iniciais de um exercicio recem-adicionado, ajustaveis logo em seguida. */
 export const DEFAULT_TARGETS: Targets = {
@@ -141,7 +141,7 @@ export function ExercisePicker({
             borderRadius={radius.card}
             style={[styles.panel, { paddingTop: insets.top + spacing.sm }]}
           >
-            <Header title="Exercícios" action={{ icon: <ArrowDownIcon size={20} />, onPress: close }} />
+            <Header title="Exercícios" back="modal" onBack={close} />
 
             <View style={styles.body}>
               {subtitle ? <Meta style={styles.subtitle}>{subtitle}</Meta> : null}

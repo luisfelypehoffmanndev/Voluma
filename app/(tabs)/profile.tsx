@@ -2,81 +2,52 @@ import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { listExercises, listRoutines, listRoutineExercises } from '@/db/repo';
-import type { Weekday } from '@/domain/types';
-import { weekPlan, weekdayName } from '@/domain/week';
+import { listBodyWeightLogs } from '@/db/repo';
+import { formatWeight } from '@/domain/volume';
 import { useQuery } from '@/store/data';
 import { useAuth } from '@/sync/auth';
 import { isCloudConfigured } from '@/sync/supabase';
-import { colors, fontSize, spacing } from '@/theme/tokens';
+import { colors, spacing } from '@/theme/tokens';
 import { usePrefs } from '@/store/prefs';
 import { Card } from '@/ui/Card';
 import { CheckCell } from '@/ui/CheckCell';
 import { preview } from '@/ui/haptics';
+import { relativeTime } from '@/ui/relative';
 import { Header, Screen } from '@/ui/Screen';
 import { useTabBarClearance } from '@/ui/tabBar';
 import { TabScene } from '@/ui/TabScene';
 import { Body, Label, Meta } from '@/ui/Text';
 import { ChevronRightIcon, SyncIcon } from '@/ui/icons';
 
-/** Ajustes: o plano da semana inteiro em uma tela, mais o catalogo de movimentos. */
-export default function SettingsScreen() {
+/**
+ * Perfil: o que e seu e nao e treino — peso, preferencias, conta, creditos.
+ *
+ * Era "Ajustes", e o plano da semana e o catalogo moravam aqui. Sairam para a
+ * aba Plano: montar o treino e conteudo, e conteudo escondido atras de um icone
+ * de configuracao e conteudo que ninguem acha.
+ */
+export default function ProfileScreen() {
   const clearance = useTabBarClearance();
   const router = useRouter();
 
-  const { data } = useQuery(
-    useCallback(async () => {
-      const [routines, exercises] = await Promise.all([listRoutines(), listExercises()]);
-      // Os sete dias sao sintetizados aqui; no banco so existe linha para os
-      // dias que ja receberam nome ou exercicio.
-      const days = weekPlan(routines);
-      const counts = await Promise.all(
-        days.map(async (day) => (day ? (await listRoutineExercises(day.id)).length : 0)),
-      );
-      return { days, counts, exercises };
-    }, []),
-  );
-
-  const days = data?.days ?? [];
-  const counts = data?.counts ?? [];
+  const { data: weights } = useQuery(useCallback(() => listBodyWeightLogs(1), []));
+  const latest = weights?.[0] ?? null;
 
   return (
     <TabScene>
       <Screen>
-        {/* Sem acao de criar: os sete dias sao permanentes, nao se criam nem se
-            apagam. */}
-        <Header title="Ajustes" />
+        <Header title="Perfil" />
 
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
           showsVerticalScrollIndicator={false}
         >
-          <Card>
-            <Label>Plano da semana</Label>
-            {days.map((day, weekday) => {
-              const count = counts[weekday] ?? 0;
-              return (
-                <Pressable
-                  key={weekday}
-                  style={styles.row}
-                  onPress={() => router.push({ pathname: '/day/[weekday]', params: { weekday } })}
-                >
-                  <View style={styles.rowText}>
-                    <Body numberOfLines={1}>{weekdayName(weekday as Weekday)}</Body>
-                    <Meta>{daysummary(day?.name ?? '', count)}</Meta>
-                  </View>
-                  <ChevronRightIcon size={16} color={colors.textSecondary} />
-                </Pressable>
-              );
-            })}
-          </Card>
-
-          <Card onPress={() => router.push('/catalog')}>
-            <Label>Catálogo</Label>
+          <Card onPress={() => router.push('/bodyweight')}>
+            <Label>Peso corporal</Label>
             <View style={styles.row}>
               <View style={styles.rowText}>
-                <Body style={styles.catalogCount}>{data?.exercises.length ?? 0} movimentos</Body>
-                <Meta>adicionar, apagar e organizar por grupo</Meta>
+                <Body>{latest ? `${formatWeight(latest.weightKg)} kg` : 'Registrar peso'}</Body>
+                <Meta>{latest ? relativeTime(latest.loggedAt) : 'sem registro ainda'}</Meta>
               </View>
               <ChevronRightIcon size={16} color={colors.textSecondary} />
             </View>
@@ -128,20 +99,6 @@ function MotionCard() {
       </View>
     </Card>
   );
-}
-
-/**
- * O que a linha do dia diz embaixo do nome: o rotulo que o usuario deu, ou o
- * estado do dia quando ele nao deu nenhum.
- *
- * Dia sem nome mas com exercicios nao e descanso — e um dia que ainda nao foi
- * batizado, e a contagem ja diz o que importa.
- */
-function daysummary(name: string, count: number): string {
-  const label = name.trim();
-  if (count === 0) return label || 'Descanso';
-  const plural = count === 1 ? 'exercício' : 'exercícios';
-  return label ? `${label} · ${count} ${plural}` : `${count} ${plural}`;
 }
 
 /**
@@ -217,7 +174,7 @@ function SyncCard() {
  *
  * Nao e enfeite: as figuras sao CC BY-SA 4.0, e BY quer dizer que o credito tem
  * que estar visivel para quem usa o app, nao so no repositorio. Fica no fim de
- * Ajustes, que e onde credito costuma morar e onde ninguem tropeca nele.
+ * Perfil, que e onde credito costuma morar e onde ninguem tropeca nele.
  */
 function CreditsCard() {
   return (
@@ -249,9 +206,6 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
     marginTop: spacing.sm,
-  },
-  catalogCount: {
-    fontSize: fontSize.bodyLg,
   },
   empty: {
     paddingTop: spacing.lg,
