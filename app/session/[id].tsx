@@ -43,6 +43,7 @@ import { CountingStat } from '@/ui/CountingStat';
 import { artSlugFor } from '@/movements/library';
 import { DEFAULT_RUN_TARGETS, DEFAULT_TARGETS, ExercisePicker } from '@/ui/ExercisePicker';
 import { shortDate } from '@/ui/relative';
+import { Reveal } from '@/ui/Reveal';
 import { Header, Screen } from '@/ui/Screen';
 import { SetRow } from '@/ui/SetRow';
 import { COMMIT_DELAY, TargetsEditor } from '@/ui/TargetsEditor';
@@ -192,6 +193,11 @@ export default function SessionScreen() {
         action={{ icon: <ArrowDownIcon size={20} />, onPress: () => router.back() }}
       />
 
+      {/* O `Header` fica FORA do fade — ele ja estava na tela durante o
+          carregamento, e faze-lo acender de novo seria animar uma troca que nao
+          aconteceu. O volume entra junto com a lista porque ele tambem so
+          existe depois da consulta: ate agora, ali, havia um spinner. */}
+      <Reveal style={styles.reveal}>
       <View style={styles.summary}>
         <CountingStat kg={sessionVolume ?? undefined} size={fontSize.numberLg} />
         <View style={styles.summaryMeta}>
@@ -241,6 +247,7 @@ export default function SessionScreen() {
         ) : null}
       </ScrollView>
       </LayoutAnimationConfig>
+      </Reveal>
 
       <ExercisePicker
         visible={picking}
@@ -1010,6 +1017,8 @@ function rowsForExercise(
 }
 
 const styles = StyleSheet.create({
+  // Estica igual ao que o `Reveal` embrulha — sem isto o scroll fica sem altura.
+  reveal: { flex: 1 },
   summary: {
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.xl,

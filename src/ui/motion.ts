@@ -103,3 +103,24 @@ export function useListMotion() {
     };
   }, [reduceMotion]);
 }
+
+/**
+ * O `animationType` de um `Modal` do React Native, atras do mesmo portao.
+ *
+ * O `Modal` e o unico movimento do app que nao passa por aqui: quem anima e a
+ * plataforma, por um enum de string, sem curva nem duracao que a gente possa
+ * escolher. Era tambem a unica animacao que ignorava "reduzir movimento" — o
+ * §10 do brief nao abre excecao ("toda animacao fica atras da preferencia de
+ * sistema, sem excecao"), entao a excecao era um bug, nao uma decisao.
+ *
+ * Isto e o maximo de controle que a API permite: com movimento reduzido, o
+ * painel aparece direto. O estado final e o mesmo — o contrato de degradacao
+ * continua valendo, o modal abre igual, so nao desliza.
+ *
+ * Existe aqui, e nao dentro do componente, porque nenhum call site consulta
+ * `useReducedMotion` sozinho — e essa regra que mantem o portao sendo um
+ * portao.
+ */
+export function useModalAnimation(): 'none' | 'slide' {
+  return useReducedMotion() ? 'none' : 'slide';
+}

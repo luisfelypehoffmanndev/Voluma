@@ -27,9 +27,10 @@ import { Card } from '@/ui/Card';
 import { MovementFigure } from '@/ui/MovementFigure';
 import { confirm } from '@/ui/haptics';
 import { PressableSurface } from '@/ui/PressableSurface';
+import { Reveal } from '@/ui/Reveal';
 import { Header, Screen } from '@/ui/Screen';
 import { Body, Label, Meta } from '@/ui/Text';
-import { ArrowDownIcon, TrashIcon } from '@/ui/icons';
+import { ChevronLeftIcon, TrashIcon } from '@/ui/icons';
 
 /** Onde cai um exercicio que nao tem grupo, ou tem um fora da lista conhecida. */
 const UNGROUPED = 'Outros';
@@ -82,7 +83,7 @@ export default function CatalogScreen() {
     <Screen>
       <Header
         title="Catálogo"
-        action={{ icon: <ArrowDownIcon size={20} />, onPress: () => router.back() }}
+        action={{ icon: <ChevronLeftIcon size={20} />, onPress: () => router.back() }}
       />
 
       <ScrollView
@@ -123,6 +124,12 @@ export default function CatalogScreen() {
 
         {loading ? <ActivityIndicator color={colors.textSecondary} /> : null}
 
+        {/* So a lista entra por fade: o campo de nome e o card da biblioteca
+            acima ja estavam na tela durante o carregamento. O `gap` repete o do
+            `contentContainerStyle` porque esta View passa a ser o pai dos cards
+            de grupo, e sem ele o espacamento entre eles colapsaria. */}
+        {groups.length > 0 ? (
+        <Reveal style={styles.reveal}>
         {groups.map(([group, items]) => (
           <Card key={group}>
             <Label>{`${group.toUpperCase()} · ${items.length}`}</Label>
@@ -135,6 +142,8 @@ export default function CatalogScreen() {
             ))}
           </Card>
         ))}
+        </Reveal>
+        ) : null}
 
         {!loading && exercises.length === 0 ? (
           <Meta style={styles.empty}>Nenhum movimento no catálogo.</Meta>
@@ -297,6 +306,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     gap: spacing.md,
   },
+  reveal: { gap: spacing.md },
   input: {
     marginTop: spacing.sm,
     fontFamily: 'Inter_400Regular',

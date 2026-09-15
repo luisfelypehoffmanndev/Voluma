@@ -9,6 +9,7 @@ import { colors, fontSize, fonts, radius, spacing, surfaces } from '@/theme/toke
 
 import { WithoutBlurTarget } from './blurTarget';
 import { GlassSurface } from './GlassSurface';
+import { useModalAnimation } from './motion';
 import { MovementFigure } from './MovementFigure';
 import { Header } from './Screen';
 import { Body, Label, Meta } from './Text';
@@ -127,8 +128,10 @@ export function ExercisePicker({
     onClose();
   };
 
+  const modalAnimation = useModalAnimation();
+
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={close} transparent>
+    <Modal visible={visible} animationType={modalAnimation} onRequestClose={close} transparent>
       {/* Um `Modal` do RN e uma janela propria no Android, e o alvo de blur da
           janela principal nao alcanca aqui — o painel fica fosco la, como
           sempre esteve. No iOS o material nativo nao le alvo e nada muda. */}
