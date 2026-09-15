@@ -159,11 +159,9 @@ export default function CatalogScreen() {
         message={removeMessage(removing?.days ?? 0)}
         cancelLabel="Cancelar"
         confirmLabel="Apagar"
-        onCancel={() => setRemoving(null)}
+        onClose={() => setRemoving(null)}
         onConfirm={() => {
-          const target = removing;
-          setRemoving(null);
-          if (target) void deleteExercise(target.exercise.id).then(bumpData);
+          if (removing) void deleteExercise(removing.exercise.id).then(bumpData);
         }}
       />
     </Screen>

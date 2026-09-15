@@ -43,7 +43,7 @@ import { useFlag, useListMotion } from '@/ui/motion';
 import { confirm } from '@/ui/haptics';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
-import { ConfirmModal } from '@/ui/ConfirmModal';
+import { ConfirmModal, ConfirmOverlay } from '@/ui/ConfirmModal';
 import { CheckCell } from '@/ui/CheckCell';
 import { CountingStat } from '@/ui/CountingStat';
 import { artSlugFor } from '@/movements/library';
@@ -267,7 +267,6 @@ export default function SessionScreen() {
   };
 
   const finish = async () => {
-    setConfirmingFinish(false);
     if (finishing) return;
     setFinishing(true);
     try {
@@ -395,10 +394,11 @@ export default function SessionScreen() {
           choose(exercise);
         }}
       >
-        {/* Dentro do seletor, e nao depois dele: no iOS um `Modal` nao abre
-            enquanto outro esta saindo, e fechar o seletor para perguntar faria
-            a pergunta nao aparecer. Tocar fora volta para a lista. */}
-        <ConfirmModal
+        {/* Uma camada DENTRO do seletor, e nao um segundo `Modal`: modal
+            aninhado fechando junto com o de fora deixava o iOS com uma camada
+            invisivel que travava todo toque depois do "So hoje". Tocar fora
+            volta para a lista. */}
+        <ConfirmOverlay
           visible={pendingPick != null}
           title={`Adicionar ${pendingPick?.name ?? ''}`}
           message={`Só neste treino, ou no plano de ${everyDay} a partir de agora?`}
@@ -406,7 +406,7 @@ export default function SessionScreen() {
           confirmLabel={everyDay.charAt(0).toUpperCase() + everyDay.slice(1)}
           onCancel={() => pendingPick && void addExercise(pendingPick, 'today')}
           onConfirm={() => pendingPick && void addExercise(pendingPick, 'plan')}
-          onDismiss={() => setPendingPick(null)}
+          onClose={() => setPendingPick(null)}
         />
       </ExercisePicker>
 
@@ -416,7 +416,7 @@ export default function SessionScreen() {
         message="O que não foi marcado não entra no volume de hoje."
         cancelLabel="Voltar ao treino"
         confirmLabel="Finalizar"
-        onCancel={() => setConfirmingFinish(false)}
+        onClose={() => setConfirmingFinish(false)}
         onConfirm={() => void finish()}
       />
     </Screen>

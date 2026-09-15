@@ -205,12 +205,10 @@ export default function DayScreen() {
         message={`Sai de ${everyWeekday(weekday)} a partir de agora. O que já foi registrado continua no histórico.`}
         cancelLabel="Cancelar"
         confirmLabel="Remover"
-        onCancel={() => setRemoving(null)}
+        onClose={() => setRemoving(null)}
         onConfirm={() => {
-          const target = removing;
-          setRemoving(null);
-          if (!target) return;
-          void removeRoutineExercise(target.id).then(() => {
+          if (!removing) return;
+          void removeRoutineExercise(removing.id).then(() => {
             bumpData();
             reload();
           });
