@@ -74,3 +74,20 @@ export function resolveTargets(
 ): Targets {
   return override ?? lastPerformed ?? seed;
 }
+
+/**
+ * Compara dois `Targets` campo a campo.
+ *
+ * Existe para o `memo` da tela de sessao: `loadSession` reconstroi um `Targets`
+ * novo a cada recarga (mesmo quando os numeros nao mudaram), entao comparar por
+ * referencia nunca bloquearia re-render nenhum.
+ */
+export function sameTargets(a: Targets, b: Targets): boolean {
+  return (
+    a.sets === b.sets &&
+    a.reps === b.reps &&
+    a.weightKg === b.weightKg &&
+    a.distanceKm === b.distanceKm &&
+    a.durationMin === b.durationMin
+  );
+}

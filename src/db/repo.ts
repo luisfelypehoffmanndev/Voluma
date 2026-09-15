@@ -55,6 +55,35 @@ async function enqueue(db: SQLiteDatabase, table: SyncedTable, rowId: string): P
   );
 }
 
+/**
+ * Irma de `enqueue`, para quando VARIAS linhas de `table` mudaram na mesma
+ * escrita e ja tem uma clausula SQL que as identifica (em vez de uma lista de
+ * ids em mao).
+ *
+ * Um round-trip so, via `INSERT ... SELECT`, em vez de coletar ids em JS e
+ * enfileirar um a um — e exatamente o padrao que tornava
+ * `setSessionExerciseTargets`/`setSessionExerciseSets` sequenciais (ver o
+ * comentario delas). `table` vem de `SyncedTable` (uniao fechada de literais,
+ * nunca de entrada do usuario), entao interpolar o nome dela e seguro — mesmo
+ * padrao que `softDelete`, logo abaixo, ja usa. `where`/`params` seguem o
+ * contrato normal de bind params: nunca concatenar VALOR nenhum na string.
+ */
+async function enqueueWhere(
+  db: SQLiteDatabase,
+  table: SyncedTable,
+  where: string,
+  params: readonly (string | number)[],
+  queuedAt: string,
+): Promise<void> {
+  await db.runAsync(
+    `INSERT INTO outbox (table_name, row_id, queued_at)
+     SELECT ?, id, ? FROM ${table} WHERE ${where}`,
+    table,
+    queuedAt,
+    ...params,
+  );
+}
+
 // ---------------------------------------------------------------- exercicios
 
 export async function listExercises(): Promise<Exercise[]> {
@@ -832,31 +861,40 @@ export async function updateSet(
   const db = await getDb();
   const timestamp = now();
 
+  // Uma UPDATE so, com as colunas presentes em `patch` — nao uma por campo.
+  // Nomes de coluna sao literais fixos, incluidos condicionalmente; os
+  // VALORES sempre vao por bind param, nunca concatenados na string.
+  const assignments: string[] = [];
+  const values: (string | number)[] = [];
+  if (patch.reps !== undefined) {
+    assignments.push('reps = ?');
+    values.push(patch.reps);
+  }
+  if (patch.weightKg !== undefined) {
+    assignments.push('weight_kg = ?');
+    values.push(patch.weightKg);
+  }
+  if (patch.distanceKm !== undefined) {
+    assignments.push('distance_km = ?');
+    values.push(patch.distanceKm);
+  }
+  if (patch.durationMin !== undefined) {
+    assignments.push('duration_min = ?');
+    values.push(patch.durationMin);
+  }
+  if (patch.done !== undefined) {
+    assignments.push('done = ?');
+    values.push(patch.done ? 1 : 0);
+  }
+  assignments.push('updated_at = ?');
+  values.push(timestamp);
+
   await db.withTransactionAsync(async () => {
-    if (patch.reps !== undefined) {
-      await db.runAsync('UPDATE session_sets SET reps = ? WHERE id = ?', patch.reps, id);
-    }
-    if (patch.weightKg !== undefined) {
-      await db.runAsync('UPDATE session_sets SET weight_kg = ? WHERE id = ?', patch.weightKg, id);
-    }
-    if (patch.distanceKm !== undefined) {
-      await db.runAsync(
-        'UPDATE session_sets SET distance_km = ? WHERE id = ?',
-        patch.distanceKm,
-        id,
-      );
-    }
-    if (patch.durationMin !== undefined) {
-      await db.runAsync(
-        'UPDATE session_sets SET duration_min = ? WHERE id = ?',
-        patch.durationMin,
-        id,
-      );
-    }
-    if (patch.done !== undefined) {
-      await db.runAsync('UPDATE session_sets SET done = ? WHERE id = ?', patch.done ? 1 : 0, id);
-    }
-    await db.runAsync('UPDATE session_sets SET updated_at = ? WHERE id = ?', timestamp, id);
+    await db.runAsync(
+      `UPDATE session_sets SET ${assignments.join(', ')} WHERE id = ?`,
+      ...values,
+      id,
+    );
     await enqueue(db, 'session_sets', id);
   });
 }
@@ -943,40 +981,66 @@ export async function setSessionExerciseTargets(
   const rows = kind === 'run' ? 1 : Math.max(0, Math.floor(targets.sets));
 
   await db.withTransactionAsync(async () => {
-    const previous = await db.getAllAsync<{ id: string }>(
-      'SELECT id FROM session_sets WHERE session_id = ? AND exercise_id = ? AND deleted_at IS NULL',
+    // Soft-delete em lote: uma UPDATE so para todas as linhas do exercicio,
+    // em vez de um SELECT de ids seguido de uma UPDATE + um enqueue por linha
+    // (o N+1 sequencial que deixava o toggle "concluido" lento — ver o
+    // comentario de `setSessionExerciseSets`, irma desta funcao).
+    await db.runAsync(
+      `UPDATE session_sets SET deleted_at = ?, updated_at = ?
+        WHERE session_id = ? AND exercise_id = ? AND deleted_at IS NULL`,
+      timestamp,
+      timestamp,
       sessionId,
       exerciseId,
     );
-    for (const row of previous) {
-      await db.runAsync(
-        'UPDATE session_sets SET deleted_at = ?, updated_at = ? WHERE id = ?',
-        timestamp,
-        timestamp,
-        row.id,
-      );
-      await enqueue(db, 'session_sets', row.id);
-    }
+    // `timestamp` e unico por chamada (um so `await now()` por escrita), entao
+    // filtrar por ele aqui re-seleciona exatamente as linhas que a UPDATE
+    // acima acabou de tocar, escopadas pelo mesmo par sessao/exercicio.
+    await enqueueWhere(
+      db,
+      'session_sets',
+      'session_id = ? AND exercise_id = ? AND deleted_at = ?',
+      [sessionId, exerciseId, timestamp],
+      timestamp,
+    );
 
-    for (let index = 1; index <= rows; index += 1) {
-      const setId = newId();
+    if (rows > 0) {
+      // Idem para a reinsercao: um INSERT multi-linha so, com os ids gerados
+      // em JS antes. `rows` nunca passa de umas poucas dezenas numa sessao
+      // real (SQLite aceita ate SQLITE_MAX_VARIABLE_NUMBER bind params por
+      // statement, 999 no pior caso — 10 por linha aqui, entao havia margem
+      // de sobra).
+      const setIds = Array.from({ length: rows }, () => newId());
+      const placeholders = setIds.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)').join(', ');
+      const values: (string | number)[] = [];
+      setIds.forEach((setId, index) => {
+        values.push(
+          setId,
+          sessionId,
+          exerciseId,
+          index + 1,
+          targets.reps,
+          targets.weightKg,
+          targets.distanceKm,
+          targets.durationMin,
+          done ? 1 : 0,
+          timestamp,
+        );
+      });
       await db.runAsync(
         `INSERT INTO session_sets
            (id, session_id, exercise_id, set_index, reps, weight_kg,
             distance_km, duration_min, done, updated_at, deleted_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
-        setId,
-        sessionId,
-        exerciseId,
-        index,
-        targets.reps,
-        targets.weightKg,
-        targets.distanceKm,
-        targets.durationMin,
-        done ? 1 : 0,
+         VALUES ${placeholders}`,
+        ...values,
+      );
+      await enqueueWhere(
+        db,
+        'session_sets',
+        'session_id = ? AND exercise_id = ? AND deleted_at IS NULL AND updated_at = ?',
+        [sessionId, exerciseId, timestamp],
         timestamp,
       );
-      await enqueue(db, 'session_sets', setId);
     }
   });
 }
@@ -1084,41 +1148,50 @@ export async function setSessionExerciseSets(
   const inserted: { id: string; setIndex: number; reps: number; weightKg: number }[] = [];
 
   await db.withTransactionAsync(async () => {
-    const previous = await db.getAllAsync<{ id: string }>(
-      'SELECT id FROM session_sets WHERE session_id = ? AND exercise_id = ? AND deleted_at IS NULL',
+    // Mesmo tratamento de `setSessionExerciseTargets`: uma UPDATE em lote em
+    // vez de SELECT + (UPDATE + enqueue) por linha existente.
+    await db.runAsync(
+      `UPDATE session_sets SET deleted_at = ?, updated_at = ?
+        WHERE session_id = ? AND exercise_id = ? AND deleted_at IS NULL`,
+      timestamp,
+      timestamp,
       sessionId,
       exerciseId,
     );
-    for (const row of previous) {
-      await db.runAsync(
-        'UPDATE session_sets SET deleted_at = ?, updated_at = ? WHERE id = ?',
-        timestamp,
-        timestamp,
-        row.id,
-      );
-      await enqueue(db, 'session_sets', row.id);
-    }
+    await enqueueWhere(
+      db,
+      'session_sets',
+      'session_id = ? AND exercise_id = ? AND deleted_at = ?',
+      [sessionId, exerciseId, timestamp],
+      timestamp,
+    );
 
-    for (let index = 0; index < rows.length; index += 1) {
-      const setId = newId();
-      const setIndex = index + 1;
-      const row = rows[index];
+    if (rows.length > 0) {
+      // `reps`/`weightKg` variam por linha aqui (rampa de aquecimento, carga
+      // que muda ao longo do exercicio) — o que nao varia e o numero de
+      // round-trips: um INSERT multi-linha so, como na funcao irma.
+      const placeholders = rows.map(() => '(?, ?, ?, ?, ?, ?, 0, 0, ?, ?, NULL)').join(', ');
+      const values: (string | number)[] = [];
+      rows.forEach((row, index) => {
+        const setId = newId();
+        const setIndex = index + 1;
+        values.push(setId, sessionId, exerciseId, setIndex, row.reps, row.weightKg, done ? 1 : 0, timestamp);
+        inserted.push({ id: setId, setIndex, reps: row.reps, weightKg: row.weightKg });
+      });
       await db.runAsync(
         `INSERT INTO session_sets
            (id, session_id, exercise_id, set_index, reps, weight_kg,
             distance_km, duration_min, done, updated_at, deleted_at)
-         VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?, NULL)`,
-        setId,
-        sessionId,
-        exerciseId,
-        setIndex,
-        row.reps,
-        row.weightKg,
-        done ? 1 : 0,
+         VALUES ${placeholders}`,
+        ...values,
+      );
+      await enqueueWhere(
+        db,
+        'session_sets',
+        'session_id = ? AND exercise_id = ? AND deleted_at IS NULL AND updated_at = ?',
+        [sessionId, exerciseId, timestamp],
         timestamp,
       );
-      await enqueue(db, 'session_sets', setId);
-      inserted.push({ id: setId, setIndex, reps: row.reps, weightKg: row.weightKg });
     }
   });
 

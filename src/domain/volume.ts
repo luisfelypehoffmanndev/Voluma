@@ -57,12 +57,15 @@ export function heaviestSet(
 }
 
 /**
- * Formata volume para exibicao. Acima de 1000 kg vira "3.2k" para caber no
- * card sem quebrar o alinhamento do numero grande.
+ * Formata volume para exibicao: sempre o numero cheio, arredondado.
+ *
+ * Ja abreviou acima de 1000 ("3,2k", "12k") para caber no card. Nao abrevia
+ * mais: o peso levantado e o numero que o usuario quer LER, e "2,6k" esconde a
+ * diferenca entre 2.550 e 2.649 — justo a faixa em que uma serie a mais
+ * aparece. O card comporta: cinco digitos a `numberLg` ocupam ~165dp dos
+ * ~320dp uteis de um telefone estreito.
  */
 export function formatVolume(kg: number): string {
-  if (kg >= 10000) return `${Math.round(kg / 1000)}k`;
-  if (kg >= 1000) return `${(kg / 1000).toFixed(1).replace('.', ',')}k`;
   return String(Math.round(kg));
 }
 

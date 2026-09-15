@@ -130,12 +130,12 @@ describe('formatVolume', () => {
     expect(formatVolume(940.4)).toBe('940');
   });
 
-  it('abrevia com uma casa e virgula entre 1000 e 10000', () => {
-    expect(formatVolume(3200)).toBe('3,2k');
+  it('nao abrevia acima de 1000', () => {
+    expect(formatVolume(3200)).toBe('3200');
   });
 
-  it('abrevia sem casa decimal acima de 10000', () => {
-    expect(formatVolume(12400)).toBe('12k');
+  it('nao abrevia nem na casa dos dez mil', () => {
+    expect(formatVolume(12400)).toBe('12400');
   });
 });
 

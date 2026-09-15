@@ -62,3 +62,25 @@ export function summarizeSets(rows: readonly Pick<SetDraft, 'reps' | 'weightKg'>
     volume,
   };
 }
+
+/**
+ * Compara duas listas de `SetDraft` posicao a posicao.
+ *
+ * Mesma razao de `sameTargets`: `loadSession` reconstroi `rows` do zero a cada
+ * recarga, entao comparar por referencia nunca bloquearia re-render nenhum.
+ * Series de um exercicio sao poucas (1-6 tipicamente), entao O(n) ingenuo e
+ * suficiente — nao precisa de memoizacao adicional.
+ */
+export function sameSetDrafts(a: readonly SetDraft[], b: readonly SetDraft[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  return a.every((row, index) => {
+    const other = b[index];
+    return (
+      row.id === other.id &&
+      row.setIndex === other.setIndex &&
+      row.reps === other.reps &&
+      row.weightKg === other.weightKg
+    );
+  });
+}
