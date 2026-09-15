@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { accentGlow, colors, radius, spacing } from '@/theme/tokens';
+import { accentGlow, colors, radius, spacing, surfaces } from '@/theme/tokens';
 
 import { GlassSurface } from './GlassSurface';
 import { PressableSurface } from './PressableSurface';
@@ -33,8 +33,11 @@ type Props = {
  * destes, e uma caixa diferente entre eles faria um parecer mais importante que
  * o outro sem ninguem ter decidido isso.
  *
- * Desabilitado muda so a cor do conteudo. Mexer em fundo e opacidade junto faz
- * o botao "acender" ao habilitar, que le como feedback de toque que nao houve.
+ * Desabilitado, o secundario muda so a cor do conteudo: mexer em fundo e
+ * opacidade junto faz o botao "acender" ao habilitar, que le como feedback de
+ * toque que nao houve. O primario e a excecao: texto cinza sobre laranja fica
+ * ilegivel, e um botao laranja brilhando que nao faz nada mente sobre o proprio
+ * estado — ele apaga para o nivel 2, como o "Adicionar" do catalogo.
  */
 export function Button({
   label,
@@ -62,7 +65,7 @@ export function Button({
   );
 
   return (
-    <View style={[primary ? styles.glow : null, style]}>
+    <View style={[primary && !disabled ? styles.glow : null, style]}>
       <PressableSurface
         onPress={onPress}
         disabled={disabled}
@@ -73,7 +76,9 @@ export function Button({
         accessibilityLabel={accessibilityLabel ?? label}
       >
         {primary ? (
-          <View style={[styles.box, styles.primary]}>{content}</View>
+          <View style={[styles.box, disabled ? styles.primaryDisabled : styles.primary]}>
+            {content}
+          </View>
         ) : (
           <GlassSurface borderRadius={radius.pill} style={styles.box}>
             {content}
@@ -94,6 +99,11 @@ const styles = StyleSheet.create({
   },
   primary: {
     backgroundColor: colors.accent,
+  },
+  primaryDisabled: {
+    backgroundColor: surfaces.raised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
   },
   /** O mesmo glow do card accent: e o que faz o laranja ler como neon. */
   glow: {

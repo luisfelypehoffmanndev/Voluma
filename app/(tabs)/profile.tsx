@@ -58,6 +58,17 @@ export default function ProfileScreen() {
             </View>
           </Card>
 
+          <Card onPress={() => router.push('/onboarding?replay=1')}>
+            <Label>Ajuda</Label>
+            <View style={styles.row}>
+              <View style={styles.rowText}>
+                <Body>Como o Voluma funciona</Body>
+                <Meta>plano, treino e histórico em duas telas</Meta>
+              </View>
+              <ChevronRightIcon size={16} color={colors.textSecondary} />
+            </View>
+          </Card>
+
           <MotionCard />
 
           <SyncCard />

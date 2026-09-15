@@ -48,6 +48,11 @@ A barra tem quatro abas sem rótulo visível (cada uma com
 | **Histórico** | calendário e números, num seletor segmentado |
 | **Perfil** | peso corporal, vibração, nuvem e créditos |
 
+Na primeira abertura (banco sem plano e sem exercícios) o app passa por um
+onboarding: duas telas explicando Plano → Hoje → Histórico e a escolha entre um
+modelo Push/Pull/Legs nos dias marcados ou a semana vazia. Nada é criado às
+escondidas. A explicação pode ser revista em **Perfil → Como o Voluma funciona**.
+
 Todo treino tem começo, meio e fim: "Finalizar treino" leva a uma tela de
 resultado que compara o volume com o mesmo dia da semana anterior. Nada
 destrutivo acontece a um toque — "Pular hoje" oferece desfazer, "Remover do
