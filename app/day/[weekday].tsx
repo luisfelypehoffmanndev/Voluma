@@ -22,6 +22,7 @@ import { addWeeks, weekRangeLabel, weekStartKey, weekdayName, weeksBetween } fro
 import { bumpData, useQuery } from '@/store/data';
 import { colors, fontSize, hitSlop, spacing } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
+import { ConfirmModal } from '@/ui/ConfirmModal';
 import { artSlugFor } from '@/movements/library';
 import { DEFAULT_RUN_TARGETS, DEFAULT_TARGETS, ExercisePicker } from '@/ui/ExercisePicker';
 import { FloatingGlassButton } from '@/ui/FloatingGlassButton';
@@ -70,6 +71,7 @@ export default function DayScreen() {
   const [weekStart, setWeekStart] = useState(() => weekStartKey(new Date()));
   const listMotion = useListMotion();
   const [picking, setPicking] = useState(false);
+  const [removing, setRemoving] = useState<WeekExercise | null>(null);
 
   const { data, loading, reload } = useQuery(
     useCallback(async () => {
@@ -169,7 +171,11 @@ export default function DayScreen() {
 
         {items.map((item) => (
           <Animated.View key={item.id} {...listMotion}>
-            <ExerciseCard item={item} weekStart={weekStart} onChanged={reload} />
+            <ExerciseCard
+              item={item}
+              weekStart={weekStart}
+              onRemove={() => setRemoving(item)}
+            />
           </Animated.View>
         ))}
 
@@ -179,6 +185,24 @@ export default function DayScreen() {
       </ScrollView>
       </LayoutAnimationConfig>
       </Reveal>
+
+      <ConfirmModal
+        visible={removing != null}
+        title={`Remover ${removing?.exerciseName ?? ''} do plano?`}
+        message={`Sai de toda ${weekdayName(weekday).toLowerCase()} a partir de agora. O que já foi registrado continua no histórico.`}
+        cancelLabel="Cancelar"
+        confirmLabel="Remover"
+        onCancel={() => setRemoving(null)}
+        onConfirm={() => {
+          const target = removing;
+          setRemoving(null);
+          if (!target) return;
+          void removeRoutineExercise(target.id).then(() => {
+            bumpData();
+            reload();
+          });
+        }}
+      />
 
       <ExercisePicker
         visible={picking}
@@ -215,11 +239,12 @@ function weekOffsetLabel(weekStart: string, currentWeek: string): string {
 function ExerciseCard({
   item,
   weekStart,
-  onChanged,
+  onRemove,
 }: {
   item: WeekExercise;
   weekStart: string;
-  onChanged: () => void;
+  /** Abre a pergunta; remover do plano nunca e a um toque. */
+  onRemove: () => void;
 }) {
   const commit = useCallback(
     (targets: Targets) => {
@@ -237,11 +262,8 @@ function ExerciseCard({
         </View>
         <Pressable
           hitSlop={hitSlop}
-          onPress={async () => {
-            await removeRoutineExercise(item.id);
-            bumpData();
-            onChanged();
-          }}
+          onPress={onRemove}
+          accessibilityLabel={`Remover ${item.exerciseName} do plano`}
         >
           <TrashIcon size={16} color={colors.textSecondary} />
         </Pressable>

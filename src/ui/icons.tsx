@@ -147,6 +147,63 @@ export function TrashIcon(props: IconProps) {
   );
 }
 
+/** Mais opcoes. Tres pontos em traco, nao preenchidos: o resto da familia e outline. */
+export function MoreIcon(props: IconProps) {
+  const { size, common } = base(props);
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Circle cx={5.5} cy={12} r={1.3} {...common} />
+      <Circle cx={12} cy={12} r={1.3} {...common} />
+      <Circle cx={18.5} cy={12} r={1.3} {...common} />
+    </Svg>
+  );
+}
+
+export function CloseIcon(props: IconProps) {
+  const { size, common } = base(props);
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Line x1={6} y1={6} x2={18} y2={18} {...common} />
+      <Line x1={18} y1={6} x2={6} y2={18} {...common} />
+    </Svg>
+  );
+}
+
+/** Aba Hoje: a acao da aba e treinar, entao o icone e "comecar". */
+export function PlayIcon(props: IconProps) {
+  const { size, common } = base(props);
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d="M8 5.5v13a.6.6 0 0 0 .9.5l10-6.5a.6.6 0 0 0 0-1l-10-6.5a.6.6 0 0 0-.9.5Z" {...common} />
+    </Svg>
+  );
+}
+
+/** Aba Plano: a semana como lista de dias. */
+export function ListIcon(props: IconProps) {
+  const { size, common } = base(props);
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Line x1={9} y1={6.5} x2={20} y2={6.5} {...common} />
+      <Line x1={9} y1={12} x2={20} y2={12} {...common} />
+      <Line x1={9} y1={17.5} x2={20} y2={17.5} {...common} />
+      <Circle cx={4.8} cy={6.5} r={0.9} {...common} />
+      <Circle cx={4.8} cy={12} r={0.9} {...common} />
+      <Circle cx={4.8} cy={17.5} r={0.9} {...common} />
+    </Svg>
+  );
+}
+
+export function PersonIcon(props: IconProps) {
+  const { size, common } = base(props);
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Circle cx={12} cy={8.5} r={3.8} {...common} />
+      <Path d="M4.5 20c.9-3.6 3.9-5.8 7.5-5.8s6.6 2.2 7.5 5.8" {...common} />
+    </Svg>
+  );
+}
+
 export function SyncIcon(props: IconProps) {
   const { size, common } = base(props);
   return (

@@ -22,7 +22,9 @@ import {
   removeSet,
   setSessionExerciseSets,
   setSessionExerciseTargets,
+  skipSessionExercise,
   targetsForWeek,
+  unskipSessionExercise,
   updateSet,
   type WeekExercise,
 } from '@/db/repo';
@@ -34,7 +36,7 @@ import { formatVolume, formatWeight } from '@/domain/volume';
 import { fromDateKey, weekStartKey, weekdayName, weekdayOf } from '@/domain/week';
 import { bumpData, useQuery } from '@/store/data';
 import { useAuth } from '@/sync/auth';
-import { colors, fontSize, hitSlop, radius, spacing } from '@/theme/tokens';
+import { colors, fontSize, radius, spacing } from '@/theme/tokens';
 import { useListMotion } from '@/ui/motion';
 import { confirm } from '@/ui/haptics';
 import { Card } from '@/ui/Card';
@@ -48,7 +50,9 @@ import { Header, Screen } from '@/ui/Screen';
 import { SetRow } from '@/ui/SetRow';
 import { COMMIT_DELAY, TargetsEditor } from '@/ui/TargetsEditor';
 import { Body, Label, Meta } from '@/ui/Text';
-import { ArrowDownIcon, PlusIcon, TrashIcon } from '@/ui/icons';
+import { ActionSheet } from '@/ui/ActionSheet';
+import { UndoToast, type UndoOffer } from '@/ui/UndoToast';
+import { ArrowDownIcon, MoreIcon, PlusIcon } from '@/ui/icons';
 
 /**
  * Registro do treino de um dia.
@@ -125,6 +129,27 @@ export default function SessionScreen() {
 
   const [picking, setPicking] = useState(false);
   const listMotion = useListMotion();
+  const [undo, setUndo] = useState<UndoOffer | null>(null);
+
+  /**
+   * "Pular hoje": sai desta sessao, o plano fica. Nao pergunta nada — e barato
+   * de reverter, entao a protecao e o "Desfazer", nao um "tem certeza?".
+   */
+  const skipToday = useCallback(async (sessionId: string, item: SessionExercise) => {
+    await skipSessionExercise(sessionId, item.exerciseId);
+    bumpData();
+    reloadRef.current();
+    setUndo({
+      id: Date.now(),
+      message: `${item.exerciseName} · pulado hoje`,
+      onUndo: () => {
+        void unskipSessionExercise(sessionId, item.exerciseId).then(() => {
+          bumpData();
+          reloadRef.current();
+        });
+      },
+    });
+  }, []);
 
   const items = data?.items;
   const sessionVolume = useMemo(() => {
@@ -187,7 +212,15 @@ export default function SessionScreen() {
   };
 
   return (
-    <Screen>
+    <Screen
+      overlay={
+        <UndoToast
+          offer={undo}
+          onExpire={() => setUndo(null)}
+          bottom={insets.bottom + spacing.xl}
+        />
+      }
+    >
       <Header
         title="Treino"
         action={{ icon: <ArrowDownIcon size={20} />, onPress: () => router.back() }}
@@ -226,8 +259,10 @@ export default function SessionScreen() {
             <ExerciseCard
               item={item}
               sessionId={session.id}
+              weekday={weekdayName(weekdayOf(date)).toLowerCase()}
               onDraft={reportDraft}
               onStructuralChange={reloadStable}
+              onSkip={skipToday}
             />
           </Animated.View>
         ))}
@@ -372,7 +407,18 @@ function useWriteBehind<T>(perform: (value: T) => Promise<void>) {
     };
   }, [flush]);
 
-  return { schedule, flush };
+  /**
+   * Joga fora o que ainda nao foi gravado. So para quando o exercicio SAI da
+   * tela (pular, remover): ai a escrita pendente ja nao descreve nada que o
+   * usuario queira, e o flush do unmount a gravaria por cima da remocao.
+   */
+  const discard = useCallback(() => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    pending.current = null;
+  }, []);
+
+  return { schedule, flush, discard };
 }
 
 type ItemSource = 'edited' | 'lastActual' | 'plan';
@@ -444,6 +490,10 @@ type CardProps = {
   onDraft: (exerciseId: string, done: boolean, volume: number) => void;
   /** Para quando a LISTA muda (exercicio removido), nao os numeros dele. */
   onStructuralChange: () => void;
+  /** "segunda" — para o menu dizer de qual dia o exercicio sai. */
+  weekday: string;
+  /** "Pular hoje". Quem cuida do "Desfazer" e a tela, nao o card que some. */
+  onSkip: (sessionId: string, item: SessionExercise) => void;
 };
 
 const ExerciseCard = memo(
@@ -458,22 +508,28 @@ const ExerciseCard = memo(
   // referencia aqui e correto — ver `reportDraft`/`reloadStable`.
   (prev, next) =>
     prev.sessionId === next.sessionId &&
+    prev.weekday === next.weekday &&
     prev.onDraft === next.onDraft &&
     prev.onStructuralChange === next.onStructuralChange &&
+    prev.onSkip === next.onSkip &&
     sameSessionExercise(prev.item, next.item),
 );
 
 /**
- * O exercicio saiu do dia: some da rotina, e o que estava gravado nesta sessao
- * zera junto.
+ * "Remover do plano": o exercicio sai da rotina daquele dia da semana, a partir
+ * de agora, e o que estava gravado nesta sessao zera junto.
  *
  * Zerar em vez de so tirar da rotina importa: deixar as series vivas manteria
  * o volume de um movimento que nao esta mais na lista. `sets: 0` nao insere
  * linha nenhuma, entao o `done` daqui e indiferente. Compartilhado pelos dois
  * tipos de card porque a regra nao muda com `kind` — so o formato das series
  * gravadas muda.
+ *
+ * Esta era a lixeira colada na caixa de concluido, a um toque e sem pergunta —
+ * e apagava do plano de TODA semana quem so queria tirar o exercicio de hoje.
+ * Agora so roda depois do "Remover" do `ExerciseMenu`.
  */
-async function removeFromToday(sessionId: string, item: SessionExercise): Promise<void> {
+async function removeFromPlan(sessionId: string, item: SessionExercise): Promise<void> {
   await removeRoutineExercise(item.routineExerciseId!);
   await setSessionExerciseTargets(
     sessionId,
@@ -486,12 +542,84 @@ async function removeFromToday(sessionId: string, item: SessionExercise): Promis
 }
 
 /**
+ * O ⋯ do card e o menu que ele abre.
+ *
+ * Mora do lado do NOME, e nao ao lado da caixa de concluido: a lixeira antiga
+ * ficava colada nela, e errar o toque por alguns pixels apagava um exercicio do
+ * plano. Entre o ⋯ e a caixa agora ha o bloco de texto inteiro.
+ *
+ * `beforeLeave` roda antes de o exercicio sair da lista: descarta a escrita
+ * adiada do card. Sem isso o flush do unmount regravaria as series depois de o
+ * pulo ou a remocao as zerarem, e o volume do dia contaria um exercicio que nao
+ * esta mais na tela.
+ */
+function ExerciseMenu({
+  item,
+  sessionId,
+  weekday,
+  onSkip,
+  onStructuralChange,
+  beforeLeave,
+}: Pick<CardProps, 'item' | 'sessionId' | 'weekday' | 'onSkip' | 'onStructuralChange'> & {
+  beforeLeave: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <Pressable
+        hitSlop={{ top: 16, bottom: 16, left: 16, right: 12 }}
+        onPress={() => setOpen(true)}
+        accessibilityLabel={`Mais opções de ${item.exerciseName}`}
+        style={styles.more}
+      >
+        <MoreIcon size={18} color={colors.textSecondary} />
+      </Pressable>
+
+      <ActionSheet
+        visible={open}
+        title={item.exerciseName}
+        onClose={() => setOpen(false)}
+        actions={[
+          {
+            label: 'Pular hoje',
+            detail: 'só neste treino · o plano não muda',
+            onPress: () => {
+              beforeLeave();
+              onSkip(sessionId, item);
+            },
+          },
+          ...(item.routineExerciseId
+            ? [
+                {
+                  label: 'Remover do plano',
+                  detail: `sai de toda ${weekday} a partir de agora`,
+                  confirm: {
+                    title: `Remover ${item.exerciseName} do plano?`,
+                    message: `Sai de toda ${weekday} a partir de agora. O que já foi registrado continua no histórico.`,
+                    confirmLabel: 'Remover',
+                  },
+                  onPress: () => {
+                    beforeLeave();
+                    void removeFromPlan(sessionId, item).then(onStructuralChange);
+                  },
+                },
+              ]
+            : []),
+        ]}
+      />
+    </>
+  );
+}
+
+/**
  * Corrida: exatamente a mecanica de antes de existir edicao por serie — um
  * alvo so (distancia/tempo), `TargetsEditor` sempre visivel, sem expandir.
  * Fatiar corrida em "serie" nao faz sentido (ver `run.ts`), entao ela nao
  * ganha o card novo.
  */
-function RunExerciseCard({ item, sessionId, onDraft, onStructuralChange }: CardProps) {
+function RunExerciseCard(props: CardProps) {
+  const { item, sessionId, onDraft } = props;
   const [targets, setTargets] = useState(item.targets);
 
   /**
@@ -527,7 +655,7 @@ function RunExerciseCard({ item, sessionId, onDraft, onStructuralChange }: CardP
    * treino dele; um engasgo de banco nao tem autoridade para revogar. Falhou, o
    * estado continua pendente e a proxima escrita leva tudo junto.
    */
-  const { schedule } = useWriteBehind<{ targets: Targets; done: boolean }>(
+  const { schedule, discard } = useWriteBehind<{ targets: Targets; done: boolean }>(
     useCallback(
       (value) =>
         setSessionExerciseTargets(
@@ -561,6 +689,7 @@ function RunExerciseCard({ item, sessionId, onDraft, onStructuralChange }: CardP
   return (
     <Card>
       <View style={[styles.itemHead, styles.itemHeadSpaced]}>
+        <ExerciseMenu {...props} beforeLeave={discard} />
         <View style={styles.itemText}>
           <Body numberOfLines={1}>{item.exerciseName}</Body>
           {/* Uma linha, sempre. Encurtar os rotulos torna a quebra improvavel;
@@ -570,19 +699,6 @@ function RunExerciseCard({ item, sessionId, onDraft, onStructuralChange }: CardP
             {`${done ? 'concluído' : SOURCE_LABEL[item.source]} · ${runSummary(targets)}`}
           </Meta>
         </View>
-
-        {item.routineExerciseId ? (
-          <Pressable
-            hitSlop={hitSlop}
-            onPress={() => {
-              // Some da lista: a tela precisa reconsultar, porque isso muda
-              // QUAIS exercicios existem, nao so os numeros de um deles.
-              void removeFromToday(sessionId, item).then(onStructuralChange);
-            }}
-          >
-            <TrashIcon size={16} color={colors.textSecondary} />
-          </Pressable>
-        ) : null}
 
         <CheckCell checked={done} onPress={toggle} />
       </View>
@@ -620,7 +736,8 @@ function RunExerciseCard({ item, sessionId, onDraft, onStructuralChange }: CardP
  * aquela linha (`scheduleRowCommit`, via `updateSet`), para nao pagar o custo
  * de apagar e reinserir N linhas a cada toque num peso so.
  */
-function StrengthExerciseCard({ item, sessionId, onDraft, onStructuralChange }: CardProps) {
+function StrengthExerciseCard(props: CardProps) {
+  const { item, sessionId, onDraft } = props;
   const [rows, setRows] = useState<SetDraft[]>(item.rows);
   const [done, setDone] = useState(item.done);
   const [expanded, setExpanded] = useState(false);
@@ -689,7 +806,7 @@ function StrengthExerciseCard({ item, sessionId, onDraft, onStructuralChange }: 
    * na fila nesse meio tempo — senao sobrescreveria uma edicao mais recente do
    * usuario com o retorno de uma escrita ja velha.
    */
-  const { schedule } = useWriteBehind<{ rows: SetDraft[]; done: boolean }>(
+  const { schedule, discard } = useWriteBehind<{ rows: SetDraft[]; done: boolean }>(
     useCallback(
       (value) =>
         setSessionExerciseSets(
@@ -779,25 +896,21 @@ function StrengthExerciseCard({ item, sessionId, onDraft, onStructuralChange }: 
   return (
     <Card>
       <View style={[styles.itemHead, expanded && styles.itemHeadSpaced]}>
+        <ExerciseMenu
+          {...props}
+          beforeLeave={() => {
+            discard();
+            for (const timer of rowTimers.current.values()) clearTimeout(timer);
+            rowTimers.current.clear();
+            pendingPatches.current.clear();
+          }}
+        />
         <Pressable style={styles.itemText} onPress={() => setExpanded((value) => !value)}>
           <Body numberOfLines={1}>{item.exerciseName}</Body>
           <Meta numberOfLines={1}>
             {`${done ? 'concluído' : SOURCE_LABEL[item.source]} · ${strengthSummary(rows)}`}
           </Meta>
         </Pressable>
-
-        {item.routineExerciseId ? (
-          <Pressable
-            hitSlop={hitSlop}
-            onPress={() => {
-              // Muda QUAIS exercicios existem, nao os numeros de um deles —
-              // por isso a tela reconsulta, e so aqui.
-              void removeFromToday(sessionId, item).then(onStructuralChange);
-            }}
-          >
-            <TrashIcon size={16} color={colors.textSecondary} />
-          </Pressable>
-        ) : null}
 
         <CheckCell checked={done} onPress={toggle} />
       </View>
@@ -880,7 +993,11 @@ async function loadSession(id: string) {
   const recorded = recordedByExercise(buckets, catalog);
   const items: SessionExercise[] = [];
 
+  // Pulados hoje saem da lista inteira — do plano e do que estava gravado.
+  const skipped = new Set(session.skippedExerciseIds);
+
   for (const item of planned) {
+    if (skipped.has(item.exerciseId)) continue;
     const entry = recorded.get(item.exerciseId) ?? null;
     // Numero gravado ganha do herdado mesmo desmarcado: e o ajuste que o
     // usuario fez neste dia, e perde-lo ao sair da tela seria pior que
@@ -901,7 +1018,7 @@ async function loadSession(id: string) {
 
   const inPlan = new Set(planned.map((item) => item.exerciseId));
   for (const [exerciseId, entry] of recorded) {
-    if (inPlan.has(exerciseId)) continue;
+    if (inPlan.has(exerciseId) || skipped.has(exerciseId)) continue;
     const exercise = catalog.find((candidate) => candidate.id === exerciseId);
     const exerciseKind = exercise?.kind ?? 'strength';
     items.push({
@@ -1047,6 +1164,11 @@ const styles = StyleSheet.create({
   },
   itemText: {
     flex: 1,
+  },
+  more: {
+    // Alvo visual pequeno, alvo de toque grande (hitSlop): o ⋯ nao pode
+    // disputar largura com o nome do exercicio.
+    paddingVertical: spacing.xs,
   },
   setsList: {
     marginTop: spacing.md,

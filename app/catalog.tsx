@@ -2,7 +2,6 @@ import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -24,6 +23,7 @@ import { MOVEMENT_LIBRARY, artSlugFor } from '@/movements/library';
 import { bumpData, useQuery } from '@/store/data';
 import { colors, fontSize, hitSlop, radius, spacing, surfaces } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
+import { ConfirmModal } from '@/ui/ConfirmModal';
 import { MovementFigure } from '@/ui/MovementFigure';
 import { confirm } from '@/ui/haptics';
 import { PressableSurface } from '@/ui/PressableSurface';
@@ -62,6 +62,9 @@ export default function CatalogScreen() {
 
   const exercises = data?.exercises ?? [];
   const groups = groupByMuscle(exercises);
+
+  // Uma pergunta por tela, nao um modal montado por linha.
+  const [removing, setRemoving] = useState<{ exercise: Exercise; days: number } | null>(null);
 
   // Guarda contra o toque duplo: sao ~60 inserts, e duas execucoes disparadas
   // juntas leriam o mesmo catalogo vazio e criariam tudo em dobro — a
@@ -138,6 +141,7 @@ export default function CatalogScreen() {
                 key={exercise.id}
                 exercise={exercise}
                 days={data?.days.get(exercise.id) ?? 0}
+                onRemove={setRemoving}
               />
             ))}
           </Card>
@@ -149,35 +153,46 @@ export default function CatalogScreen() {
           <Meta style={styles.empty}>Nenhum movimento no catálogo.</Meta>
         ) : null}
       </ScrollView>
+
+      <ConfirmModal
+        visible={removing != null}
+        title={`Apagar ${removing?.exercise.name ?? ''}?`}
+        message={removeMessage(removing?.days ?? 0)}
+        cancelLabel="Cancelar"
+        confirmLabel="Apagar"
+        onCancel={() => setRemoving(null)}
+        onConfirm={() => {
+          const target = removing;
+          setRemoving(null);
+          if (target) void deleteExercise(target.exercise.id).then(bumpData);
+        }}
+      />
     </Screen>
   );
 }
 
-/** Uma linha do catalogo: nome, onde ele e usado, e a acao de apagar. */
-function ExerciseRow({ exercise, days }: { exercise: Exercise; days: number }) {
-  const remove = () => {
-    // Confirma so quando ha o que perder. Perguntar por um movimento que nao
-    // esta em dia nenhum e ruido: nada acontece alem de sumir da lista.
-    if (days === 0) {
-      deleteExercise(exercise.id).then(bumpData);
-      return;
-    }
+/**
+ * O que apagar custa. Pergunta sempre, inclusive fora do plano: some do
+ * catalogo e dos seletores, e nao ha como desfazer.
+ */
+function removeMessage(days: number): string {
+  const history = 'O histórico já registrado continua.';
+  if (days === 0) return `Sai do catálogo e dos seletores. ${history}`;
+  const where = `${days} ${days === 1 ? 'dia da semana' : 'dias da semana'}`;
+  return `Está em ${where}. Apagar tira o movimento de todos eles. ${history}`;
+}
 
-    Alert.alert(
-      exercise.name,
-      `Está em ${days} ${days === 1 ? 'dia da semana' : 'dias da semana'}. Apagar tira o movimento de todos eles. O histórico já registrado continua.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Apagar',
-          style: 'destructive',
-          onPress: () => {
-            deleteExercise(exercise.id).then(bumpData);
-          },
-        },
-      ],
-    );
-  };
+/** Uma linha do catalogo: nome, onde ele e usado, e a acao de apagar. */
+function ExerciseRow({
+  exercise,
+  days,
+  onRemove,
+}: {
+  exercise: Exercise;
+  days: number;
+  onRemove: (target: { exercise: Exercise; days: number }) => void;
+}) {
+  const remove = () => onRemove({ exercise, days });
 
   return (
     <View style={styles.row}>
@@ -186,7 +201,7 @@ function ExerciseRow({ exercise, days }: { exercise: Exercise; days: number }) {
         <Body numberOfLines={1}>{exercise.name}</Body>
         <Meta>{usageLabel(days, exercise.kind === 'run')}</Meta>
       </View>
-      <Pressable hitSlop={hitSlop} onPress={remove}>
+      <Pressable hitSlop={hitSlop} onPress={remove} accessibilityLabel={`Apagar ${exercise.name}`}>
         <TrashIcon size={16} color={colors.textSecondary} />
       </Pressable>
     </View>

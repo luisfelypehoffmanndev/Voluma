@@ -10,7 +10,7 @@
  * last-write-wins do sync. Nada e apagado de verdade: delete e soft delete.
  */
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export const MIGRATIONS: readonly string[] = [
   // v1 — schema inicial
@@ -198,6 +198,20 @@ export const MIGRATIONS: readonly string[] = [
   ALTER TABLE session_sets ADD COLUMN duration_min INTEGER NOT NULL DEFAULT 0;
 
   CREATE INDEX IF NOT EXISTS idx_exercises_kind ON exercises (kind);
+  `,
+
+  `
+  -- Exercicios que o usuario tirou SO deste treino ("Pular hoje"), sem mexer no
+  -- plano. Lista JSON de exercise_id na propria sessao, e nao tabela nova: e
+  -- estado de uma linha so, o last-write-wins por updated_at ja cobre, e
+  -- desfazer e regravar a lista.
+  ALTER TABLE sessions ADD COLUMN skipped_exercise_ids TEXT NOT NULL DEFAULT '[]';
+
+  -- Quando o usuario tocou em "Finalizar treino". Nao da para reusar
+  -- finished_at: getOrCreateSessionForDate ja cria a sessao com ele preenchido,
+  -- porque a cascata de alvos (lastPerformedTargets) exige finished_at. Nulo =
+  -- nunca finalizado.
+  ALTER TABLE sessions ADD COLUMN completed_at TEXT;
   `,
 ];
 

@@ -103,6 +103,11 @@ alter table public.week_targets      add column if not exists target_duration_mi
 alter table public.session_sets      add column if not exists distance_km real not null default 0;
 alter table public.session_sets      add column if not exists duration_min integer not null default 0;
 
+-- ------------------------------------ v4: pular exercicio e finalizar treino
+
+alter table public.sessions          add column if not exists skipped_exercise_ids text not null default '[]';
+alter table public.sessions          add column if not exists completed_at timestamptz;
+
 -- ---------------------------------------------------------------- indices
 -- O pull filtra sempre por dono + updated_at, entao esse e o indice que importa.
 
