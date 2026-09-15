@@ -189,6 +189,20 @@ O §7 no eixo do tempo:
 - Campo de luz (`--ambient`) em movimento. O campo é arquitetura, não efeito.
 - `ripple` do Android, que contradiz acende/apaga e faria o Android parecer outro app.
 
+### A única exceção: a abertura do onboarding
+
+O onboarding é o único lugar do app com uma **entrada de cinema**: o campo de luz acende a partir do escuro, as sete barras do ícone crescem uma a uma até a de hoje (em laranja), "Voluma" surge e o botão aparece por último. Na tela de volume, o número conta até o novo valor a cada toque.
+
+A exceção se sustenta pelo mesmo raciocínio da caixa de concluído (§2): o que a regra impede é a tela que nunca para quieta, e isto acontece **uma vez na vida do usuário**. Não vira ruído porque não se repete.
+
+O limite continua valendo:
+- A curva é a mesma `SETTLE`, sem mola e sem overshoot. As barras crescem pela altura, ancoradas na base, como uma leitura sendo medida.
+- "Reduzir movimento" zera duração **e atraso**: tudo aparece no primeiro quadro.
+- O campo de luz não se move. A cortina que o cobre é que some.
+- Fora do onboarding nada disso vale. Barras em cascata numa tela comum continuam proibidas.
+
+Na abertura o accent é a barra de hoje, e por isso o botão "Começar" é vidro.
+
 ### Reduzir movimento é obrigatório
 
 Toda animação fica atrás da preferência de sistema, sem exceção. O contrato é: **quem pediu menos movimento não pediu menos interface** — o estado final continua correto (a caixa fica laranja, o chip fica aceso), só a transição desaparece.
