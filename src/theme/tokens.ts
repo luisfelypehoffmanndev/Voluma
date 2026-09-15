@@ -93,6 +93,12 @@ export const surfaces = {
   /** nivel 2 — superficie dentro de um card: input, dia selecionado */
   raised: 'rgba(255,255,255,0.08)',
   /**
+   * Nivel 2 pressionado. Sobe os mesmos 0,05 dos outros dois pares (card
+   * 0,06 -> 0,11; control 0,09 -> 0,14): o degrau do toque e o mesmo em toda a
+   * escada, so a base muda. Sobre um card isso vai de `#2B2B2B` a `#373737`.
+   */
+  raisedPressed: 'rgba(255,255,255,0.13)',
+  /**
    * Nivel 1 em area pequena (o botao redondo do cabecalho). Alpha um pouco
    * maior: numa area de 38px o olho le menos luz atravessando, e a 6% o botao
    * sumia do cabecalho.

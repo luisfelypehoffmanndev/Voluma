@@ -100,6 +100,7 @@ describe('a escada de densidade', () => {
       for (const [rest, active] of [
         [surfaces.card, surfaces.cardPressed],
         [surfaces.control, surfaces.controlPressed],
+        [surfaces.raised, surfaces.raisedPressed],
       ] as const) {
         const from = alphaOf(rest);
         const to = alphaOf(active);
@@ -145,6 +146,23 @@ describe('a escada de densidade', () => {
   it('acende ao ser pressionado, em vez de apagar', () => {
     expect(alphaOf(surfaces.cardPressed)).toBeGreaterThan(alphaOf(surfaces.card));
     expect(alphaOf(surfaces.controlPressed)).toBeGreaterThan(alphaOf(surfaces.control));
+    expect(alphaOf(surfaces.raisedPressed)).toBeGreaterThan(alphaOf(surfaces.raised));
+  });
+
+  /**
+   * O degrau do toque e o mesmo em toda a escada — 0,05 — e so o piso muda. Foi
+   * o que fixou o `raisedPressed` quando o nivel 2 ganhou botao proprio: sem
+   * isto, o valor seria chute, e um chute aqui faz um botao responder ao dedo
+   * mais forte que o card ao lado sem ninguem ter decidido isso.
+   */
+  it('mantem o mesmo degrau de toque nos tres niveis', () => {
+    for (const [rest, active] of [
+      [surfaces.card, surfaces.cardPressed],
+      [surfaces.raised, surfaces.raisedPressed],
+      [surfaces.control, surfaces.controlPressed],
+    ] as const) {
+      expect(alphaOf(active) - alphaOf(rest)).toBeCloseTo(0.05, 10);
+    }
   });
 });
 

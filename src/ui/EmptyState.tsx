@@ -19,15 +19,22 @@ type Props = {
  * Antes era uma linha cinza ("Nenhum exercicio neste dia. Descanso.") que
  * constatava o vazio e deixava o usuario procurar sozinho onde se adiciona.
  *
- * O botao e secundario (vidro): o accent de cada tela ja tem dono, e um vazio
- * nao e o momento mais importante dela.
+ * O botao e `inline` (nivel 2), sem cor: o accent de cada tela ja tem dono, e
+ * um vazio nao e o momento mais importante dela. Nao e vidro porque um vazio
+ * aparece no MEIO do conteudo e rola com ele — ver a nota de posicao em
+ * `Button.tsx`.
  */
 export function EmptyState({ title, message, action, style }: Props) {
   return (
     <View style={[styles.wrap, style]}>
       <Body style={styles.center}>{title}</Body>
       <Meta style={styles.center}>{message}</Meta>
-      <Button label={action.label} onPress={action.onPress} style={styles.button} />
+      <Button
+        variant="inline"
+        label={action.label}
+        onPress={action.onPress}
+        style={styles.button}
+      />
     </View>
   );
 }

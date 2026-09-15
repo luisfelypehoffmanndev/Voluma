@@ -18,8 +18,10 @@ type Props = {
  * distinguir os dois, quem tem treinos gravados le "nenhum treino" e conclui
  * que o app perdeu os dados.
  *
- * Tudo em branco e cinza: icone outline, texto, botao de vidro. Erro nao ganha
- * vermelho (§7) — o que diz que e erro e a frase.
+ * Tudo em branco e cinza: icone outline, texto, botao de nivel 2. Erro nao
+ * ganha vermelho (§7) — o que diz que e erro e a frase. O botao nao e vidro
+ * porque esta tela substitui o CONTEUDO e rola com ele — ver a nota de posicao
+ * em `Button.tsx`.
  *
  * A mensagem tecnica so aparece em desenvolvimento. "database is locked" ajuda
  * quem depura; quem esta na academia precisa saber que os dados estao salvos.
@@ -31,7 +33,7 @@ export function LoadError({ error, onRetry }: Props) {
       <Body style={styles.title}>Não foi possível carregar</Body>
       <Meta style={styles.text}>Seus treinos continuam salvos neste aparelho.</Meta>
       {__DEV__ ? <Meta style={styles.text}>{error.message}</Meta> : null}
-      <Button label="Tentar de novo" onPress={onRetry} style={styles.button} />
+      <Button variant="inline" label="Tentar de novo" onPress={onRetry} style={styles.button} />
     </View>
   );
 }
