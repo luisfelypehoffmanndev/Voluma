@@ -103,9 +103,17 @@ export function ConfirmContent({
         <Body style={styles.title}>{title}</Body>
         {message ? <Meta>{message}</Meta> : null}
       </View>
+      {/*
+        Nivel 2, e nao vidro: estes dois botoes vivem DENTRO do painel de vidro
+        do `Sheet`, e vidro sobre vidro nao se le — o preenchimento sem blur do
+        nivel 3 compoe praticamente no mesmo cinza do painel, e o botao sumia no
+        Android. Nivel 2 e um degrau acima da superficie em que esta, que e
+        exatamente o que o brief pede. Os dois mudam juntos: caixa diferente
+        entre eles faria um parecer mais importante que o outro.
+      */}
       <View style={styles.actions}>
-        <Button label={cancelLabel} onPress={onCancel} style={styles.action} />
-        <Button label={confirmLabel} onPress={onConfirm} style={styles.action} />
+        <Button variant="inline" label={cancelLabel} onPress={onCancel} style={styles.action} />
+        <Button variant="inline" label={confirmLabel} onPress={onConfirm} style={styles.action} />
       </View>
     </>
   );

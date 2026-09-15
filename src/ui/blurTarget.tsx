@@ -84,9 +84,30 @@ export function BlurTarget({
     }, [claim])
   );
 
+  // Dentro do alvo, o alvo corrente e `null` — e nao a si mesmo.
+  //
+  // A regra do topo deste arquivo ("o vidro nao pode estar dentro do proprio
+  // alvo") valia por convencao, e a convencao falhou. Sete botoes secundarios
+  // — o vazio, o erro, o "Fechar" do resultado, os dois da pergunta, os dois da
+  // home — montavam `GlassSurface` no MEIO do conteudo, onde o `overlay` do
+  // `Screen` nao alcanca. La o `useBlurTarget` devolvia este alvo, que e
+  // ancestral deles: o RenderNode passava a se conter, `prepareTreeImpl`
+  // recursava sem fundo e a RenderThread estourava a pilha (SIGSEGV). Nao dava
+  // tela de erro de JS porque o ciclo e nativo.
+  //
+  // O conserto de verdade foi de nivel, nao de alvo: aqueles botoes viraram
+  // `inline` (nivel 2) e nao montam vidro nenhum — ver `Button.tsx`. Esta linha
+  // fica como rede: se um vidro de nivel 3 reaparecer dentro do conteudo, ele
+  // cai no preenchimento fosco em vez de derrubar o app. Feio, e visivel em
+  // revisao; o crash nao era nem uma coisa nem outra.
+  //
+  // Quem precisa de blur de verdade continua tendo: a tab bar e os `overlay`
+  // vivem FORA do alvo e leem o registro da raiz, que nao muda.
+  const inside = useMemo<Registry>(() => ({ target: null, claim }), [claim]);
+
   return (
     <BlurTargetView ref={ref} style={style}>
-      {children}
+      <BlurTargetContext.Provider value={inside}>{children}</BlurTargetContext.Provider>
     </BlurTargetView>
   );
 }

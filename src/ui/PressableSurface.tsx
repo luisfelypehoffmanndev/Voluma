@@ -15,7 +15,7 @@ import { useTiming } from './motion';
 /**
  * Os dois gestos de toque do brief (§10), agora interpolados.
  *
- * - **acende** (`card`, `control`): superficie translucida clareia. Baixar a
+ * - **acende** (`card`, `control`, `raised`): superficie translucida clareia. Baixar a
  *   opacidade dela apagaria o texto junto e o card quase sumiria — nao e o
  *   mesmo gesto. Ver o comentario original em `Card.tsx`.
  * - **apaga** (`solid`): chrome solido ou conteudo opaco escurece.
@@ -30,6 +30,8 @@ type Feedback =
   | 'card'
   /** Nivel 1 em area pequena — botao redondo do cabecalho. Acende. */
   | 'control'
+  /** Nivel 2 — superficie dentro de um card: o botao que rola com a pagina. Acende. */
+  | 'raised'
   /** Chrome solido, icone ou linha de lista. Apaga. */
   | 'solid'
   /** Sem feedback proprio: quem responde e o filho (ex.: a celula marcavel). */
@@ -107,7 +109,9 @@ export function PressableSurface({
     const [rest, active] =
       feedback === 'control'
         ? [surfaces.control, surfaces.controlPressed]
-        : [surfaces.card, surfaces.cardPressed];
+        : feedback === 'raised'
+          ? [surfaces.raised, surfaces.raisedPressed]
+          : [surfaces.card, surfaces.cardPressed];
 
     return {
       color: '#FFFFFF',

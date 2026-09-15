@@ -231,7 +231,10 @@ export default function HomeScreen() {
  *
  * Primario (accent) so quando ele e o proximo passo — comecar ou continuar.
  * Treino finalizado e dia de descanso ainda podem abrir a sessao, mas ai e
- * consulta ou extra, nao a acao do dia: vidro, sem cor.
+ * consulta ou extra, nao a acao do dia: nivel 2, sem cor.
+ *
+ * Nivel 2 e nao vidro porque este botao mora no `ScrollView` da home e rola com
+ * ele — ver a nota de posicao em `Button.tsx`.
  */
 function TodayAction({ state, onPress }: { state: WorkoutState; onPress: () => void }) {
   switch (state.kind) {
@@ -252,9 +255,9 @@ function TodayAction({ state, onPress }: { state: WorkoutState; onPress: () => v
         />
       );
     case 'completed':
-      return <Button label="Ver treino de hoje" onPress={onPress} />;
+      return <Button variant="inline" label="Ver treino de hoje" onPress={onPress} />;
     case 'rest':
-      return <Button label="Treino livre" onPress={onPress} />;
+      return <Button variant="inline" label="Treino livre" onPress={onPress} />;
   }
 }
 

@@ -113,7 +113,9 @@ export default function ResultScreen() {
           </Card>
         ) : null}
 
-        <Button label="Fechar" onPress={close} />
+        {/* `inline`: este botao e o fim da leitura e rola com ela, nao um
+            footer que flutua — nivel 2, nao vidro. */}
+        <Button variant="inline" label="Fechar" onPress={close} />
       </ScrollView>
     </Screen>
   );
