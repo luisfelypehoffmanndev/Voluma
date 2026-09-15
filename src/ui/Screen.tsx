@@ -7,7 +7,7 @@ import { colors, hitSlop, radius, spacing, surfaces } from '@/theme/tokens';
 import { Ambient } from './Ambient';
 import { BlurTarget } from './blurTarget';
 import { PressableSurface } from './PressableSurface';
-import { Title } from './Text';
+import { Meta, Title } from './Text';
 import { ArrowDownIcon, ChevronLeftIcon } from './icons';
 
 /**
@@ -42,6 +42,8 @@ export function Screen({ children, overlay }: { children: ReactNode; overlay?: R
 
 type HeaderProps = {
   title: string;
+  /** Linha de dado sob o titulo — "Segunda · 14 set". Nunca frase de boas-vindas. */
+  subtitle?: string;
   /**
    * Como a tela saiu, e portanto como volta:
    * - `push` entrou da direita — volta com ‹ (dia, catalogo, biblioteca).
@@ -60,7 +62,7 @@ type HeaderProps = {
 };
 
 /** Cabecalho de tela: voltar e titulo a esquerda, acoes redondas a direita. */
-export function Header({ title, back, onBack, action, secondaryAction }: HeaderProps) {
+export function Header({ title, subtitle, back, onBack, action, secondaryAction }: HeaderProps) {
   const router = useRouter();
 
   return (
@@ -73,9 +75,10 @@ export function Header({ title, back, onBack, action, secondaryAction }: HeaderP
             accessibilityLabel={back === 'push' ? 'Voltar' : 'Fechar'}
           />
         ) : null}
-        <Title numberOfLines={1} style={styles.title}>
-          {title}
-        </Title>
+        <View style={styles.title}>
+          <Title numberOfLines={1}>{title}</Title>
+          {subtitle ? <Meta numberOfLines={1}>{subtitle}</Meta> : null}
+        </View>
       </View>
       <View style={styles.actions}>
         {secondaryAction ? <RoundButton {...secondaryAction} /> : null}

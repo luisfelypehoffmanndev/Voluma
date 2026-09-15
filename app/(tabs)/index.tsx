@@ -11,10 +11,11 @@ import {
 import { getDb } from '@/db/client';
 import {
   getOrCreateSessionForDate,
+  getSessionByDate,
   listBodyWeightLogs,
   listRoutineExercises,
-  distanceByDate,
   listRoutines,
+  listSessionSets,
   targetsForWeek,
   trainedDates,
   volumeByDate,
@@ -23,6 +24,7 @@ import {
 import { seedIfEmpty } from '@/db/seed';
 import { buildDotMatrix, currentStreak } from '@/domain/streak';
 import { formatDistance, formatDuration } from '@/domain/run';
+import { workoutState, type WorkoutState } from '@/domain/today';
 import { formatVolume, formatWeight } from '@/domain/volume';
 import type { Routine, Weekday } from '@/domain/types';
 import {
@@ -36,10 +38,11 @@ import {
 } from '@/domain/week';
 import { bumpData, useQuery } from '@/store/data';
 import { colors, fontSize, spacing } from '@/theme/tokens';
+import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { DotMatrix } from '@/ui/DotMatrix';
 import { ProgressRing } from '@/ui/ProgressRing';
-import { relativeTime } from '@/ui/relative';
+import { relativeTime, shortDate } from '@/ui/relative';
 import { Header, Screen } from '@/ui/Screen';
 import { StatNumber } from '@/ui/StatNumber';
 import { useTabBarClearance } from '@/ui/tabBar';
@@ -59,12 +62,21 @@ import { Body, Label, Meta, Mono } from '@/ui/Text';
 const MATRIX_MONTHS = 5;
 
 /**
- * Home — o bento grid da referencia.
+ * Home — "Foco Unico": um trabalho so, te colocar no treino de hoje em um toque.
  *
- * Uma unica cor de destaque nesta tela: o card de volume de 7 dias, que inverte
- * para fundo accent solido com texto preto. Por isso o dot-matrix daqui vai com
- * `showRecord={false}` — o ponto de recorde tambem e accent, e dois accents na
- * mesma tela quebram a regra do brief.
+ * O treino abria ao tocar no card "HOJE", que nao tinha cara de botao, no meio
+ * de cinco cards disputando atencao. Agora a acao principal e um botao de
+ * verdade, logo abaixo do card do dia, com o dado no rotulo ("Começar treino ·
+ * 5 exercícios").
+ *
+ * Uma unica cor de destaque nesta tela: esse botao, quando ele e a acao
+ * principal (comecar ou continuar). O card de volume de 7 dias, que era o card
+ * accent solido, virou vidro normal — dois laranjas brigariam, e o que o
+ * usuario precisa achar de relance e o botao, nao o numero. Treino ja
+ * finalizado ou dia de descanso: o botao vira vidro e a tela fica sem accent.
+ *
+ * O dot-matrix continua com `showRecord={false}`: o ponto de recorde tambem e
+ * accent.
  */
 export default function HomeScreen() {
   const clearance = useTabBarClearance();
@@ -78,7 +90,8 @@ export default function HomeScreen() {
   const { data, loading } = useQuery(useCallback(loadHome, []));
 
   // Um treino por data: abrir de novo cai no mesmo registro, com os numeros que
-  // ja foram gravados. Nao ha "comecar" nem "continuar" — so o dia de hoje.
+  // ja foram gravados. "Comecar" e "continuar" abrem a mesma sessao; o que muda
+  // e so o rotulo, que diz em que pe o dia esta.
   const openWorkout = async () => {
     const session = await getOrCreateSessionForDate(new Date());
     bumpData();
@@ -89,19 +102,19 @@ export default function HomeScreen() {
     return (
       <TabScene>
         <Screen>
-          <Header title="Treinos" />
+          <Header title="Hoje" subtitle={todaySubtitle()} />
           <ActivityIndicator color={colors.textSecondary} />
         </Screen>
       </TabScene>
     );
   }
 
-  const { today, upcoming, weekVolume, weekDistance, bodyWeight, dots, streak } = data;
+  const { today, upcoming, weekVolume, bodyWeight, dots, streak } = data;
 
   return (
     <TabScene>
       <Screen>
-        <Header title="Treinos" />
+        <Header title="Hoje" subtitle={todaySubtitle()} />
 
         {/* O `Header` fica FORA do fade: ele ja estava na tela durante o
             carregamento, e faze-lo acender de novo seria animar uma troca que
@@ -111,20 +124,18 @@ export default function HomeScreen() {
           contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
           showsVerticalScrollIndicator={false}
         >
-          {/* O card mais importante da tela. Ganha destaque por tamanho e posicao,
-              nao por cor: o accent da tela ja esta gasto no card de volume, e
-              inverter uma LISTA para laranja solido daria um bloco de texto
-              colorido — o oposto do que o brief pede para o card invertido, que e
-              reservado a um NUMERO. */}
-          <Card onPress={openWorkout}>
+          {/* O card do dia deixou de ser tocavel: quem abre o treino e o botao
+              logo abaixo. Um card que as vezes e botao ensina a tocar em todo
+              card, e os outros daqui levam a outras telas. */}
+          <Card>
             <View style={styles.todayHead}>
               <View style={styles.todayText}>
-                <Label>{`HOJE · ${weekdayName(today.weekday).toUpperCase()}`}</Label>
+                <Label>{weekdayName(today.weekday).toUpperCase()}</Label>
                 <Body numberOfLines={1} style={styles.todayName}>
                   {today.name}
                 </Body>
               </View>
-              <ProgressRing progress={today.progress} value={String(today.plannedSets)} />
+              <ProgressRing progress={today.state.progress} value={String(today.plannedSets)} />
             </View>
 
             {today.exercises.slice(0, MAX_TODAY_ROWS).map((item) => (
@@ -142,17 +153,19 @@ export default function HomeScreen() {
               </Meta>
             ) : null}
 
-            {today.exercises.length === 0 ? (
-              <Meta style={styles.moreRow}>Sem exercícios hoje — toque para treino livre.</Meta>
+            {today.state.kind === 'rest' ? (
+              <Meta style={styles.moreRow}>Hoje é descanso no seu plano.</Meta>
             ) : null}
           </Card>
+
+          <TodayAction state={today.state} onPress={openWorkout} />
 
           <View style={styles.row}>
             <Card style={styles.half} onPress={() => router.push('/bodyweight')}>
               <StatNumber
                 value={bodyWeight ? formatWeight(bodyWeight.weightKg) : '—'}
                 unit="kg"
-                size={fontSize.numberMd}
+                size={fontSize.numberSm}
               />
               <View style={styles.cardFoot}>
                 <Body>Peso corporal</Body>
@@ -160,18 +173,12 @@ export default function HomeScreen() {
               </View>
             </Card>
 
-            {/* Sem accent: o orcamento de cor da tela ja esta no card de volume.
-                Distancia e volume sao numeros de unidades diferentes — km e kg
-                nao somam — entao cada um tem o seu, nunca um total misturado. */}
+            {/* Vidro normal: o accent da tela e do botao de treino. */}
             <Card style={styles.half} onPress={() => router.push('/history?view=numbers')}>
-              <StatNumber
-                value={formatDistance(weekDistance)}
-                unit="km"
-                size={fontSize.numberMd}
-              />
+              <StatNumber value={formatVolume(weekVolume)} unit="kg" size={fontSize.numberSm} />
               <View style={styles.cardFoot}>
-                <Body>Distância</Body>
-                <Meta>Últimos 7 dias</Meta>
+                <Body>Volume</Body>
+                <Meta>últimos 7 dias</Meta>
               </View>
             </Card>
           </View>
@@ -185,21 +192,6 @@ export default function HomeScreen() {
                 <Meta>{`últimos ${MATRIX_MONTHS} meses`}</Meta>
               </View>
             </View>
-          </Card>
-
-          {/* O unico elemento accent da tela. */}
-          <Card accent style={styles.volumeCard} onPress={() => router.push('/history?view=numbers')}>
-            <View>
-              <Body style={styles.volumeLabel}>Volume levantado</Body>
-              <Label style={styles.volumeSub}>Últimos 7 dias</Label>
-            </View>
-            <StatNumber
-              value={formatVolume(weekVolume)}
-              unit="kg"
-              size={fontSize.numberMd}
-              color={colors.textOnAccent}
-              dimUnit={false}
-            />
           </Card>
 
           <Card>
@@ -223,6 +215,43 @@ export default function HomeScreen() {
   );
 }
 
+/**
+ * O botao principal da home, com o estado do dia no rotulo.
+ *
+ * Primario (accent) so quando ele e o proximo passo — comecar ou continuar.
+ * Treino finalizado e dia de descanso ainda podem abrir a sessao, mas ai e
+ * consulta ou extra, nao a acao do dia: vidro, sem cor.
+ */
+function TodayAction({ state, onPress }: { state: WorkoutState; onPress: () => void }) {
+  switch (state.kind) {
+    case 'notStarted':
+      return (
+        <Button
+          variant="primary"
+          label={`Começar treino · ${state.total} ${state.total === 1 ? 'exercício' : 'exercícios'}`}
+          onPress={onPress}
+        />
+      );
+    case 'inProgress':
+      return (
+        <Button
+          variant="primary"
+          label={`Continuar treino · ${state.done} de ${state.total}`}
+          onPress={onPress}
+        />
+      );
+    case 'completed':
+      return <Button label="Ver treino de hoje" onPress={onPress} />;
+    case 'rest':
+      return <Button label="Treino livre" onPress={onPress} />;
+  }
+}
+
+/** "Segunda · 14 set" — o dado no lugar do "Bem-vindo de volta" (§7). */
+function todaySubtitle(now = new Date()): string {
+  return `${weekdayName(weekdayOf(now))} · ${shortDate(now, now)}`;
+}
+
 async function loadHome() {
   await getDb();
   if (await seedIfEmpty()) bumpData();
@@ -234,12 +263,12 @@ async function loadHome() {
   const matrixDays = daysSinceMonthStart(now, MATRIX_MONTHS);
   const window = lastNDays(now, matrixDays);
 
-  const [routines, volumes, distances, trained, weights] = await Promise.all([
+  const [routines, volumes, trained, weights, session] = await Promise.all([
     listRoutines(),
     volumeByDate(window[0], todayKey),
-    distanceByDate(window[0], todayKey),
     trainedDates(window[0], todayKey),
     listBodyWeightLogs(1),
+    getSessionByDate(todayKey),
   ]);
 
   const weekStart = weekStartKey(now);
@@ -249,15 +278,13 @@ async function loadHome() {
   const todayExercises = todayRoutine ? await targetsForWeek(weekStart, todayRoutine.id) : [];
   const plannedSets = todayExercises.reduce((sum, item) => sum + item.targets.sets, 0);
 
-  const upcoming = await nextDays(routines, now, 3);
+  const [upcoming, sessionSets] = await Promise.all([
+    nextDays(routines, now, 3),
+    session ? listSessionSets(session.id) : Promise.resolve([]),
+  ]);
 
   const weekKeys = lastNDays(now, 7);
   const weekVolume = weekKeys.reduce((sum, key) => sum + (volumes.get(key) ?? 0), 0);
-  // Arredonda a uma casa: somar 0,1 sete vezes rende 0,7000000000000001.
-  const weekDistance =
-    Math.round(weekKeys.reduce((sum, key) => sum + (distances.get(key) ?? 0), 0) * 10) / 10;
-
-  const doneToday = trained.has(todayKey);
 
   return {
     today: {
@@ -266,11 +293,15 @@ async function loadHome() {
       name: dayTitle(todayRoutine?.name ?? '', todayExercises.length),
       exercises: todayExercises,
       plannedSets,
-      progress: doneToday ? 1 : 0,
+      state: workoutState({
+        plannedExerciseIds: todayExercises.map((item) => item.exerciseId),
+        sets: sessionSets,
+        skippedExerciseIds: session?.skippedExerciseIds ?? [],
+        completed: session?.completedAt != null,
+      }),
     },
     upcoming,
     weekVolume,
-    weekDistance,
     bodyWeight: weights[0] ?? null,
     dots: buildDotMatrix(volumes, now, matrixDays),
     streak: currentStreak(trained, now),
@@ -285,6 +316,7 @@ async function loadHome() {
  * esta a um toque de distancia na tela do dia.
  */
 const MAX_TODAY_ROWS = 5;
+
 
 /** "3 × 10 · 62,5 kg" ou "5 km · 28 min" — o alvo da semana, em mono. */
 function targetsLabel(item: WeekExercise): string {
@@ -412,7 +444,6 @@ const styles = StyleSheet.create({
   },
   half: {
     flex: 1,
-    minHeight: 150,
     justifyContent: 'space-between',
   },
   cardFoot: {
@@ -427,18 +458,5 @@ const styles = StyleSheet.create({
   matrixText: {
     flex: 1,
     gap: 2,
-  },
-  volumeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  volumeLabel: {
-    color: colors.textOnAccent,
-  },
-  volumeSub: {
-    // Sem opacidade: a hierarquia aqui e de tamanho (12 contra 16), nao de
-    // esmaecimento. Preto a 70% sobre o accent lia como cinza, nao como preto fraco.
-    color: colors.textOnAccent,
   },
 });
