@@ -210,7 +210,7 @@ export default function SessionScreen() {
   if (error) {
     return (
       <Screen>
-        <Header title="Treino" back="modal" />
+        <Header title="Treino" back />
         <LoadError error={error} onRetry={reload} />
       </Screen>
     );
@@ -219,7 +219,7 @@ export default function SessionScreen() {
   if (loading || !data?.session) {
     return (
       <Screen>
-        <Header title="Treino" back="modal" />
+        <Header title="Treino" back />
         <ActivityIndicator color={colors.textSecondary} />
       </Screen>
     );
@@ -318,7 +318,7 @@ export default function SessionScreen() {
         </>
       }
     >
-      <Header title="Treino" back="modal" />
+      <Header title="Treino" back />
 
       {/* O `Header` fica FORA do fade — ele ja estava na tela durante o
           carregamento, e faze-lo acender de novo seria animar uma troca que nao

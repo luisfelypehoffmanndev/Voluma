@@ -148,7 +148,7 @@ export function ExercisePicker({
             borderRadius={radius.card}
             style={[styles.panel, { paddingTop: insets.top + spacing.sm }]}
           >
-            <Header title="Exercícios" back="modal" onBack={close} />
+            <Header title="Exercícios" back onBack={close} />
 
             <View style={styles.body}>
               {subtitle ? <Meta style={styles.subtitle}>{subtitle}</Meta> : null}

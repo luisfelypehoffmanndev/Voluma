@@ -47,7 +47,7 @@ export default function LoginScreen() {
 
   return (
     <Screen>
-      <Header title="Conta" back="modal" />
+      <Header title="Conta" back />
 
       <KeyboardAvoidingView
         behavior={Platform.select({ ios: 'padding', default: undefined })}

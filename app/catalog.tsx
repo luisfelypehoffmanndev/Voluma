@@ -85,7 +85,7 @@ export default function CatalogScreen() {
 
   return (
     <Screen>
-      <Header title="Catálogo" back="push" />
+      <Header title="Catálogo" back />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xxl }]}
