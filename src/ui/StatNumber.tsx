@@ -1,6 +1,18 @@
-import { StyleSheet, Text, View, type StyleProp, type TextStyle } from 'react-native';
+import { StyleSheet, Text, TextInput, View, type StyleProp, type TextStyle } from 'react-native';
+import Animated, { useAnimatedProps, type SharedValue } from 'react-native-reanimated';
 
 import { colors, fontSize, fonts } from '@/theme/tokens';
+
+/**
+ * O truque padrao para animar TEXTO sem passar pela JS thread: `Text` nao tem
+ * prop animavel de conteudo, `TextInput` tem (`text`), e o Reanimated sabe
+ * escreve-la direto da UI thread via `useAnimatedProps`.
+ *
+ * `text` nao existe no tipo publico de `TextInput` (e uma prop nativa, usada
+ * pelo proprio RN internamente para o mesmo fim), entao o cast e inevitavel —
+ * e o motivo de ele estar isolado aqui, num lugar so, em vez de espalhado.
+ */
+const AnimatedTextInput = Animated.createAnimatedComponent(TextInput);
 
 type Props = {
   value: string;
@@ -26,6 +38,23 @@ type Props = {
    */
   fit?: boolean;
   style?: StyleProp<TextStyle>;
+  /**
+   * Quando presente, o NUMERO vem daqui e roda inteiro na UI thread — `value`
+   * passa a valer so como texto inicial (o que aparece antes do primeiro
+   * quadro, e o que o layout mede).
+   *
+   * Existe para a contagem do "Volume levantado": animar o numero com
+   * `setState` por quadro custava ~42 re-renders em 700ms na JS thread, e
+   * qualquer trabalho concorrente ali — a escrita do treino caindo no banco no
+   * meio da contagem, por exemplo — aparecia como engasgo. Pela UI thread nada
+   * disso a alcanca.
+   *
+   * O formato e fechado de proposito: inteiro arredondado, a MESMA regra de
+   * `formatVolume` (`src/domain/volume.ts`). As duas precisam andar juntas —
+   * se aquela voltar a abreviar ou ganhar separador de milhar, esta aqui tem
+   * que acompanhar, e ai o worklet deixa de ser uma linha.
+   */
+  animatedValue?: SharedValue<number>;
 };
 
 /**
@@ -43,22 +72,36 @@ export function StatNumber({
   dimUnit = true,
   fit = true,
   style,
+  animatedValue,
 }: Props) {
   const unitSize = Math.max(12, Math.round(size * 0.28));
+  const valueStyle = [styles.value, { fontSize: size, lineHeight: size * 1.02, color }, style];
+
+  const animatedProps = useAnimatedProps(() => {
+    // Mesma regra de `formatVolume` — ver o comentario de `animatedValue`.
+    const text = String(Math.round(animatedValue?.value ?? 0));
+    return { text, defaultValue: text } as never;
+  }, [animatedValue]);
 
   return (
     <View style={styles.row}>
-      <Text
-        numberOfLines={1}
-        adjustsFontSizeToFit={fit}
-        style={[
-          styles.value,
-          { fontSize: size, lineHeight: size * 1.02, color },
-          style,
-        ]}
-      >
-        {value}
-      </Text>
+      {animatedValue ? (
+        <AnimatedTextInput
+          editable={false}
+          // Sem isto o TextInput traz a bagagem de campo de formulario e o
+          // numero sai desalinhado da unidade: padding proprio no Android,
+          // sublinhado, e a folga de fonte que a `lineHeight` acima ja resolve.
+          underlineColorAndroid="transparent"
+          scrollEnabled={false}
+          defaultValue={value}
+          animatedProps={animatedProps}
+          style={[valueStyle, styles.animatedValue]}
+        />
+      ) : (
+        <Text numberOfLines={1} adjustsFontSizeToFit={fit} style={valueStyle}>
+          {value}
+        </Text>
+      )}
       {unit ? (
         <Text
           style={[
@@ -82,6 +125,16 @@ const styles = StyleSheet.create({
   value: {
     fontFamily: fonts.monoLight,
     letterSpacing: -1,
+  },
+  /**
+   * O que separa um `TextInput` de um `Text` na mesma linha de base: o campo
+   * vem com padding proprio nos dois lados e, no Android, com a folga de fonte
+   * que o `Text` daqui ja neutraliza pela `lineHeight`.
+   */
+  animatedValue: {
+    padding: 0,
+    margin: 0,
+    includeFontPadding: false,
   },
   unit: {
     fontFamily: fonts.sansMedium,

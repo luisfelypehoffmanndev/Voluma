@@ -1,6 +1,13 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  AppState,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 import Animated, { LayoutAnimationConfig } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -21,9 +28,9 @@ import {
 } from '@/db/repo';
 import type { ExerciseKind, SessionSet, Targets } from '@/domain/types';
 import { formatDistance, formatDuration, runTargetsFromSets } from '@/domain/run';
-import { type SetDraft, summarizeSets } from '@/domain/sets';
-import { targetsFromSets } from '@/domain/targets';
-import { formatVolume, formatWeight, totalVolume } from '@/domain/volume';
+import { type SetDraft, sameSetDrafts, summarizeSets } from '@/domain/sets';
+import { sameTargets, targetsFromSets } from '@/domain/targets';
+import { formatVolume, formatWeight } from '@/domain/volume';
 import { fromDateKey, weekStartKey, weekdayName, weekdayOf } from '@/domain/week';
 import { bumpData, useQuery } from '@/store/data';
 import { useAuth } from '@/sync/auth';
@@ -63,42 +70,78 @@ export default function SessionScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const { data, loading, reload } = useQuery(useCallback(() => loadSession(id), [id]));
+  /**
+   * `liveUpdates: false` porque ESTA tela e a dona do dado enquanto esta
+   * aberta.
+   *
+   * Cada card mantem o estado otimista do que o usuario acabou de tocar, e a
+   * escrita correspondente e adiada e coalescida (`useWriteBehind`). Recarregar
+   * em cima da propria escrita nao traria informacao nenhuma — o banco so
+   * confirmaria o que a tela ja mostra — e custava caro no pior momento
+   * possivel: `loadSession` resolve a cascata de alvos da semana inteira, e ela
+   * caia junto com o re-render da lista exatamente no instante do toque. Era o
+   * que engasgava a contagem do volume, que roda na JS thread.
+   *
+   * Continua recarregando ao montar, ao voltar o foco (o usuario pode ter
+   * registrado algo em outra tela) e via `reload()` — usado quando a LISTA
+   * muda de verdade, ao adicionar ou remover um exercicio.
+   */
+  const { data, loading, reload } = useQuery(useCallback(() => loadSession(id), [id]), {
+    liveUpdates: false,
+  });
 
   /**
-   * O volume tem consulta PROPRIA, separada de `loadSession`.
+   * O que os cards estao mostrando AGORA, por exercicio.
    *
-   * `loadSession` espera `targetsForWeek`, que resolve os alvos de cada
-   * exercicio (ver `src/db/repo.ts` — hoje em paralelo, ja foi um `for` com
-   * `await lastPerformedTargets(...)` em serie) — e o que monta a lista da
-   * tela, mas continua mais pesado que a contagem do volume, que so precisa
-   * somar `session_sets`. Separado, o numero do topo chega (e a contagem
-   * comeca) assim que ESTA consulta, bem mais leve, resolver — sem esperar o
-   * reload pesado da lista.
+   * O numero do topo era uma consulta propria ao banco (`listSessionSets` +
+   * `totalVolume`), entao so mudava depois de escrita + `bumpData` + recarga —
+   * e quando a escrita falhava, nunca mudava. Agora ele e a soma do que esta na
+   * tela: responde no mesmo quadro do toque, e a contagem de `CountingStat`
+   * dispara na hora. O contador de concluidos, na linha de baixo, segue a mesma
+   * regra pelo mesmo motivo.
    *
-   * A contagem em si mora no `CountingStat`, la embaixo: `useCountUp` faz um
-   * `setState` por quadro, e chamado AQUI ele re-renderizava a tela inteira
-   * umas 40 vezes em 700ms. Ver o cabecalho daquele arquivo.
-   *
-   * PROBLEMA CONHECIDO, AINDA ABERTO: marcar uma caixa aqui continua
-   * respondendo devagar (visual + haptico) em testes no dev-client via
-   * tunel, mesmo depois de duas correcoes (`targetsForWeek` em paralelo, e
-   * `useQuery` parando de recarregar abas fora de foco — ambas em
-   * `src/store/data.ts`/`src/db/repo.ts`). `write()`/`toggle()` ja sao
-   * otimistas (`setDone` antes do `await`) e `confirm()` nunca espera a
-   * escrita, entao o atraso nao deveria vir daqui. Suspeitas nao descartadas:
-   * (1) parte e overhead normal de dev mode + Metro por tunel (JS
-   * nao-otimizado, sem bytecode do Hermes de producao) — vale medir numa
-   * build de release antes de investigar mais fundo; (2) pode haver outro
-   * N+1 sequencial em algum caminho de escrita (`setSessionExerciseSets`,
-   * `updateSet`) que ainda nao foi auditado como `targetsForWeek` foi.
+   * E um mapa de sobreposicao, nao a verdade inteira: quem nunca reportou cai
+   * no que veio do banco em `loadSession`, entao a primeira renderizacao ja
+   * mostra o numero certo, sem passar por zero — o que faria a contagem animar
+   * do nada ao abrir a tela.
    */
-  const { data: sessionVolume } = useQuery(
-    useCallback(() => listSessionSets(id).then(totalVolume), [id]),
-  );
+  const [drafts, setDrafts] = useState<Record<string, { done: boolean; volume: number }>>({});
+
+  const reportDraft = useCallback((exerciseId: string, done: boolean, volume: number) => {
+    setDrafts((current) => {
+      const previous = current[exerciseId];
+      if (previous && previous.done === done && previous.volume === volume) return current;
+      return { ...current, [exerciseId]: { done, volume } };
+    });
+  }, []);
+
+  // `reload` do `useQuery` e uma funcao nova a cada render; os cards sao
+  // memoizados e comparam props por referencia, entao ela precisa de uma
+  // identidade estavel para nao derrubar o `memo` de todos eles.
+  const reloadRef = useRef(reload);
+  reloadRef.current = reload;
+  const reloadStable = useCallback(() => reloadRef.current(), []);
 
   const [picking, setPicking] = useState(false);
   const listMotion = useListMotion();
+
+  const items = data?.items;
+  const sessionVolume = useMemo(() => {
+    if (!items) return undefined;
+    return items.reduce(
+      (sum, item) =>
+        sum +
+        (drafts[item.exerciseId]?.volume ??
+          draftVolume(item.exerciseKind, item.done, item.rows, item.targets)),
+      0,
+    );
+  }, [items, drafts]);
+
+  const doneCount = useMemo(
+    () =>
+      (items ?? []).filter((item) => drafts[item.exerciseId]?.done ?? item.done).length,
+    [items, drafts],
+  );
 
   // Sair da tela e o melhor momento para tentar subir: o treino acabou de ser
   // registrado e normalmente o usuario ja saiu da area morta da academia. Se
@@ -117,10 +160,12 @@ export default function SessionScreen() {
     );
   }
 
-  const { session, items, catalog, routineId } = data;
+  const { session, catalog, routineId } = data;
+  // `items` ja saiu de `data` la em cima, para a soma do volume — aqui so o
+  // estreitamento de tipo, que o `if` de carregamento acima ja garantiu.
+  const exercises = items ?? [];
   const date = fromDateKey(session.date);
-  const used = new Set(items.map((item) => item.exerciseId));
-  const doneCount = items.filter((item) => item.done).length;
+  const used = new Set(exercises.map((item) => item.exerciseId));
 
   /**
    * Adicionar aqui e recorrente por padrao: o exercicio entra na rotina daquele
@@ -152,7 +197,7 @@ export default function SessionScreen() {
         <View style={styles.summaryMeta}>
           <Label>Volume levantado</Label>
           <Meta>
-            {`${weekdayName(weekdayOf(date))} · ${shortDate(date)} · ${doneCount} de ${items.length} concluídos`}
+            {`${weekdayName(weekdayOf(date))} · ${shortDate(date)} · ${doneCount} de ${exercises.length} concluídos`}
           </Meta>
         </View>
       </View>
@@ -170,13 +215,18 @@ export default function SessionScreen() {
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets
       >
-        {items.map((item) => (
+        {exercises.map((item) => (
           <Animated.View key={item.id} {...listMotion}>
-            <ExerciseCard item={item} sessionId={session.id} />
+            <ExerciseCard
+              item={item}
+              sessionId={session.id}
+              onDraft={reportDraft}
+              onStructuralChange={reloadStable}
+            />
           </Animated.View>
         ))}
 
-        {items.length === 0 ? (
+        {exercises.length === 0 ? (
           <Meta style={styles.empty}>Nenhum exercício neste dia ainda.</Meta>
         ) : null}
 
@@ -227,6 +277,97 @@ const SOURCE_LABEL: Record<ItemSource, string> = {
   plan: 'do plano',
 };
 
+/**
+ * O volume de UM exercicio a partir do rascunho que esta na tela — o mesmo
+ * numero que `totalVolume` daria depois que a escrita cair no banco.
+ *
+ * Existe para o topo da tela nao depender do banco: somando isto sobre os
+ * exercicios, o "Volume levantado" responde no mesmo quadro do toque, e a
+ * contagem do `CountingStat` dispara na hora em vez de esperar escrita +
+ * `bumpData` + recarga. Segue a regra de `setVolume` (`src/domain/volume.ts`):
+ * exercicio nao concluido nao conta — e alvo, nao carga levantada.
+ *
+ * Corrida entra pela mesma conta que o banco faz: uma linha so, com os reps e
+ * a carga dos alvos (normalmente zero — corrida nao levanta peso), nunca a
+ * distancia, que tem card proprio e unidade propria.
+ */
+function draftVolume(
+  kind: ExerciseKind,
+  done: boolean,
+  rows: readonly SetDraft[],
+  targets: Targets,
+): number {
+  if (!done) return 0;
+  if (kind === 'run') return targets.reps * targets.weightKg;
+  return summarizeSets(rows).volume;
+}
+
+/**
+ * Escrita adiada, coalescida e que nunca desiste.
+ *
+ * Tres garantias, nessa ordem de importancia:
+ *
+ * 1. **Coalesce.** Cinco toques seguidos na mesma caixa viram UMA escrita, a do
+ *    estado final. Antes cada toque abria sua propria transacao, e duas delas
+ *    perto no tempo se sobrepunham na conexao compartilhada — a origem do erro
+ *    que fazia a caixa voltar sozinha (ver `serializeTransactions` em
+ *    `src/db/client.ts`). Menos escrita e menos chance de colisao, alem de
+ *    menos trabalho na JS thread no instante do toque.
+ * 2. **Uma em voo por vez.** Se um estado novo chega enquanto a escrita
+ *    anterior ainda nao voltou, ele espera e entra depois — nunca em paralelo.
+ * 3. **Nao perde.** Flush no unmount e ao mandar o app para segundo plano, para
+ *    que sair da tela (ou fechar o app) no meio do debounce grave mesmo assim.
+ *
+ * O que ele deliberadamente NAO faz e avisar quem chamou sobre falha: o estado
+ * da tela e a intencao do usuario, e ela nao se desfaz porque o SQLite
+ * engasgou. Falhou, tenta de novo na proxima vez que houver algo pendente.
+ */
+function useWriteBehind<T>(perform: (value: T) => Promise<void>) {
+  const pending = useRef<{ value: T } | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inFlight = useRef(false);
+  const performRef = useRef(perform);
+  performRef.current = perform;
+
+  const flush = useCallback(() => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    if (inFlight.current) return; // o `finally` abaixo reentra quando voltar
+    const next = pending.current;
+    if (!next) return;
+
+    pending.current = null;
+    inFlight.current = true;
+    void performRef.current(next.value).finally(() => {
+      inFlight.current = false;
+      if (pending.current) flush();
+    });
+  }, []);
+
+  const schedule = useCallback(
+    (value: T) => {
+      pending.current = { value };
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(flush, COMMIT_DELAY);
+    },
+    [flush],
+  );
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') flush();
+    });
+    return () => {
+      subscription.remove();
+      flush();
+    };
+  }, [flush]);
+
+  return { schedule, flush };
+}
+
 type ItemSource = 'edited' | 'lastActual' | 'plan';
 
 type SessionExercise = {
@@ -251,6 +392,31 @@ type SessionExercise = {
 };
 
 /**
+ * Compara dois `SessionExercise` por VALOR, campo a campo — nunca por
+ * referencia.
+ *
+ * `loadSession` (mais abaixo) reconstroi `items` do zero a cada recarga:
+ * `items.push({ ... })` cria um objeto NOVO por exercicio, inclusive os que
+ * nao mudaram nem um pouco. Isso significa que todo `item` passado a
+ * `ExerciseCard` e sempre uma referencia nova — a comparacao rasa padrao do
+ * `memo` (que compara por referencia) nunca bloquearia re-render nenhum, e o
+ * `memo` abaixo seria um no-op. Por isso o comparador tem que ser por valor.
+ */
+function sameSessionExercise(a: SessionExercise, b: SessionExercise): boolean {
+  return (
+    a.id === b.id &&
+    a.exerciseId === b.exerciseId &&
+    a.exerciseName === b.exerciseName &&
+    a.exerciseKind === b.exerciseKind &&
+    a.done === b.done &&
+    a.source === b.source &&
+    a.routineExerciseId === b.routineExerciseId &&
+    sameTargets(a.targets, b.targets) &&
+    sameSetDrafts(a.rows, b.rows)
+  );
+}
+
+/**
  * Um exercicio do treino: os numeros, e a caixa que decide se eles contam.
  *
  * So decide o roteamento por `kind` — a mecanica de musculacao (series
@@ -260,24 +426,35 @@ type SessionExercise = {
  *
  * `memo` aqui e defensivo, nao otimizacao especulativa: cada card carrega a
  * arte do movimento e uma lista de series com estado proprio, e qualquer
- * `setState` na raiz desta tela redesenharia todos eles. `item` so troca de
- * identidade quando `loadSession` recarrega — ou seja, quando os dados
- * mudaram de verdade —, entao a comparacao rasa do `memo` e exatamente a
- * pergunta certa.
+ * `setState` na raiz desta tela redesenharia todos eles. Usa o comparador de
+ * valor `sameSessionExercise` — ver o comentario dela — em vez da comparacao
+ * rasa padrao, que `loadSession` derrota sempre.
  */
-const ExerciseCard = memo(function ExerciseCard({
-  item,
-  sessionId,
-}: {
+type CardProps = {
   item: SessionExercise;
   sessionId: string;
-}) {
-  return item.exerciseKind === 'run' ? (
-    <RunExerciseCard item={item} sessionId={sessionId} />
-  ) : (
-    <StrengthExerciseCard item={item} sessionId={sessionId} />
-  );
-});
+  /** Avisa a tela do estado otimista deste card — ver `drafts` em `SessionScreen`. */
+  onDraft: (exerciseId: string, done: boolean, volume: number) => void;
+  /** Para quando a LISTA muda (exercicio removido), nao os numeros dele. */
+  onStructuralChange: () => void;
+};
+
+const ExerciseCard = memo(
+  function ExerciseCard(props: CardProps) {
+    return props.item.exerciseKind === 'run' ? (
+      <RunExerciseCard {...props} />
+    ) : (
+      <StrengthExerciseCard {...props} />
+    );
+  },
+  // `onDraft` e `onStructuralChange` vem memoizados da tela, entao comparar por
+  // referencia aqui e correto — ver `reportDraft`/`reloadStable`.
+  (prev, next) =>
+    prev.sessionId === next.sessionId &&
+    prev.onDraft === next.onDraft &&
+    prev.onStructuralChange === next.onStructuralChange &&
+    sameSessionExercise(prev.item, next.item),
+);
 
 /**
  * O exercicio saiu do dia: some da rotina, e o que estava gravado nesta sessao
@@ -307,7 +484,7 @@ async function removeFromToday(sessionId: string, item: SessionExercise): Promis
  * Fatiar corrida em "serie" nao faz sentido (ver `run.ts`), entao ela nao
  * ganha o card novo.
  */
-function RunExerciseCard({ item, sessionId }: { item: SessionExercise; sessionId: string }) {
+function RunExerciseCard({ item, sessionId, onDraft, onStructuralChange }: CardProps) {
   const [targets, setTargets] = useState(item.targets);
 
   /**
@@ -325,51 +502,53 @@ function RunExerciseCard({ item, sessionId }: { item: SessionExercise; sessionId
    */
   const [done, setDone] = useState(item.done);
 
-  /**
-   * Aceita o valor do banco de volta — mas nunca com uma escrita nossa em voo.
-   *
-   * Sem a guarda, qualquer `bumpData` disparado por OUTRA tela no meio da nossa
-   * escrita traria o `item.done` velho e a caixa piscaria de volta para o
-   * estado anterior. Com ela, o unico caminho que reverte a caixa e a falha.
-   */
-  const writing = useRef(false);
-
+  // A tela soma o volume e conta os concluidos a partir daqui, nao do banco —
+  // e o que faz o numero do topo responder no mesmo quadro do toque.
   useEffect(() => {
-    if (writing.current) return;
-    setDone(item.done);
-  }, [item.done]);
+    onDraft(item.exerciseId, done, draftVolume(item.exerciseKind, done, item.rows, targets));
+  }, [onDraft, item.exerciseId, item.exerciseKind, item.rows, done, targets]);
 
-  // Grava o exercicio inteiro com o estado da caixa. `bumpData` recarrega esta
-  // tela junto com as outras — e o que faz o peso do topo, o card da home e o
-  // dot-matrix acompanharem o toque. Esses agregados continuam esperando o
-  // banco de proposito: eles relatam o que ficou gravado, nao a intencao.
-  const write = (next: Targets, nextDone: boolean) => {
-    setDone(nextDone);
-    writing.current = true;
-
-    setSessionExerciseTargets(sessionId, item.exerciseId, item.exerciseKind, next, nextDone)
-      .then(bumpData)
-      // Sem isto uma falha de escrita sumia sem deixar rastro: a tela nao
-      // recarregava e o usuario via a caixa nao reagir, sem nada em lugar nenhum
-      // dizendo por que. Agora ela tambem desfaz o otimismo — do contrario a
-      // caixa ficaria marcada mentindo sobre um treino que nao foi gravado.
-      .catch((error) => {
-        setDone(!nextDone);
-        console.warn('[Voluma] falha ao gravar', item.exerciseName, error);
-      })
-      .finally(() => {
-        writing.current = false;
-      });
-  };
+  /**
+   * A escrita e adiada e coalescida; o estado da tela nunca espera por ela, e
+   * NUNCA e desfeito por ela.
+   *
+   * O `catch` daqui costumava fazer `setDone(!nextDone)` — desfazer o otimismo
+   * quando o SQLite falhava. Era honesto no papel e pessimo na pratica: como
+   * toda escrita estava falhando (ver `serializeTransactions` em
+   * `src/db/client.ts`), a caixa marcava e desmarcava sozinha, e era isso que
+   * parecia "delay". Marcar um exercicio e uma afirmacao do usuario sobre o
+   * treino dele; um engasgo de banco nao tem autoridade para revogar. Falhou, o
+   * estado continua pendente e a proxima escrita leva tudo junto.
+   */
+  const { schedule } = useWriteBehind<{ targets: Targets; done: boolean }>(
+    useCallback(
+      (value) =>
+        setSessionExerciseTargets(
+          sessionId,
+          item.exerciseId,
+          item.exerciseKind,
+          value.targets,
+          value.done,
+        )
+          // `bumpData` e para as OUTRAS telas (home, calendario, numeros). Esta
+          // aqui ja mostra a verdade e nao recarrega com ele — ver
+          // `liveUpdates: false` em `SessionScreen`.
+          .then(bumpData)
+          .catch((error) => console.warn('[Voluma] falha ao gravar', item.exerciseName, error)),
+      [sessionId, item.exerciseId, item.exerciseKind, item.exerciseName],
+    ),
+  );
 
   const toggle = () => {
-    // O haptico fica AQUI e nao em `write`: o stepper tambem chama `write` (para
-    // um exercicio ja marcado), e vibrar ali dispararia dezenas de pulsos por
-    // exercicio. Confirmacao e o gesto da caixa, nao toda escrita.
+    // O haptico fica AQUI e nao no agendamento da escrita: o stepper tambem
+    // agenda (para um exercicio ja marcado), e vibrar ali dispararia dezenas de
+    // pulsos por exercicio. Confirmacao e o gesto da caixa, nao toda escrita.
     confirm();
+    const nextDone = !done;
+    setDone(nextDone);
     // Marcar leva junto o que estiver no stepper agora, inclusive um ajuste que
     // o usuario acabou de fazer e nunca foi ao banco.
-    write(targets, !done);
+    schedule({ targets, done: nextDone });
   };
 
   return (
@@ -386,7 +565,14 @@ function RunExerciseCard({ item, sessionId }: { item: SessionExercise; sessionId
         </View>
 
         {item.routineExerciseId ? (
-          <Pressable hitSlop={hitSlop} onPress={() => void removeFromToday(sessionId, item)}>
+          <Pressable
+            hitSlop={hitSlop}
+            onPress={() => {
+              // Some da lista: a tela precisa reconsultar, porque isso muda
+              // QUAIS exercicios existem, nao so os numeros de um deles.
+              void removeFromToday(sessionId, item).then(onStructuralChange);
+            }}
+          >
             <TrashIcon size={16} color={colors.textSecondary} />
           </Pressable>
         ) : null}
@@ -402,7 +588,7 @@ function RunExerciseCard({ item, sessionId }: { item: SessionExercise; sessionId
           setTargets(next);
           // Ja marcado: o numero novo tem que valer na hora, senao o peso do dia
           // ficaria com a carga antiga ate o usuario desmarcar e marcar de novo.
-          if (done) write(next, true);
+          if (done) schedule({ targets: next, done: true });
         }}
         resetKey={`${sessionId}:${item.exerciseId}`}
       />
@@ -427,31 +613,24 @@ function RunExerciseCard({ item, sessionId }: { item: SessionExercise; sessionId
  * aquela linha (`scheduleRowCommit`, via `updateSet`), para nao pagar o custo
  * de apagar e reinserir N linhas a cada toque num peso so.
  */
-function StrengthExerciseCard({ item, sessionId }: { item: SessionExercise; sessionId: string }) {
+function StrengthExerciseCard({ item, sessionId, onDraft, onStructuralChange }: CardProps) {
   const [rows, setRows] = useState<SetDraft[]>(item.rows);
   const [done, setDone] = useState(item.done);
   const [expanded, setExpanded] = useState(false);
 
-  // Mesma guarda de `RunExerciseCard.writing`, generalizada para contador: o
-  // toggle, uma edicao de serie e um add/remove de serie podem estar em voo ao
-  // mesmo tempo, e so quando NENHUM deles esta e que aceitamos `item.done` de
-  // volta.
-  const writingCount = useRef(0);
   const rowTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const pendingPatches = useRef(new Map<string, Partial<Pick<SetDraft, 'reps' | 'weightKg'>>>());
 
+  // A tela soma o volume e conta os concluidos a partir daqui, nao do banco —
+  // e o que faz o numero do topo responder no mesmo quadro do toque.
   useEffect(() => {
-    if (writingCount.current === 0) setDone(item.done);
-  }, [item.done]);
+    onDraft(item.exerciseId, done, draftVolume(item.exerciseKind, done, rows, item.targets));
+  }, [onDraft, item.exerciseId, item.exerciseKind, item.targets, done, rows]);
 
   const commitRowNow = (id: string, patch: Partial<Pick<SetDraft, 'reps' | 'weightKg'>>) => {
-    writingCount.current += 1;
     updateSet(id, patch)
       .then(bumpData)
-      .catch((error) => console.warn('[Voluma] falha ao gravar série', item.exerciseName, error))
-      .finally(() => {
-        writingCount.current -= 1;
-      });
+      .catch((error) => console.warn('[Voluma] falha ao gravar série', item.exerciseName, error));
   };
 
   // Debounce por serie, mesmo numero (`COMMIT_DELAY`) e mesma razao do
@@ -491,37 +670,48 @@ function StrengthExerciseCard({ item, sessionId }: { item: SessionExercise; sess
     [],
   );
 
-  // Grava o exercicio inteiro com o estado da caixa — igual ao `write` de
-  // `RunExerciseCard`, so que substituindo series divergentes em vez de um
-  // alvo uniforme. `inserted` traz os ids reais de volta: sem isso, editar uma
-  // serie logo depois de marcar concluido nao encontraria linha para
-  // atualizar, porque o rascunho local ainda teria `id: null` nela.
-  const write = (nextRows: SetDraft[], nextDone: boolean) => {
-    setDone(nextDone);
-    writingCount.current += 1;
-
-    setSessionExerciseSets(
-      sessionId,
-      item.exerciseId,
-      nextRows.map((row) => ({ reps: row.reps, weightKg: row.weightKg })),
-      nextDone,
-    )
-      .then((inserted) => {
-        setRows(inserted);
-        bumpData();
-      })
-      .catch((error) => {
-        setDone(!nextDone);
-        console.warn('[Voluma] falha ao gravar', item.exerciseName, error);
-      })
-      .finally(() => {
-        writingCount.current -= 1;
-      });
-  };
+  /**
+   * Grava o exercicio inteiro com o estado da caixa — mesma mecanica do
+   * `RunExerciseCard`, so que substituindo series divergentes em vez de um alvo
+   * uniforme, e pelas mesmas duas regras: adiada/coalescida, e **nunca** desfaz
+   * o que esta na tela quando falha (ver o comentario la).
+   *
+   * `inserted` traz os ids reais de volta: sem isso, editar uma serie logo
+   * depois de marcar concluido nao encontraria linha para atualizar, porque o
+   * rascunho local ainda teria `id: null` nela. So aplica se nada novo entrou
+   * na fila nesse meio tempo — senao sobrescreveria uma edicao mais recente do
+   * usuario com o retorno de uma escrita ja velha.
+   */
+  const { schedule } = useWriteBehind<{ rows: SetDraft[]; done: boolean }>(
+    useCallback(
+      (value) =>
+        setSessionExerciseSets(
+          sessionId,
+          item.exerciseId,
+          value.rows.map((row) => ({ reps: row.reps, weightKg: row.weightKg })),
+          value.done,
+        )
+          .then((inserted) => {
+            setRows((current) =>
+              sameSetDrafts(
+                current.map((row) => ({ ...row, id: null })),
+                inserted.map((row) => ({ ...row, id: null })),
+              )
+                ? inserted
+                : current,
+            );
+            bumpData();
+          })
+          .catch((error) => console.warn('[Voluma] falha ao gravar', item.exerciseName, error)),
+      [sessionId, item.exerciseId, item.exerciseName],
+    ),
+  );
 
   const toggle = () => {
     confirm();
-    write(rows, !done);
+    const nextDone = !done;
+    setDone(nextDone);
+    schedule({ rows, done: nextDone });
   };
 
   const updateRow = (index: number, patch: Partial<Pick<SetDraft, 'reps' | 'weightKg'>>) => {
@@ -538,7 +728,6 @@ function StrengthExerciseCard({ item, sessionId }: { item: SessionExercise; sess
 
     if (done) {
       confirm();
-      writingCount.current += 1;
       addSet(sessionId, item.exerciseId, true)
         .then((created) => {
           setRows((current) => [...current, created]);
@@ -546,10 +735,7 @@ function StrengthExerciseCard({ item, sessionId }: { item: SessionExercise; sess
         })
         .catch((error) =>
           console.warn('[Voluma] falha ao adicionar série', item.exerciseName, error),
-        )
-        .finally(() => {
-          writingCount.current -= 1;
-        });
+        );
     } else {
       setRows((current) => [
         ...current,
@@ -571,15 +757,11 @@ function StrengthExerciseCard({ item, sessionId }: { item: SessionExercise; sess
 
     if (done && row.id) {
       confirm();
-      writingCount.current += 1;
       removeSet(row.id)
         .then(bumpData)
         .catch((error) =>
           console.warn('[Voluma] falha ao remover série', item.exerciseName, error),
-        )
-        .finally(() => {
-          writingCount.current -= 1;
-        });
+        );
     }
 
     setRows((current) => current.filter((_, i) => i !== index));
@@ -598,7 +780,14 @@ function StrengthExerciseCard({ item, sessionId }: { item: SessionExercise; sess
         </Pressable>
 
         {item.routineExerciseId ? (
-          <Pressable hitSlop={hitSlop} onPress={() => void removeFromToday(sessionId, item)}>
+          <Pressable
+            hitSlop={hitSlop}
+            onPress={() => {
+              // Muda QUAIS exercicios existem, nao os numeros de um deles —
+              // por isso a tela reconsulta, e so aqui.
+              void removeFromToday(sessionId, item).then(onStructuralChange);
+            }}
+          >
             <TrashIcon size={16} color={colors.textSecondary} />
           </Pressable>
         ) : null}

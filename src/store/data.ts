@@ -30,6 +30,24 @@ export type QueryResult<T> = {
   reload: () => void;
 };
 
+export type QueryOptions = {
+  /**
+   * Recarregar quando QUALQUER escrita do app chamar `bumpData()`. Ligado por
+   * padrao — e o que faz a home, o calendario e os numeros acompanharem um
+   * treino registrado em outra tela.
+   *
+   * Desligue na tela que e DONA do dado enquanto esta aberta. A tela de sessao
+   * e o caso: ela mantem o estado otimista do que o usuario acabou de tocar, e
+   * recarregar em cima da propria escrita nao traz informacao nenhuma (o banco
+   * so confirma o que ela ja mostra) e ainda por cima joga uma consulta pesada
+   * (`loadSession` resolve a cascata de alvos da semana inteira) e um
+   * re-render da lista em cima do exato instante do toque — que era o que
+   * engasgava a contagem do volume. Desligado, ela ainda recarrega ao montar,
+   * ao voltar o foco e via `reload()`.
+   */
+  liveUpdates?: boolean;
+};
+
 /**
  * Roda `query` no mount, ao voltar o foco para a tela e sempre que os dados
  * mudarem.
@@ -38,8 +56,11 @@ export type QueryResult<T> = {
  * parametros nas deps — e a identidade dela que dispara a reconsulta quando o
  * calendario troca de mes ou a tela troca de rotina.
  */
-export function useQuery<T>(query: () => Promise<T>): QueryResult<T> {
-  const version = useDataVersion((state) => state.version);
+export function useQuery<T>(query: () => Promise<T>, options?: QueryOptions): QueryResult<T> {
+  const liveUpdates = options?.liveUpdates ?? true;
+  // Congelar a versao em 0 tira `version` das deps do efeito na pratica: a
+  // tela para de reagir a `bumpData` sem perder mount, foco nem `reload()`.
+  const version = useDataVersion((state) => (liveUpdates ? state.version : 0));
   const isFocused = useIsFocused();
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
