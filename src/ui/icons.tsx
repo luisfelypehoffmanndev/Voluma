@@ -147,6 +147,21 @@ export function TrashIcon(props: IconProps) {
   );
 }
 
+/**
+ * "Nao deu para carregar". Circulo com traco, branco — nunca o vermelho de
+ * alerta, que e cor de estado (§7).
+ */
+export function AlertIcon(props: IconProps) {
+  const { size, common } = base(props);
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Circle cx={12} cy={12} r={8.5} {...common} />
+      <Line x1={12} y1={7.5} x2={12} y2={13} {...common} />
+      <Line x1={12} y1={16.3} x2={12} y2={16.4} {...common} />
+    </Svg>
+  );
+}
+
 /** Mais opcoes. Tres pontos em traco, nao preenchidos: o resto da familia e outline. */
 export function MoreIcon(props: IconProps) {
   const { size, common } = base(props);

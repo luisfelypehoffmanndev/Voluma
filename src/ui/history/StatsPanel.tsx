@@ -7,7 +7,13 @@ import { formatVolume, formatWeight } from '@/domain/volume';
 import { fromDateKey, lastNDays, toDateKey } from '@/domain/week';
 import { useQuery } from '@/store/data';
 import { colors, fontSize, spacing } from '@/theme/tokens';
+import { useRouter } from 'expo-router';
+
+import { getOrCreateSessionForDate } from '@/db/repo';
+import { bumpData } from '@/store/data';
 import { Card } from '@/ui/Card';
+import { EmptyState } from '@/ui/EmptyState';
+import { LoadError } from '@/ui/LoadError';
 import { shortDate } from '@/ui/relative';
 import { StatNumber } from '@/ui/StatNumber';
 import { useTabBarClearance } from '@/ui/tabBar';
@@ -36,7 +42,8 @@ export function StatsPanel() {
   const clearance = useTabBarClearance();
   const { width } = useWindowDimensions();
 
-  const { data } = useQuery(
+  const router = useRouter();
+  const { data, error, reload } = useQuery(
     useCallback(async () => {
       const now = new Date();
       const window = lastNDays(now, DAYS);
@@ -63,6 +70,8 @@ export function StatsPanel() {
   const barWidth = Math.floor(chartWidth / (DAYS * 2));
 
   const today = days[days.length - 1]?.volume ?? 0;
+
+  if (error) return <LoadError error={error} onRetry={reload} />;
 
   return (
     <ScrollView
@@ -118,7 +127,18 @@ export function StatsPanel() {
           </View>
         ))}
         {(data?.records.length ?? 0) === 0 ? (
-          <Meta style={styles.empty}>Nenhuma série registrada ainda.</Meta>
+          <EmptyState
+            title="Nenhum recorde ainda"
+            message="Seus recordes aparecem aqui depois do primeiro treino."
+            action={{
+              label: 'Começar treino',
+              onPress: async () => {
+                const session = await getOrCreateSessionForDate(new Date());
+                bumpData();
+                router.push(`/session/${session.id}`);
+              },
+            }}
+          />
         ) : null}
       </Card>
 

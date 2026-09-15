@@ -36,6 +36,24 @@ scripts/        gerador do grão que dithera o campo de luz
 supabase/       schema.sql para colar no SQL Editor
 ```
 
+### Abas
+
+A barra tem quatro abas sem rótulo visível (cada uma com
+`tabBarAccessibilityLabel`), e cada tela tem uma ação principal óbvia:
+
+| Aba | Para quê |
+|---|---|
+| **Hoje** | o treino do dia e o botão "Começar / Continuar treino" |
+| **Plano** | os sete dias da semana e o catálogo de movimentos |
+| **Histórico** | calendário e números, num seletor segmentado |
+| **Perfil** | peso corporal, vibração, nuvem e créditos |
+
+Todo treino tem começo, meio e fim: "Finalizar treino" leva a uma tela de
+resultado que compara o volume com o mesmo dia da semana anterior. Nada
+destrutivo acontece a um toque — "Pular hoje" oferece desfazer, "Remover do
+plano" pergunta antes. Toda lista vazia tem um botão que resolve, e toda falha
+de carga tem "Tentar de novo" (`useQuery` devolve `error`).
+
 Volume nunca é armazenado. Ele é sempre derivado de `reps × peso` das séries
 concluídas — ver `src/domain/volume.ts`.
 

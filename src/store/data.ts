@@ -27,6 +27,13 @@ export const bumpData = () => useDataVersion.getState().bump();
 export type QueryResult<T> = {
   data: T | null;
   loading: boolean;
+  /**
+   * A ultima consulta falhou. Separado de `data` de proposito: sem isto uma
+   * consulta que quebra ficava em `loading` para sempre ou parecia uma lista
+   * vazia — e "nenhum treino" para quem tem treinos faz o usuario achar que
+   * perdeu os dados. Limpa sozinho na proxima consulta que der certo.
+   */
+  error: Error | null;
   reload: () => void;
 };
 
@@ -64,6 +71,7 @@ export function useQuery<T>(query: () => Promise<T>, options?: QueryOptions): Qu
   const isFocused = useIsFocused();
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
   const [localVersion, setLocalVersion] = useState(0);
   const settled = useRef(false);
   const focused = useRef(false);
@@ -94,7 +102,16 @@ export function useQuery<T>(query: () => Promise<T>, options?: QueryOptions): Qu
 
     query()
       .then((result) => {
-        if (!cancelled) setData(result);
+        if (cancelled) return;
+        setData(result);
+        setError(null);
+      })
+      .catch((reason: unknown) => {
+        if (cancelled) return;
+        // O dado anterior, se houver, fica: a tela decide se mostra o erro por
+        // cima dele ou no lugar dele.
+        setError(reason instanceof Error ? reason : new Error(String(reason)));
+        if (__DEV__) console.warn('[Voluma] consulta falhou', reason);
       })
       .finally(() => {
         if (cancelled) return;
@@ -122,5 +139,9 @@ export function useQuery<T>(query: () => Promise<T>, options?: QueryOptions): Qu
     }, []),
   );
 
-  return { data, loading, reload: () => setLocalVersion((current) => current + 1) };
+  // Estavel: as telas passam `reload` para cards memoizados e para o
+  // "Tentar de novo", e uma funcao nova a cada render derrubaria o `memo`.
+  const reload = useCallback(() => setLocalVersion((current) => current + 1), []);
+
+  return { data, loading, error, reload };
 }
