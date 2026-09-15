@@ -9,6 +9,7 @@ import { useQuery } from '@/store/data';
 import { colors, fontSize, spacing } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
 import { PressableSurface } from '@/ui/PressableSurface';
+import { LoadError } from '@/ui/LoadError';
 import { Header, Screen } from '@/ui/Screen';
 import { useTabBarClearance } from '@/ui/tabBar';
 import { TabScene } from '@/ui/TabScene';
@@ -27,7 +28,7 @@ export default function PlanScreen() {
   const clearance = useTabBarClearance();
   const router = useRouter();
 
-  const { data } = useQuery(
+  const { data, error, reload } = useQuery(
     useCallback(async () => {
       const [routines, exercises] = await Promise.all([listRoutines(), listExercises()]);
       // Os sete dias sao sintetizados aqui; no banco so existe linha para os
@@ -48,6 +49,7 @@ export default function PlanScreen() {
       <Screen>
         <Header title="Plano" />
 
+        {error ? <LoadError error={error} onRetry={reload} /> : (
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
           showsVerticalScrollIndicator={false}
@@ -85,6 +87,7 @@ export default function PlanScreen() {
             </View>
           </Card>
         </ScrollView>
+        )}
       </Screen>
     </TabScene>
   );

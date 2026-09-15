@@ -43,6 +43,7 @@ import { Card } from '@/ui/Card';
 import { DotMatrix } from '@/ui/DotMatrix';
 import { ProgressRing } from '@/ui/ProgressRing';
 import { relativeTime, shortDate } from '@/ui/relative';
+import { LoadError } from '@/ui/LoadError';
 import { Header, Screen } from '@/ui/Screen';
 import { StatNumber } from '@/ui/StatNumber';
 import { useTabBarClearance } from '@/ui/tabBar';
@@ -87,7 +88,7 @@ export default function HomeScreen() {
   // card dos dois lados.
   const matrixWidth = width - spacing.xl * 4;
 
-  const { data, loading } = useQuery(useCallback(loadHome, []));
+  const { data, loading, error, reload } = useQuery(useCallback(loadHome, []));
 
   // Um treino por data: abrir de novo cai no mesmo registro, com os numeros que
   // ja foram gravados. "Comecar" e "continuar" abrem a mesma sessao; o que muda
@@ -97,6 +98,17 @@ export default function HomeScreen() {
     bumpData();
     router.push(`/session/${session.id}`);
   };
+
+  if (error) {
+    return (
+      <TabScene>
+        <Screen>
+          <Header title="Hoje" subtitle={todaySubtitle()} />
+          <LoadError error={error} onRetry={reload} />
+        </Screen>
+      </TabScene>
+    );
+  }
 
   if (loading || !data) {
     return (

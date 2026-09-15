@@ -13,6 +13,7 @@ import { Card } from '@/ui/Card';
 import { CheckCell } from '@/ui/CheckCell';
 import { preview } from '@/ui/haptics';
 import { relativeTime } from '@/ui/relative';
+import { LoadError } from '@/ui/LoadError';
 import { Header, Screen } from '@/ui/Screen';
 import { useTabBarClearance } from '@/ui/tabBar';
 import { TabScene } from '@/ui/TabScene';
@@ -30,7 +31,7 @@ export default function ProfileScreen() {
   const clearance = useTabBarClearance();
   const router = useRouter();
 
-  const { data: weights } = useQuery(useCallback(() => listBodyWeightLogs(1), []));
+  const { data: weights, error, reload } = useQuery(useCallback(() => listBodyWeightLogs(1), []));
   const latest = weights?.[0] ?? null;
 
   return (
@@ -42,6 +43,10 @@ export default function ProfileScreen() {
           contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
           showsVerticalScrollIndicator={false}
         >
+          {/* So o peso le o banco nesta tela; vibracao, nuvem e creditos
+              continuam funcionando mesmo se a consulta falhar. */}
+          {error ? <LoadError error={error} onRetry={reload} /> : null}
+
           <Card onPress={() => router.push('/bodyweight')}>
             <Label>Peso corporal</Label>
             <View style={styles.row}>

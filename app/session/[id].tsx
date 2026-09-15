@@ -50,6 +50,8 @@ import { artSlugFor } from '@/movements/library';
 import { DEFAULT_RUN_TARGETS, DEFAULT_TARGETS, ExercisePicker } from '@/ui/ExercisePicker';
 import { shortDate } from '@/ui/relative';
 import { Reveal } from '@/ui/Reveal';
+import { EmptyState } from '@/ui/EmptyState';
+import { LoadError } from '@/ui/LoadError';
 import { Header, Screen } from '@/ui/Screen';
 import { SetRow } from '@/ui/SetRow';
 import { COMMIT_DELAY, TargetsEditor } from '@/ui/TargetsEditor';
@@ -98,7 +100,7 @@ export default function SessionScreen() {
    * registrado algo em outra tela) e via `reload()` — usado quando a LISTA
    * muda de verdade, ao adicionar ou remover um exercicio.
    */
-  const { data, loading, reload } = useQuery(useCallback(() => loadSession(id), [id]), {
+  const { data, loading, error, reload } = useQuery(useCallback(() => loadSession(id), [id]), {
     liveUpdates: false,
   });
 
@@ -204,6 +206,15 @@ export default function SessionScreen() {
   // registrado e normalmente o usuario ja saiu da area morta da academia. Se
   // falhar, a outbox segura.
   useEffect(() => () => void useAuth.getState().runSync(), []);
+
+  if (error) {
+    return (
+      <Screen>
+        <Header title="Treino" back="modal" />
+        <LoadError error={error} onRetry={reload} />
+      </Screen>
+    );
+  }
 
   if (loading || !data?.session) {
     return (
@@ -352,13 +363,17 @@ export default function SessionScreen() {
         ))}
 
         {exercises.length === 0 ? (
-          <Meta style={styles.empty}>Nenhum exercício neste dia ainda.</Meta>
-        ) : null}
-
-        <Pressable style={styles.addExercise} onPress={() => setPicking(true)}>
-          <PlusIcon size={16} color={colors.textPrimary} />
-          <Body style={styles.addExerciseText}>Adicionar exercício</Body>
-        </Pressable>
+          <EmptyState
+            title="Nenhum exercício hoje"
+            message="Adicione um movimento para registrar o treino."
+            action={{ label: 'Adicionar exercício', onPress: () => setPicking(true) }}
+          />
+        ) : (
+          <Pressable style={styles.addExercise} onPress={() => setPicking(true)}>
+            <PlusIcon size={16} color={colors.textPrimary} />
+            <Body style={styles.addExerciseText}>Adicionar exercício</Body>
+          </Pressable>
+        )}
       </ScrollView>
       </LayoutAnimationConfig>
       </Reveal>

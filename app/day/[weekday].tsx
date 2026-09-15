@@ -28,6 +28,8 @@ import { DEFAULT_RUN_TARGETS, DEFAULT_TARGETS, ExercisePicker } from '@/ui/Exerc
 import { FloatingGlassButton } from '@/ui/FloatingGlassButton';
 import { useListMotion } from '@/ui/motion';
 import { Reveal } from '@/ui/Reveal';
+import { EmptyState } from '@/ui/EmptyState';
+import { LoadError } from '@/ui/LoadError';
 import { Header, RoundButton, Screen } from '@/ui/Screen';
 import { TargetsEditor } from '@/ui/TargetsEditor';
 import { Body, Label, Meta } from '@/ui/Text';
@@ -73,7 +75,7 @@ export default function DayScreen() {
   const [picking, setPicking] = useState(false);
   const [removing, setRemoving] = useState<WeekExercise | null>(null);
 
-  const { data, loading, reload } = useQuery(
+  const { data, loading, error, reload } = useQuery(
     useCallback(async () => {
       const routine = await ensureDayRoutine(weekday);
       // A corrida existe sob demanda: garantir aqui e o que a faz aparecer no
@@ -87,13 +89,19 @@ export default function DayScreen() {
     }, [weekday, weekStart]),
   );
 
+  if (error) {
+    return (
+      <Screen>
+        <Header title={weekdayName(weekday)} back="push" />
+        <LoadError error={error} onRetry={reload} />
+      </Screen>
+    );
+  }
+
   if (loading || !data) {
     return (
       <Screen>
-        <Header
-          title={weekdayName(weekday)}
-          back="push"
-        />
+        <Header title={weekdayName(weekday)} back="push" />
         <ActivityIndicator color={colors.textSecondary} />
       </Screen>
     );
@@ -117,17 +125,18 @@ export default function DayScreen() {
     // dentro do alvo de blur se leria a si mesmo. Ver `Screen`.
     <Screen
       overlay={
-        <FloatingGlassButton
-          label="Adicionar exercício"
-          onPress={() => setPicking(true)}
-          bottom={insets.bottom + spacing.xl}
-        />
+        // Com a lista vazia o botao de adicionar mora no proprio vazio; dois
+        // "Adicionar exercicio" na mesma tela seriam uma pergunta sem resposta.
+        items.length > 0 ? (
+          <FloatingGlassButton
+            label="Adicionar exercício"
+            onPress={() => setPicking(true)}
+            bottom={insets.bottom + spacing.xl}
+          />
+        ) : null
       }
     >
-      <Header
-        title={weekdayName(weekday)}
-        back="push"
-      />
+      <Header title={weekdayName(weekday)} back="push" />
 
       {/* O `Header` fica fora do fade: ele ja estava na tela durante o
           carregamento. So o conteudo, que ate agora era um spinner, entra. */}
@@ -180,7 +189,11 @@ export default function DayScreen() {
         ))}
 
         {items.length === 0 ? (
-          <Meta style={styles.empty}>Nenhum exercício neste dia. Descanso.</Meta>
+          <EmptyState
+            title="Dia de descanso"
+            message={`Nenhum exercício ${everyWeekday(weekday)}. Adicione um para montar o treino.`}
+            action={{ label: 'Adicionar exercício', onPress: () => setPicking(true) }}
+          />
         ) : null}
       </ScrollView>
       </LayoutAnimationConfig>

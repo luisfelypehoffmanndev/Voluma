@@ -29,6 +29,7 @@ import {
 import { bumpData, useQuery } from '@/store/data';
 import { colors, fontSize, fonts, radius, spacing, surfaces } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
+import { LoadError } from '@/ui/LoadError';
 import { shortDate } from '@/ui/relative';
 import { RoundButton } from '@/ui/Screen';
 import { useTabBarClearance } from '@/ui/tabBar';
@@ -100,6 +101,19 @@ export function CalendarPanel() {
     setCursor((current) => new Date(current.getFullYear(), current.getMonth() + delta, 1));
 
   const todayKey = toDateKey(today);
+
+  const failed = month.error ?? day.error;
+  if (failed) {
+    return (
+      <LoadError
+        error={failed}
+        onRetry={() => {
+          month.reload();
+          day.reload();
+        }}
+      />
+    );
+  }
 
   return (
     <ScrollView

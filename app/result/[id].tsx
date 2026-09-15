@@ -20,6 +20,7 @@ import { colors, fontSize, spacing } from '@/theme/tokens';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { duration, shortDate } from '@/ui/relative';
+import { LoadError } from '@/ui/LoadError';
 import { Header, Screen } from '@/ui/Screen';
 import { StatNumber } from '@/ui/StatNumber';
 import { Body, Label, Meta } from '@/ui/Text';
@@ -47,11 +48,20 @@ export default function ResultScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const { data, loading } = useQuery(useCallback(() => loadResult(id), [id]));
+  const { data, loading, error, reload } = useQuery(useCallback(() => loadResult(id), [id]));
 
   // "Fechar" volta para Hoje, e nao para quem abriu o treino: o treino acabou,
   // e a proxima coisa que o usuario ve e a home dizendo isso.
   const close = () => router.dismissTo('/');
+
+  if (error) {
+    return (
+      <Screen>
+        <Header title="Resultado" back="modal" onBack={close} />
+        <LoadError error={error} onRetry={reload} />
+      </Screen>
+    );
+  }
 
   if (loading || !data) {
     return (
@@ -84,7 +94,7 @@ export default function ResultScreen() {
           <Body style={styles.comparison}>
             {comparison
               ? `${formatComparison(comparison)} vs. ${base}`
-              : `Primeira ${weekdayName(weekday).toLowerCase()} registrada`}
+              : `Primeiro treino de ${weekdayName(weekday).toLowerCase()} registrado`}
           </Body>
         </View>
 

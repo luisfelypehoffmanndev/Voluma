@@ -28,6 +28,7 @@ import { MovementFigure } from '@/ui/MovementFigure';
 import { confirm } from '@/ui/haptics';
 import { PressableSurface } from '@/ui/PressableSurface';
 import { Reveal } from '@/ui/Reveal';
+import { LoadError } from '@/ui/LoadError';
 import { Header, Screen } from '@/ui/Screen';
 import { Body, Label, Meta } from '@/ui/Text';
 import { TrashIcon } from '@/ui/icons';
@@ -49,7 +50,7 @@ export default function CatalogScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const { data, loading } = useQuery(
+  const { data, loading, error, reload } = useQuery(
     useCallback(async () => {
       const [exercises, days, missing] = await Promise.all([
         listExercises(),
@@ -84,10 +85,7 @@ export default function CatalogScreen() {
 
   return (
     <Screen>
-      <Header
-        title="Catálogo"
-        back="push"
-      />
+      <Header title="Catálogo" back="push" />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xxl }]}
@@ -126,6 +124,7 @@ export default function CatalogScreen() {
         ) : null}
 
         {loading ? <ActivityIndicator color={colors.textSecondary} /> : null}
+        {error ? <LoadError error={error} onRetry={reload} /> : null}
 
         {/* So a lista entra por fade: o campo de nome e o card da biblioteca
             acima ja estavam na tela durante o carregamento. O `gap` repete o do
@@ -149,7 +148,7 @@ export default function CatalogScreen() {
         </Reveal>
         ) : null}
 
-        {!loading && exercises.length === 0 ? (
+        {!loading && !error && exercises.length === 0 ? (
           <Meta style={styles.empty}>Nenhum movimento no catálogo.</Meta>
         ) : null}
       </ScrollView>

@@ -11,6 +11,8 @@ import { colors, fontSize, radius, spacing, surfaces } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
 import { MovementFigure } from '@/ui/MovementFigure';
 import { PressableSurface } from '@/ui/PressableSurface';
+import { EmptyState } from '@/ui/EmptyState';
+import { LoadError } from '@/ui/LoadError';
 import { Header, Screen } from '@/ui/Screen';
 import { Body, Label, Meta } from '@/ui/Text';
 import { CheckIcon, PlusIcon } from '@/ui/icons';
@@ -39,7 +41,7 @@ export default function LibraryScreen() {
   const [group, setGroup] = useState<MuscleGroup | null>(null);
   const [equipment, setEquipment] = useState<string | null>(null);
 
-  const { data, loading } = useQuery(
+  const { data, loading, error, reload } = useQuery(
     useCallback(async () => {
       const exercises = await listExercises();
       return new Set(exercises.map((exercise) => normalizeName(exercise.name)));
@@ -64,10 +66,7 @@ export default function LibraryScreen() {
 
   return (
     <Screen>
-      <Header
-        title="Biblioteca"
-        back="push"
-      />
+      <Header title="Biblioteca" back="push" />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xxl }]}
@@ -94,6 +93,7 @@ export default function LibraryScreen() {
         </Card>
 
         {loading ? <ActivityIndicator color={colors.textSecondary} /> : null}
+        {error ? <LoadError error={error} onRetry={reload} /> : null}
 
         <Card>
           <Label>{`${results.length} ${results.length === 1 ? 'MOVIMENTO' : 'MOVIMENTOS'}`}</Label>
@@ -106,7 +106,33 @@ export default function LibraryScreen() {
             />
           ))}
           {results.length === 0 ? (
-            <Meta style={styles.empty}>Nenhum movimento com esses filtros.</Meta>
+            <EmptyState
+              title="Nenhum movimento encontrado"
+              message={
+                search.trim()
+                  ? 'A biblioteca não conhece esse nome. Crie o seu.'
+                  : 'Nenhum movimento combina com esses filtros.'
+              }
+              action={
+                search.trim()
+                  ? {
+                      label: `Criar “${search.trim()}”`,
+                      onPress: async () => {
+                        if (owned.has(normalizeName(search))) return;
+                        await createExercise(search.trim(), group ?? undefined);
+                        setSearch('');
+                        bumpData();
+                      },
+                    }
+                  : {
+                      label: 'Limpar filtros',
+                      onPress: () => {
+                        setGroup(null);
+                        setEquipment(null);
+                      },
+                    }
+              }
+            />
           ) : null}
         </Card>
       </ScrollView>

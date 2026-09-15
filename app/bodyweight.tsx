@@ -10,6 +10,7 @@ import { colors, fontSize, hitSlop, radius, spacing } from '@/theme/tokens';
 import { relativeTime } from '@/ui/relative';
 import { confirm } from '@/ui/haptics';
 import { PressableSurface } from '@/ui/PressableSurface';
+import { LoadError } from '@/ui/LoadError';
 import { Header, Screen } from '@/ui/Screen';
 import { StatNumber } from '@/ui/StatNumber';
 import { Body, Label, Meta } from '@/ui/Text';
@@ -27,7 +28,7 @@ export default function BodyWeightScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const { data, reload } = useQuery(useCallback(() => listBodyWeightLogs(20), []));
+  const { data, error, reload } = useQuery(useCallback(() => listBodyWeightLogs(20), []));
   const logs = data ?? [];
 
   const [draft, setDraft] = useState<number | null>(null);
@@ -45,10 +46,7 @@ export default function BodyWeightScreen() {
 
   return (
     <Screen>
-      <Header
-        title="Peso"
-        back="modal"
-      />
+      <Header title="Peso" back="modal" />
 
       <View style={styles.dial}>
         <Label>Quilos</Label>
@@ -99,6 +97,7 @@ export default function BodyWeightScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Label style={styles.historyTitle}>Registros recentes</Label>
+        {error ? <LoadError error={error} onRetry={reload} /> : null}
 
         {logs.map((log) => (
           <View key={log.id} style={styles.logRow}>
