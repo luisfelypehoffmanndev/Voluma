@@ -87,8 +87,8 @@ export function weekRangeLabel(weekStart: string): string {
  * Os dias nao existem como linha no banco — sao sintetizados aqui na leitura.
  * Fazer backfill de 7 rotinas vazias faria elas subirem para o Supabase e
  * reaparecerem em todo dispositivo, inclusive dias que o usuario nunca vai
- * usar, e ainda quebraria a guarda do `seedIfEmpty`, que bail quando ja existe
- * qualquer rotina.
+ * usar, e ainda quebraria a guarda do `isFirstRun` (onboarding), que considera
+ * o app configurado quando ja existe qualquer rotina.
  */
 export function weekPlan(routines: readonly Routine[]): (Routine | null)[] {
   const days: (Routine | null)[] = [];

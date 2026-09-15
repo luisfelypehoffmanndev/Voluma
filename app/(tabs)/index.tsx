@@ -21,7 +21,6 @@ import {
   volumeByDate,
   type WeekExercise,
 } from '@/db/repo';
-import { seedIfEmpty } from '@/db/seed';
 import { buildDotMatrix, currentStreak } from '@/domain/streak';
 import { formatDistance, formatDuration } from '@/domain/run';
 import { workoutState, type WorkoutState } from '@/domain/today';
@@ -266,7 +265,6 @@ function todaySubtitle(now = new Date()): string {
 
 async function loadHome() {
   await getDb();
-  if (await seedIfEmpty()) bumpData();
 
   const now = new Date();
   const todayKey = toDateKey(now);

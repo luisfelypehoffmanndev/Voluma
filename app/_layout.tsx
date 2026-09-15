@@ -15,6 +15,7 @@ import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { useOnboarding } from '@/store/onboarding';
 import { usePrefs } from '@/store/prefs';
 import { useSyncLifecycle } from '@/sync/auth';
 import { colors } from '@/theme/tokens';
@@ -42,11 +43,20 @@ export default function RootLayout() {
     void usePrefs.getState().load();
   }, []);
 
+  // Primeira abertura ou nao — decidido antes de qualquer tela aparecer, para a
+  // home nao piscar vazia e so depois ceder lugar ao onboarding.
+  const onboarding = useOnboarding((state) => state.status);
   useEffect(() => {
-    if (ready) SplashScreen.hideAsync().catch(() => {});
-  }, [ready]);
+    void useOnboarding.getState().check();
+  }, []);
 
-  if (!ready) return null;
+  const booted = ready && onboarding !== 'checking';
+
+  useEffect(() => {
+    if (booted) SplashScreen.hideAsync().catch(() => {});
+  }, [booted]);
+
+  if (!booted) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -66,6 +76,7 @@ export default function RootLayout() {
             }}
           >
             <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="onboarding" options={{ animation: 'fade', gestureEnabled: false }} />
             <Stack.Screen name="session/[id]" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="result/[id]" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="day/[weekday]" />

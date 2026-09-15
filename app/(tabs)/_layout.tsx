@@ -1,6 +1,7 @@
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 import { StyleSheet } from 'react-native';
 
+import { useOnboarding } from '@/store/onboarding';
 import { colors, radius } from '@/theme/tokens';
 import { GlassSurface } from '@/ui/GlassSurface';
 import { ChartIcon, ListIcon, PersonIcon, PlayIcon } from '@/ui/icons';
@@ -21,6 +22,11 @@ import { useTabBarGeometry } from '@/ui/tabBar';
  */
 export default function TabsLayout() {
   const bar = useTabBarGeometry();
+  const onboarding = useOnboarding((state) => state.status);
+
+  // Banco vazio: antes da home, o onboarding. O `_layout` raiz so solta o
+  // splash depois de saber a resposta, entao esta troca nunca aparece na tela.
+  if (onboarding === 'needed') return <Redirect href="/onboarding" />;
 
   return (
     <Tabs

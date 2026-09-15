@@ -235,8 +235,8 @@ export async function createRoutine(name: string, weekday: Weekday): Promise<Rou
  *
  * Os sete dias sao sintetizados na leitura (`weekPlan`), nao gravados de
  * antemao: sete linhas vazias subiriam para o Supabase e voltariam em todo
- * aparelho, inclusive dias que o usuario nunca vai usar, e ainda calariam o
- * `seedIfEmpty`, cuja guarda e "ja existe alguma rotina?".
+ * aparelho, inclusive dias que o usuario nunca vai usar, e ainda confundiriam
+ * o `isFirstRun` do onboarding, cuja guarda e "ja existe alguma rotina?".
  *
  * O preco e este: toda escrita num dia passa por aqui primeiro, para ter um
  * `routine_id`. A busca e a criacao ficam na mesma transacao porque dois toques
