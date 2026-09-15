@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -61,6 +61,12 @@ type Props = {
   onClose: () => void;
   onPick: (exerciseId: string) => void;
   onCreate: (name: string, muscleGroup?: string, kind?: ExerciseKind) => void;
+  /**
+   * Um modal que abre POR CIMA do seletor — a pergunta de alcance do treino.
+   * Precisa morar dentro deste `Modal`: no iOS um segundo `Modal` irmao nao
+   * abre enquanto este esta visivel ou saindo.
+   */
+  children?: ReactNode;
 };
 
 /**
@@ -85,6 +91,7 @@ export function ExercisePicker({
   onClose,
   onPick,
   onCreate,
+  children,
 }: Props) {
   const [search, setSearch] = useState('');
   const insets = useSafeAreaInsets();
@@ -207,6 +214,7 @@ export function ExercisePicker({
           </GlassSurface>
         </View>
       </WithoutBlurTarget>
+      {children}
     </Modal>
   );
 }

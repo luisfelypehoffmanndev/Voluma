@@ -18,7 +18,7 @@ import {
   type WeekExercise,
 } from '@/db/repo';
 import type { Targets, Weekday } from '@/domain/types';
-import { addWeeks, weekRangeLabel, weekStartKey, weekdayName, weeksBetween } from '@/domain/week';
+import { addWeeks, everyWeekday, weekRangeLabel, weekStartKey, weekdayName, weeksBetween } from '@/domain/week';
 import { bumpData, useQuery } from '@/store/data';
 import { colors, fontSize, hitSlop, spacing } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
@@ -46,9 +46,9 @@ const NAME_COMMIT_DELAY = 400;
  * no cabecalho ja da esse contexto.
  */
 const SOURCE_LABEL: Record<TargetSource, string> = {
-  override: 'ajustado',
-  lastActual: 'última vez',
-  plan: 'do plano',
+  override: 'editado por você',
+  lastActual: 'igual à última vez',
+  plan: 'do seu plano',
 };
 
 /**
@@ -189,7 +189,7 @@ export default function DayScreen() {
       <ConfirmModal
         visible={removing != null}
         title={`Remover ${removing?.exerciseName ?? ''} do plano?`}
-        message={`Sai de toda ${weekdayName(weekday).toLowerCase()} a partir de agora. O que já foi registrado continua no histórico.`}
+        message={`Sai de ${everyWeekday(weekday)} a partir de agora. O que já foi registrado continua no histórico.`}
         cancelLabel="Cancelar"
         confirmLabel="Remover"
         onCancel={() => setRemoving(null)}
@@ -208,7 +208,7 @@ export default function DayScreen() {
         visible={picking}
         catalog={catalog}
         usedIds={used}
-        subtitle={`Passa a valer toda ${weekdayName(weekday).toLowerCase()}`}
+        subtitle={`Passa a valer ${everyWeekday(weekday)}`}
         onClose={() => setPicking(false)}
         onPick={addToDay}
         onCreate={async (name, muscleGroup, kind) => {

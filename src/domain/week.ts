@@ -134,6 +134,25 @@ export function weekdayName(weekday: Weekday): string {
   return WEEKDAY_NAMES[weekday];
 }
 
+/**
+ * Sabado e domingo sao masculinos; os outros cinco, femininos. E o que separa
+ * "toda segunda" de "todo sabado" — errar isso numa pergunta de confirmacao le
+ * como app traduzido por maquina.
+ */
+function isMasculine(weekday: Weekday): boolean {
+  return weekday === 0 || weekday === 6;
+}
+
+/** "toda segunda", "todo sábado" — o alcance de uma mudanca no plano. */
+export function everyWeekday(weekday: Weekday): string {
+  return `${isMasculine(weekday) ? 'todo' : 'toda'} ${weekdayName(weekday).toLowerCase()}`;
+}
+
+/** "segunda passada", "sábado passado" — a base da comparacao do resultado. */
+export function lastWeekday(weekday: Weekday): string {
+  return `${weekdayName(weekday).toLowerCase()} ${isMasculine(weekday) ? 'passado' : 'passada'}`;
+}
+
 /** Iniciais para o cabecalho do calendario, comecando no domingo. */
 export function weekdayInitials(): readonly string[] {
   return WEEKDAY_SHORT;
