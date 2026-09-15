@@ -92,7 +92,7 @@ export default function DayScreen() {
       <Screen>
         <Header
           title={weekdayName(weekday)}
-          action={{ icon: <ChevronLeftIcon size={20} />, onPress: () => router.back() }}
+          back="push"
         />
         <ActivityIndicator color={colors.textSecondary} />
       </Screen>
@@ -126,7 +126,7 @@ export default function DayScreen() {
     >
       <Header
         title={weekdayName(weekday)}
-        action={{ icon: <ChevronLeftIcon size={20} />, onPress: () => router.back() }}
+        back="push"
       />
 
       {/* O `Header` fica fora do fade: ele ja estava na tela durante o

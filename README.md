@@ -53,7 +53,7 @@ sincronização entre aparelhos:
    (**Project Settings → Data API**).
 5. Reinicie o `expo start` — variáveis `EXPO_PUBLIC_*` entram no bundle em
    tempo de build, não em tempo de execução.
-6. No app: **Ajustes → Nuvem → Entrar**, e use "Criar conta com este e-mail"
+6. No app: **Perfil → Nuvem → Entrar**, e use "Criar conta com este e-mail"
    na primeira vez.
 
 A anon key é pública por design. O que protege os dados é o RLS: cada linha

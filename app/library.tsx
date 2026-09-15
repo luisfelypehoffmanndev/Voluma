@@ -13,7 +13,7 @@ import { MovementFigure } from '@/ui/MovementFigure';
 import { PressableSurface } from '@/ui/PressableSurface';
 import { Header, Screen } from '@/ui/Screen';
 import { Body, Label, Meta } from '@/ui/Text';
-import { CheckIcon, ChevronLeftIcon, PlusIcon } from '@/ui/icons';
+import { CheckIcon, PlusIcon } from '@/ui/icons';
 
 /**
  * A biblioteca de movimentos.
@@ -66,7 +66,7 @@ export default function LibraryScreen() {
     <Screen>
       <Header
         title="Biblioteca"
-        action={{ icon: <ChevronLeftIcon size={20} />, onPress: () => router.back() }}
+        back="push"
       />
 
       <ScrollView

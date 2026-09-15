@@ -15,13 +15,12 @@ import { colors, fontSize, fonts, radius, spacing, surfaces } from '@/theme/toke
 import { PressableSurface } from '@/ui/PressableSurface';
 import { Header, Screen } from '@/ui/Screen';
 import { Body, Label, Meta } from '@/ui/Text';
-import { ArrowDownIcon } from '@/ui/icons';
 
 /**
  * Login por e-mail e senha.
  *
  * A tela nao bloqueia o app: quem nao entra continua usando tudo local. Por
- * isso ela e alcancada pelos Ajustes, e nao imposta no boot.
+ * isso ela e alcancada pelo Perfil, e nao imposta no boot.
  */
 export default function LoginScreen() {
   const router = useRouter();
@@ -50,7 +49,7 @@ export default function LoginScreen() {
     <Screen>
       <Header
         title="Conta"
-        action={{ icon: <ArrowDownIcon size={20} />, onPress: () => router.back() }}
+        back="modal"
       />
 
       <KeyboardAvoidingView
