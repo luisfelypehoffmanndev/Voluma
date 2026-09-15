@@ -72,12 +72,13 @@ para a próxima.
 
 De `Design/design.md`, as que mais restringem o código:
 
-- **Um único elemento em `--accent` por tela.** Na home é o card de volume de 7
-  dias; por isso o dot-matrix de lá recebe `showRecord={false}`.
+- **Um único elemento em `--accent` por tela.** Na home é o botão "Começar /
+  Continuar treino"; por isso o card de volume é vidro normal e o dot-matrix de
+  lá recebe `showRecord={false}`.
 - **Toda superfície é vidro sobre um campo de luz.** O que muda entre os níveis
   é a densidade, não a matéria: cards a 6%, superfície dentro deles a 8%, e tab
   bar e modal quase opacos — esses precisam esconder o que passa por baixo. O
-  card accent é a única superfície sólida que sobrou.
+  botão e o card accent são as únicas superfícies sólidas que sobraram.
 - **Sem cor de estado.** Erro e sucesso são comunicados por texto, nunca por
   vermelho ou verde.
 - **Números em mono de traço fino**, nunca sans bold.

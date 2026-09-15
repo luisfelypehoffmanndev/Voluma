@@ -29,6 +29,14 @@ Pense em painel de instrumento (velocímetro, equalizador, terminal), não em "a
 
 Regra dura: se você usar `--accent` em mais de um elemento na mesma tela, volte e remova um.
 
+### O accent da home é o botão de treino
+
+Na home, o elemento accent é o **botão principal** ("Começar treino · 5 exercícios" / "Continuar treino · 2 de 5"), não mais o card de volume de 7 dias. A home tem um trabalho só — colocar o usuário no treino de hoje em um toque — e o que ele precisa achar de relance é esse botão, não um número. O card de volume virou vidro normal.
+
+Quando o botão deixa de ser o próximo passo (treino já finalizado, dia de descanso), ele vira vidro sem cor e a home fica sem accent nenhum. Isso é permitido: o limite é *no máximo* um.
+
+Botão accent é sólido com o mesmo glow do card accent, e texto em `--bg`. Nunca aparece numa tela com caixas de concluído (ver a exceção abaixo): o "Finalizar treino" da sessão é vidro.
+
 Nada de segunda cor de acento (sem verde de "sucesso", sem vermelho de "erro" decorativo). Estado negativo pode ser comunicado com texto/ícone em branco, não com cor.
 
 ### A única exceção: a caixa de concluído
@@ -110,7 +118,7 @@ Este é o ponto onde o app deve ser reconhecível. Baseado nas refs:
 
 - **Barras de progresso finas e pontilhadas** (tracinhos, não barra sólida cheia) para mostrar decorrer de tempo/fase — como o gráfico de sono.
 - **Grade de pontos (dot-matrix)** para histórico/streak de treino ao longo do mês — pontos pequenos, apagados quando não há treino, cheios/brancos quando há. Não usar heatmap colorido tipo GitHub; manter em escala de cinza + 1 ponto em destaque se for recorde.
-- Números sempre como protagonistas visuais (peso, volume levantado, horas de sono) — a cor de fundo do card pode inverter (fundo laranja sólido, texto preto) *apenas* no card que representa o dado mais importante da tela, como no card de sono. Isso é o "uso mínimo mas com contraste" que você pediu: em vez de accent como detalhe pequeno, ocasionalmente ele vira o fundo de UM card inteiro para chamar atenção. Esse é o único card que continua **sólido**: laranja translúcido perde o soco.
+- Números sempre como protagonistas visuais (peso, volume levantado, horas de sono) — a cor de fundo do card pode inverter (fundo laranja sólido, texto preto) *apenas* no card que representa o dado mais importante da tela, como no card de sono, e só numa tela em que a ação principal não seja um botão accent (§2: na home o accent é do botão de treino). Isso é o "uso mínimo mas com contraste" que você pediu: em vez de accent como detalhe pequeno, ocasionalmente ele vira o fundo de UM card inteiro para chamar atenção. Esse é o único card que continua **sólido**: laranja translúcido perde o soco.
 
 ### Celula marcável
 
