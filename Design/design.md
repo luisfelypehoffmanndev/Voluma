@@ -45,7 +45,7 @@ Há um caso, e só um, em que `--accent` aparece repetido na mesma tela: a **cai
 
 A exceção se sustenta porque a cor ali não está fazendo o trabalho que a regra proíbe. A regra existe para impedir que dois elementos *disputem* a atenção — dois destaques concorrentes diluem os dois. A caixa não destaca um exercício entre os outros: ela marca **um estado binário que se repete**, e o que o laranja comunica é a leitura agregada — quanto do treino já foi feito, visível de relance pela quantidade de caixas acesas. Uma única caixa laranja no meio de caixas apagadas seria a leitura errada.
 
-O limite continua valendo do lado de fora: numa tela que tem caixas de concluído, **nenhum outro elemento** pode usar accent. Foi por isso que o botão fixo de "registrar treino" saiu da tela quando as caixas entraram — os dois juntos seriam exatamente a disputa que a regra impede.
+O limite continua valendo do lado de fora: numa tela que tem caixas de concluído, **nenhum outro elemento** pode usar accent. Foi por isso que o botão fixo de "registrar treino" saiu da tela quando as caixas entraram — os dois juntos seriam exatamente a disputa que a regra impede. Quando o treino ganhou fim, a barra fixa voltou como **"Finalizar treino · 3 de 5" em vidro de nível 3, sem accent** — a ação existe, mas não disputa cor com as caixas.
 
 Isso **não** abre precedente para cor de estado (§2, parágrafo acima): não existe caixa verde de "ok" nem vermelha de "falhou". O par é aceso/apagado na mesma matiz, e "não concluído" continua sendo ausência de cor, não outra cor.
 

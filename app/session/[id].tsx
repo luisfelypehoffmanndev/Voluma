@@ -8,12 +8,14 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import Animated, { LayoutAnimationConfig } from 'react-native-reanimated';
+import Animated, { LayoutAnimationConfig, useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   addExerciseToRoutine,
+  addExerciseToSession,
   addSet,
+  completeSession,
   createExercise,
   getSession,
   listExercises,
@@ -33,13 +35,15 @@ import { formatDistance, formatDuration, runTargetsFromSets } from '@/domain/run
 import { type SetDraft, sameSetDrafts, summarizeSets } from '@/domain/sets';
 import { sameTargets, targetsFromSets } from '@/domain/targets';
 import { formatVolume, formatWeight } from '@/domain/volume';
-import { fromDateKey, weekStartKey, weekdayName, weekdayOf } from '@/domain/week';
+import { everyWeekday, fromDateKey, weekStartKey, weekdayName, weekdayOf } from '@/domain/week';
 import { bumpData, useQuery } from '@/store/data';
 import { useAuth } from '@/sync/auth';
 import { colors, fontSize, radius, spacing } from '@/theme/tokens';
-import { useListMotion } from '@/ui/motion';
+import { useFlag, useListMotion } from '@/ui/motion';
 import { confirm } from '@/ui/haptics';
+import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
+import { ConfirmModal } from '@/ui/ConfirmModal';
 import { CheckCell } from '@/ui/CheckCell';
 import { CountingStat } from '@/ui/CountingStat';
 import { artSlugFor } from '@/movements/library';
@@ -52,7 +56,7 @@ import { COMMIT_DELAY, TargetsEditor } from '@/ui/TargetsEditor';
 import { Body, Label, Meta } from '@/ui/Text';
 import { ActionSheet } from '@/ui/ActionSheet';
 import { UndoToast, type UndoOffer } from '@/ui/UndoToast';
-import { MoreIcon, PlusIcon } from '@/ui/icons';
+import { ChevronRightIcon, MoreIcon, PlusIcon } from '@/ui/icons';
 
 /**
  * Registro do treino de um dia.
@@ -67,8 +71,11 @@ import { MoreIcon, PlusIcon } from '@/ui/icons';
  * empilhados da tela do dia no Plano, o mesmo debounce — segue valendo para
  * ela sem mudanca (ver `RunExerciseCard`).
  *
- * Nada aqui precisa ser "finalizado". Cada exercicio grava sozinho quando a mao
- * para, e o numero do topo — o peso agregado do dia — atualiza junto.
+ * Cada exercicio grava sozinho quando a mao para, e o numero do topo — o peso
+ * agregado do dia — atualiza junto. Mesmo assim o treino tem fim: a barra fixa
+ * no rodape ("Finalizar treino · 3 de 5") fecha a sessao e leva ao resultado.
+ * Sem ela sair era descer a seta e nada acontecer, e o usuario nunca sabia se
+ * o treino tinha "acabado".
  */
 export default function SessionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -132,6 +139,30 @@ export default function SessionScreen() {
   const [undo, setUndo] = useState<UndoOffer | null>(null);
 
   /**
+   * Um "termine o que esta pendente" por card, para o Finalizar esperar.
+   *
+   * Cada card grava com atraso (`useWriteBehind`). Finalizar sem esperar
+   * perderia o ultimo toque — e justamente o mais comum: marcar o ultimo
+   * exercicio e ir direto para o botao. `completeSession` descartaria as
+   * series ainda nao gravadas como "nunca marcadas", e o resultado mostraria
+   * um volume menor que o da tela.
+   */
+  const settlers = useRef(new Map<string, () => Promise<void>>());
+  const registerSettle = useCallback((key: string, settle: (() => Promise<void>) | null) => {
+    if (settle) settlers.current.set(key, settle);
+    else settlers.current.delete(key);
+  }, []);
+  const [confirmingFinish, setConfirmingFinish] = useState(false);
+  const [finishing, setFinishing] = useState(false);
+
+  /** O exercicio escolhido no seletor, esperando "So hoje" ou "Toda segunda". */
+  const [pendingPick, setPendingPick] = useState<{
+    id: string;
+    name: string;
+    kind: ExerciseKind;
+  } | null>(null);
+
+  /**
    * "Pular hoje": sai desta sessao, o plano fica. Nao pergunta nada — e barato
    * de reverter, entao a protecao e o "Desfazer", nao um "tem certeza?".
    */
@@ -177,10 +208,7 @@ export default function SessionScreen() {
   if (loading || !data?.session) {
     return (
       <Screen>
-        <Header
-          title="Treino"
-          back="modal"
-        />
+        <Header title="Treino" back="modal" />
         <ActivityIndicator color={colors.textSecondary} />
       </Screen>
     );
@@ -193,38 +221,93 @@ export default function SessionScreen() {
   const date = fromDateKey(session.date);
   const used = new Set(exercises.map((item) => item.exerciseId));
 
+  // "toda segunda" / "todo sábado" — o alcance de tudo que mexe no plano.
+  const everyDay = everyWeekday(weekdayOf(date));
+  const pending = exercises.length - doneCount;
+
   /**
-   * Adicionar aqui e recorrente por padrao: o exercicio entra na rotina daquele
-   * dia da semana, entao aparece neste treino E em todo dia igual daqui pra
-   * frente. E o mesmo contrato da tela do dia — por isso o mesmo subtitulo.
+   * Adicionar pergunta o alcance: "So hoje" ou "Toda segunda".
+   *
+   * Antes era sempre recorrente, avisado numa linha cinza que ninguem lia — o
+   * usuario achava que adicionava so no treino de hoje e o exercicio aparecia
+   * em toda segunda dali pra frente.
+   *
+   * "So hoje" nao precisou de modelo novo: series gravadas de um exercicio fora
+   * da rotina ja aparecem no fim da lista (ver `loadSession`), entao basta
+   * materializa-las nesta sessao.
    */
-  const addExercise = async (exerciseId: string) => {
-    if (!routineId) return;
-    const picked = catalog.find((exercise) => exercise.id === exerciseId);
-    await addExerciseToRoutine(
-      routineId,
-      exerciseId,
-      picked?.kind === 'run' ? DEFAULT_RUN_TARGETS : DEFAULT_TARGETS,
-    );
+  const addExercise = async (pick: { id: string; kind: ExerciseKind }, scope: 'today' | 'plan') => {
+    const targets = pick.kind === 'run' ? DEFAULT_RUN_TARGETS : DEFAULT_TARGETS;
+    if (scope === 'plan' && routineId) {
+      await addExerciseToRoutine(routineId, pick.id, targets);
+    } else {
+      await addExerciseToSession(session.id, pick.id, targets);
+    }
     bumpData();
+    setPendingPick(null);
     setPicking(false);
     reload();
   };
 
+  /** Sem rotina (sessao sem dia da semana) nao ha "toda segunda": adiciona direto. */
+  const choose = (pick: { id: string; name: string; kind: ExerciseKind }) => {
+    if (routineId) setPendingPick(pick);
+    else void addExercise(pick, 'today');
+  };
+
+  const finish = async () => {
+    setConfirmingFinish(false);
+    if (finishing) return;
+    setFinishing(true);
+    try {
+      await Promise.all([...settlers.current.values()].map((settle) => settle()));
+      await completeSession(session.id);
+      confirm();
+      bumpData();
+      router.replace(`/result/${session.id}`);
+    } finally {
+      setFinishing(false);
+    }
+  };
+
+  const footerBottom = insets.bottom + spacing.xl;
+
   return (
     <Screen
       overlay={
-        <UndoToast
-          offer={undo}
-          onExpire={() => setUndo(null)}
-          bottom={insets.bottom + spacing.xl}
-        />
+        <>
+          {exercises.length > 0 || session.completedAt ? (
+            // Vidro, nunca accent: esta tela tem caixas de concluido, e o §2 do
+            // brief tira o accent de todo o resto quando elas existem.
+            <View style={[styles.footer, { bottom: footerBottom }]}>
+              {session.completedAt ? (
+                <Button
+                  label="Ver resultado"
+                  onPress={() => router.push(`/result/${session.id}`)}
+                />
+              ) : (
+                <Button
+                  label={
+                    finishing
+                      ? 'Finalizando…'
+                      : `Finalizar treino · ${doneCount} de ${exercises.length}`
+                  }
+                  disabled={finishing}
+                  onPress={() => (pending > 0 ? setConfirmingFinish(true) : void finish())}
+                />
+              )}
+            </View>
+          ) : null}
+          <UndoToast
+            offer={undo}
+            onExpire={() => setUndo(null)}
+            // Acima da barra de finalizar, nunca por cima dela.
+            bottom={footerBottom + FOOTER_HEIGHT + spacing.md}
+          />
+        </>
       }
     >
-      <Header
-        title="Treino"
-        back="modal"
-      />
+      <Header title="Treino" back="modal" />
 
       {/* O `Header` fica FORA do fade — ele ja estava na tela durante o
           carregamento, e faze-lo acender de novo seria animar uma troca que nao
@@ -259,10 +342,11 @@ export default function SessionScreen() {
             <ExerciseCard
               item={item}
               sessionId={session.id}
-              weekday={weekdayName(weekdayOf(date)).toLowerCase()}
+              everyDay={everyDay}
               onDraft={reportDraft}
               onStructuralChange={reloadStable}
               onSkip={skipToday}
+              registerSettle={registerSettle}
             />
           </Animated.View>
         ))}
@@ -271,15 +355,10 @@ export default function SessionScreen() {
           <Meta style={styles.empty}>Nenhum exercício neste dia ainda.</Meta>
         ) : null}
 
-        {routineId ? (
-          <Pressable style={styles.addExercise} onPress={() => setPicking(true)}>
-            <PlusIcon size={16} color={colors.textPrimary} />
-            <View style={styles.addExerciseText}>
-              <Body>Adicionar exercício</Body>
-              <Meta>{`entra também toda ${weekdayName(weekdayOf(date)).toLowerCase()}`}</Meta>
-            </View>
-          </Pressable>
-        ) : null}
+        <Pressable style={styles.addExercise} onPress={() => setPicking(true)}>
+          <PlusIcon size={16} color={colors.textPrimary} />
+          <Body style={styles.addExerciseText}>Adicionar exercício</Body>
+        </Pressable>
       </ScrollView>
       </LayoutAnimationConfig>
       </Reveal>
@@ -288,13 +367,42 @@ export default function SessionScreen() {
         visible={picking}
         catalog={catalog}
         usedIds={used}
-        subtitle={`Passa a valer toda ${weekdayName(weekdayOf(date)).toLowerCase()}`}
-        onClose={() => setPicking(false)}
-        onPick={addExercise}
+        onClose={() => {
+          setPendingPick(null);
+          setPicking(false);
+        }}
+        onPick={(exerciseId) => {
+          const picked = catalog.find((exercise) => exercise.id === exerciseId);
+          if (picked) choose(picked);
+        }}
         onCreate={async (name, muscleGroup, kind) => {
           const exercise = await createExercise(name, muscleGroup, kind);
-          await addExercise(exercise.id);
+          choose(exercise);
         }}
+      >
+        {/* Dentro do seletor, e nao depois dele: no iOS um `Modal` nao abre
+            enquanto outro esta saindo, e fechar o seletor para perguntar faria
+            a pergunta nao aparecer. Tocar fora volta para a lista. */}
+        <ConfirmModal
+          visible={pendingPick != null}
+          title={`Adicionar ${pendingPick?.name ?? ''}`}
+          message={`Só neste treino, ou no plano de ${everyDay} a partir de agora?`}
+          cancelLabel="Só hoje"
+          confirmLabel={everyDay.charAt(0).toUpperCase() + everyDay.slice(1)}
+          onCancel={() => pendingPick && void addExercise(pendingPick, 'today')}
+          onConfirm={() => pendingPick && void addExercise(pendingPick, 'plan')}
+          onDismiss={() => setPendingPick(null)}
+        />
+      </ExercisePicker>
+
+      <ConfirmModal
+        visible={confirmingFinish}
+        title={`Finalizar com ${pending} ${pending === 1 ? 'exercício pendente' : 'exercícios pendentes'}?`}
+        message="O que não foi marcado não entra no volume de hoje."
+        cancelLabel="Voltar ao treino"
+        confirmLabel="Finalizar"
+        onCancel={() => setConfirmingFinish(false)}
+        onConfirm={() => void finish()}
       />
     </Screen>
   );
@@ -314,10 +422,13 @@ export default function SessionScreen() {
  * dado, nao frases — o §8 do brief ja pedia substantivo + dado.
  */
 const SOURCE_LABEL: Record<ItemSource, string> = {
-  edited: 'ajustado',
-  lastActual: 'última vez',
-  plan: 'do plano',
+  edited: 'editado por você',
+  lastActual: 'igual à última vez',
+  plan: 'do seu plano',
 };
+
+/** Altura do `Button` — a barra de finalizar e o aviso de desfazer se empilham por ela. */
+const FOOTER_HEIGHT = 54;
 
 /**
  * O volume de UM exercicio a partir do rascunho que esta na tela — o mesmo
@@ -368,6 +479,7 @@ function useWriteBehind<T>(perform: (value: T) => Promise<void>) {
   const pending = useRef<{ value: T } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inFlight = useRef(false);
+  const current = useRef<Promise<void> | null>(null);
   const performRef = useRef(perform);
   performRef.current = perform;
 
@@ -382,11 +494,23 @@ function useWriteBehind<T>(perform: (value: T) => Promise<void>) {
 
     pending.current = null;
     inFlight.current = true;
-    void performRef.current(next.value).finally(() => {
+    current.current = performRef.current(next.value).finally(() => {
       inFlight.current = false;
       if (pending.current) flush();
     });
   }, []);
+
+  /**
+   * Grava agora o que estiver pendente e so resolve quando nao sobrar nada —
+   * nem na fila, nem em voo. E o que o "Finalizar treino" espera.
+   */
+  const settle = useCallback(async () => {
+    flush();
+    while (inFlight.current || pending.current) {
+      if (current.current) await current.current;
+      flush();
+    }
+  }, [flush]);
 
   const schedule = useCallback(
     (value: T) => {
@@ -418,7 +542,7 @@ function useWriteBehind<T>(perform: (value: T) => Promise<void>) {
     pending.current = null;
   }, []);
 
-  return { schedule, flush, discard };
+  return { schedule, flush, discard, settle };
 }
 
 type ItemSource = 'edited' | 'lastActual' | 'plan';
@@ -490,10 +614,12 @@ type CardProps = {
   onDraft: (exerciseId: string, done: boolean, volume: number) => void;
   /** Para quando a LISTA muda (exercicio removido), nao os numeros dele. */
   onStructuralChange: () => void;
-  /** "segunda" — para o menu dizer de qual dia o exercicio sai. */
-  weekday: string;
+  /** "toda segunda" — para o menu dizer de qual dia o exercicio sai. */
+  everyDay: string;
   /** "Pular hoje". Quem cuida do "Desfazer" e a tela, nao o card que some. */
   onSkip: (sessionId: string, item: SessionExercise) => void;
+  /** Entrega a tela um jeito de esperar as escritas pendentes deste card. */
+  registerSettle: (key: string, settle: (() => Promise<void>) | null) => void;
 };
 
 const ExerciseCard = memo(
@@ -508,10 +634,11 @@ const ExerciseCard = memo(
   // referencia aqui e correto — ver `reportDraft`/`reloadStable`.
   (prev, next) =>
     prev.sessionId === next.sessionId &&
-    prev.weekday === next.weekday &&
+    prev.everyDay === next.everyDay &&
     prev.onDraft === next.onDraft &&
     prev.onStructuralChange === next.onStructuralChange &&
     prev.onSkip === next.onSkip &&
+    prev.registerSettle === next.registerSettle &&
     sameSessionExercise(prev.item, next.item),
 );
 
@@ -556,11 +683,11 @@ async function removeFromPlan(sessionId: string, item: SessionExercise): Promise
 function ExerciseMenu({
   item,
   sessionId,
-  weekday,
+  everyDay,
   onSkip,
   onStructuralChange,
   beforeLeave,
-}: Pick<CardProps, 'item' | 'sessionId' | 'weekday' | 'onSkip' | 'onStructuralChange'> & {
+}: Pick<CardProps, 'item' | 'sessionId' | 'everyDay' | 'onSkip' | 'onStructuralChange'> & {
   beforeLeave: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -593,10 +720,10 @@ function ExerciseMenu({
             ? [
                 {
                   label: 'Remover do plano',
-                  detail: `sai de toda ${weekday} a partir de agora`,
+                  detail: `sai de ${everyDay} a partir de agora`,
                   confirm: {
                     title: `Remover ${item.exerciseName} do plano?`,
-                    message: `Sai de toda ${weekday} a partir de agora. O que já foi registrado continua no histórico.`,
+                    message: `Sai de ${everyDay} a partir de agora. O que já foi registrado continua no histórico.`,
                     confirmLabel: 'Remover',
                   },
                   onPress: () => {
@@ -655,7 +782,7 @@ function RunExerciseCard(props: CardProps) {
    * treino dele; um engasgo de banco nao tem autoridade para revogar. Falhou, o
    * estado continua pendente e a proxima escrita leva tudo junto.
    */
-  const { schedule, discard } = useWriteBehind<{ targets: Targets; done: boolean }>(
+  const { schedule, discard, settle } = useWriteBehind<{ targets: Targets; done: boolean }>(
     useCallback(
       (value) =>
         setSessionExerciseTargets(
@@ -673,6 +800,12 @@ function RunExerciseCard(props: CardProps) {
       [sessionId, item.exerciseId, item.exerciseKind, item.exerciseName],
     ),
   );
+
+  const { registerSettle } = props;
+  useEffect(() => {
+    registerSettle(item.exerciseId, settle);
+    return () => registerSettle(item.exerciseId, null);
+  }, [registerSettle, item.exerciseId, settle]);
 
   const toggle = () => {
     // O haptico fica AQUI e nao no agendamento da escrita: o stepper tambem
@@ -751,11 +884,10 @@ function StrengthExerciseCard(props: CardProps) {
     onDraft(item.exerciseId, done, draftVolume(item.exerciseKind, done, rows, item.targets));
   }, [onDraft, item.exerciseId, item.exerciseKind, item.targets, done, rows]);
 
-  const commitRowNow = (id: string, patch: Partial<Pick<SetDraft, 'reps' | 'weightKg'>>) => {
+  const commitRowNow = (id: string, patch: Partial<Pick<SetDraft, 'reps' | 'weightKg'>>) =>
     updateSet(id, patch)
       .then(bumpData)
       .catch((error) => console.warn('[Voluma] falha ao gravar série', item.exerciseName, error));
-  };
 
   // Debounce por serie, mesmo numero (`COMMIT_DELAY`) e mesma razao do
   // `TargetsEditor`: curto o bastante para nao se perder ao sair da tela,
@@ -806,7 +938,7 @@ function StrengthExerciseCard(props: CardProps) {
    * na fila nesse meio tempo — senao sobrescreveria uma edicao mais recente do
    * usuario com o retorno de uma escrita ja velha.
    */
-  const { schedule, discard } = useWriteBehind<{ rows: SetDraft[]; done: boolean }>(
+  const { schedule, discard, settle } = useWriteBehind<{ rows: SetDraft[]; done: boolean }>(
     useCallback(
       (value) =>
         setSessionExerciseSets(
@@ -831,12 +963,43 @@ function StrengthExerciseCard(props: CardProps) {
     ),
   );
 
+  // As series editadas com o exercicio ja concluido gravam por fora do
+  // `useWriteBehind` (`scheduleRowCommit`), entao o Finalizar espera as duas
+  // filas. Os refs deixam o cadastro estavel entre renders.
+  const settleRef = useRef(settle);
+  settleRef.current = settle;
+  const commitRowRef = useRef(commitRowNow);
+  commitRowRef.current = commitRowNow;
+  const { registerSettle } = props;
+  useEffect(() => {
+    const settleAll = async () => {
+      const rowWrites = [...rowTimers.current.entries()].map(([id, timer]) => {
+        clearTimeout(timer);
+        rowTimers.current.delete(id);
+        const patch = pendingPatches.current.get(id);
+        pendingPatches.current.delete(id);
+        return patch ? commitRowRef.current(id, patch) : Promise.resolve();
+      });
+      await Promise.all([...rowWrites, settleRef.current()]);
+    };
+    registerSettle(item.exerciseId, settleAll);
+    return () => registerSettle(item.exerciseId, null);
+  }, [registerSettle, item.exerciseId]);
+
   const toggle = () => {
     confirm();
     const nextDone = !done;
     setDone(nextDone);
     schedule({ rows, done: nextDone });
   };
+
+  // O chevron gira em vez de trocar de icone: diz que o cabecalho abre, e para
+  // onde. Rotacao nao muda forma nem tamanho (§10), e `useFlag` ja passa pelo
+  // portao de "reduzir movimento".
+  const opened = useFlag(expanded);
+  const chevronStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${opened.value * 90}deg` }],
+  }));
 
   const updateRow = (index: number, patch: Partial<Pick<SetDraft, 'reps' | 'weightKg'>>) => {
     const row = rows[index];
@@ -905,11 +1068,24 @@ function StrengthExerciseCard(props: CardProps) {
             pendingPatches.current.clear();
           }}
         />
-        <Pressable style={styles.itemText} onPress={() => setExpanded((value) => !value)}>
-          <Body numberOfLines={1}>{item.exerciseName}</Body>
-          <Meta numberOfLines={1}>
-            {`${done ? 'concluído' : SOURCE_LABEL[item.source]} · ${strengthSummary(rows)}`}
-          </Meta>
+        {/* O cabecalho inteiro abre, nao so o nome — o alvo e a linha toda
+            entre o ⋯ e a caixa de concluido. */}
+        <Pressable
+          style={styles.expandable}
+          onPress={() => setExpanded((value) => !value)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded }}
+          accessibilityLabel={`${item.exerciseName}, ${expanded ? 'recolher' : 'ver'} séries`}
+        >
+          <View style={styles.itemText}>
+            <Body numberOfLines={1}>{item.exerciseName}</Body>
+            <Meta numberOfLines={1}>
+              {`${done ? 'concluído' : SOURCE_LABEL[item.source]} · ${strengthSummary(rows)}`}
+            </Meta>
+          </View>
+          <Animated.View style={chevronStyle}>
+            <ChevronRightIcon size={16} color={colors.textSecondary} />
+          </Animated.View>
         </Pressable>
 
         <CheckCell checked={done} onPress={toggle} />
@@ -1165,6 +1341,17 @@ const styles = StyleSheet.create({
   itemText: {
     flex: 1,
   },
+  expandable: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  footer: {
+    position: 'absolute',
+    left: spacing.xl,
+    right: spacing.xl,
+  },
   more: {
     // Alvo visual pequeno, alvo de toque grande (hitSlop): o ⋯ nao pode
     // disputar largura com o nome do exercicio.
@@ -1195,6 +1382,5 @@ const styles = StyleSheet.create({
   },
   addExerciseText: {
     flex: 1,
-    gap: 2,
   },
 });

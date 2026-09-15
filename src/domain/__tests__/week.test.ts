@@ -1,4 +1,4 @@
-import { addWeeks, daysSinceMonthStart, fromDateKey, lastNDays, monthGrid, nextRoutine, routineForWeekday, toDateKey, weekPlan, weekRangeLabel, weekStartKey, weekdayLabel, weekdayName, weekdayOf, weeksBetween } from '../week';
+import { addWeeks, daysSinceMonthStart, fromDateKey, lastNDays, monthGrid, nextRoutine, routineForWeekday, toDateKey, weekPlan, weekRangeLabel, weekStartKey, weekdayLabel, weekdayName, weekdayOf, weeksBetween, everyWeekday, lastWeekday } from '../week';
 import type { Routine, Weekday } from '../types';
 
 function makeRoutine(overrides: Partial<Routine> & { weekday: Weekday }): Routine {
@@ -297,5 +297,15 @@ describe('weekdayName', () => {
       'Sexta',
       'Sábado',
     ]);
+  });
+});
+
+describe('everyWeekday / lastWeekday', () => {
+  it('concorda em genero com o dia', () => {
+    expect(everyWeekday(1)).toBe('toda segunda');
+    expect(everyWeekday(6)).toBe('todo sábado');
+    expect(everyWeekday(0)).toBe('todo domingo');
+    expect(lastWeekday(5)).toBe('sexta passada');
+    expect(lastWeekday(0)).toBe('domingo passado');
   });
 });

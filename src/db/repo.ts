@@ -15,7 +15,7 @@ import type {
 } from '@/domain/types';
 import { runTargetsFromSets } from '@/domain/run';
 import { resolveTargets, targetsFromSets } from '@/domain/targets';
-import { toDateKey, weekStartKey, weekdayOf } from '@/domain/week';
+import { fromDateKey, toDateKey, weekStartKey, weekdayOf } from '@/domain/week';
 
 import { getDb } from './client';
 import type { SyncedTable } from './schema';
@@ -886,6 +886,56 @@ async function updateSkipped(
     );
     await enqueue(db, 'sessions', sessionId);
   });
+}
+
+/**
+ * "Finalizar treino": o que `finishSession` ja fazia (descartar series nunca
+ * marcadas) mais `completed_at`, que e o marcador que a home e o resultado leem.
+ *
+ * `finished_at` nao serve de marcador porque `getOrCreateSessionForDate` ja cria
+ * a sessao com ele preenchido — ver o comentario de la.
+ */
+export async function completeSession(id: string): Promise<void> {
+  await finishSession(id);
+  const db = await getDb();
+  const timestamp = now();
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      'UPDATE sessions SET completed_at = ?, updated_at = ? WHERE id = ?',
+      timestamp,
+      timestamp,
+      id,
+    );
+    await enqueue(db, 'sessions', id);
+  });
+}
+
+/**
+ * O volume do treino anterior a `dateKey` que caiu no mesmo dia da semana e
+ * levantou alguma carga. `null` se nao houver nenhum.
+ *
+ * "Levantou alguma carga" pula a segunda em que o usuario so abriu o treino e
+ * saiu: comparar contra zero diria "▲ infinito". O dia da semana e filtrado em
+ * JS e nao por `strftime('%w')`, porque `date` e a data LOCAL do usuario e o
+ * SQLite a leria como UTC.
+ */
+export async function previousVolumeSameWeekday(dateKey: string): Promise<number | null> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ date: string; volume: number }>(
+    `SELECT s.date AS date, SUM(ss.reps * ss.weight_kg) AS volume
+       FROM sessions s
+       JOIN session_sets ss
+         ON ss.session_id = s.id AND ss.done = 1 AND ss.deleted_at IS NULL
+      WHERE s.deleted_at IS NULL AND s.date < ?
+      GROUP BY s.date
+     HAVING volume > 0
+      ORDER BY s.date DESC
+      LIMIT 60`,
+    dateKey,
+  );
+  const weekday = weekdayOf(fromDateKey(dateKey));
+  const match = rows.find((row) => weekdayOf(fromDateKey(row.date)) === weekday);
+  return match ? match.volume : null;
 }
 
 export async function deleteSession(id: string): Promise<void> {
