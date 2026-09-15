@@ -26,10 +26,11 @@ import { artSlugFor } from '@/movements/library';
 import { DEFAULT_RUN_TARGETS, DEFAULT_TARGETS, ExercisePicker } from '@/ui/ExercisePicker';
 import { FloatingGlassButton } from '@/ui/FloatingGlassButton';
 import { useListMotion } from '@/ui/motion';
+import { Reveal } from '@/ui/Reveal';
 import { Header, RoundButton, Screen } from '@/ui/Screen';
 import { TargetsEditor } from '@/ui/TargetsEditor';
 import { Body, Label, Meta } from '@/ui/Text';
-import { ArrowDownIcon, ChevronLeftIcon, ChevronRightIcon, TrashIcon } from '@/ui/icons';
+import { ChevronLeftIcon, ChevronRightIcon, TrashIcon } from '@/ui/icons';
 
 /** Tempo de mao parada antes de gravar o rotulo do dia. */
 const NAME_COMMIT_DELAY = 400;
@@ -89,7 +90,7 @@ export default function DayScreen() {
       <Screen>
         <Header
           title={weekdayName(weekday)}
-          action={{ icon: <ArrowDownIcon size={20} />, onPress: () => router.back() }}
+          action={{ icon: <ChevronLeftIcon size={20} />, onPress: () => router.back() }}
         />
         <ActivityIndicator color={colors.textSecondary} />
       </Screen>
@@ -123,9 +124,12 @@ export default function DayScreen() {
     >
       <Header
         title={weekdayName(weekday)}
-        action={{ icon: <ArrowDownIcon size={20} />, onPress: () => router.back() }}
+        action={{ icon: <ChevronLeftIcon size={20} />, onPress: () => router.back() }}
       />
 
+      {/* O `Header` fica fora do fade: ele ja estava na tela durante o
+          carregamento. So o conteudo, que ate agora era um spinner, entra. */}
+      <Reveal style={styles.reveal}>
       {/* `skipEntering` so vale para a PRIMEIRA renderizacao: sem ele a lista
           inteira entraria em cascata toda vez que a tela abre. Trocar de semana
           nao remonta os itens — a `key` e o id do routine_exercise, que nao
@@ -174,6 +178,7 @@ export default function DayScreen() {
         ) : null}
       </ScrollView>
       </LayoutAnimationConfig>
+      </Reveal>
 
       <ExercisePicker
         visible={picking}
@@ -299,6 +304,8 @@ function DayNameInput({ routineId, value }: { routineId: string; value: string }
 }
 
 const styles = StyleSheet.create({
+  // Estica igual ao que o `Reveal` embrulha — sem isto o scroll fica sem altura.
+  reveal: { flex: 1 },
   content: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.lg,

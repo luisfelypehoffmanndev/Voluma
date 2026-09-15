@@ -43,6 +43,7 @@ import { relativeTime } from '@/ui/relative';
 import { Header, Screen } from '@/ui/Screen';
 import { StatNumber } from '@/ui/StatNumber';
 import { useTabBarClearance } from '@/ui/tabBar';
+import { Reveal } from '@/ui/Reveal';
 import { TabScene } from '@/ui/TabScene';
 import { Body, Label, Meta, Mono } from '@/ui/Text';
 
@@ -102,6 +103,10 @@ export default function HomeScreen() {
       <Screen>
         <Header title="Treinos" />
 
+        {/* O `Header` fica FORA do fade: ele ja estava na tela durante o
+            carregamento, e faze-lo acender de novo seria animar uma troca que
+            nao aconteceu. So o conteudo, que ate agora era um spinner, entra. */}
+        <Reveal style={styles.reveal}>
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
           showsVerticalScrollIndicator={false}
@@ -212,6 +217,7 @@ export default function HomeScreen() {
             ) : null}
           </Card>
         </ScrollView>
+        </Reveal>
       </Screen>
     </TabScene>
   );
@@ -351,6 +357,9 @@ async function nextDays(
 }
 
 const styles = StyleSheet.create({
+  // O `Reveal` entra entre o `Screen` e o `ScrollView`, entao precisa esticar
+  // igual ao que ele substitui no fluxo — sem isto o scroll fica sem altura.
+  reveal: { flex: 1 },
   content: {
     paddingHorizontal: spacing.xl,
     gap: spacing.md,
