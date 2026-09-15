@@ -46,7 +46,7 @@ export default function BodyWeightScreen() {
 
   return (
     <Screen>
-      <Header title="Peso" back="modal" />
+      <Header title="Peso" back />
 
       <View style={styles.dial}>
         <Label>Quilos</Label>

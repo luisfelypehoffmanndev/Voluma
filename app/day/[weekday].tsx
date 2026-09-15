@@ -92,7 +92,7 @@ export default function DayScreen() {
   if (error) {
     return (
       <Screen>
-        <Header title={weekdayName(weekday)} back="push" />
+        <Header title={weekdayName(weekday)} back />
         <LoadError error={error} onRetry={reload} />
       </Screen>
     );
@@ -101,7 +101,7 @@ export default function DayScreen() {
   if (loading || !data) {
     return (
       <Screen>
-        <Header title={weekdayName(weekday)} back="push" />
+        <Header title={weekdayName(weekday)} back />
         <ActivityIndicator color={colors.textSecondary} />
       </Screen>
     );
@@ -136,7 +136,7 @@ export default function DayScreen() {
         ) : null
       }
     >
-      <Header title={weekdayName(weekday)} back="push" />
+      <Header title={weekdayName(weekday)} back />
 
       {/* O `Header` fica fora do fade: ele ja estava na tela durante o
           carregamento. So o conteudo, que ate agora era um spinner, entra. */}

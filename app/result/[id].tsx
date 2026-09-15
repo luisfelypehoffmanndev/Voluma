@@ -57,7 +57,7 @@ export default function ResultScreen() {
   if (error) {
     return (
       <Screen>
-        <Header title="Resultado" back="modal" onBack={close} />
+        <Header title="Resultado" back onBack={close} />
         <LoadError error={error} onRetry={reload} />
       </Screen>
     );
@@ -66,7 +66,7 @@ export default function ResultScreen() {
   if (loading || !data) {
     return (
       <Screen>
-        <Header title="Resultado" back="modal" onBack={close} />
+        <Header title="Resultado" back onBack={close} />
         <ActivityIndicator color={colors.textSecondary} />
       </Screen>
     );
@@ -80,7 +80,7 @@ export default function ResultScreen() {
       <Header
         title="Resultado"
         subtitle={`${weekdayName(weekday)} · ${shortDate(date)}`}
-        back="modal"
+        back
         onBack={close}
       />
 

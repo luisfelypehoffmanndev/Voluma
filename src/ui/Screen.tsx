@@ -8,7 +8,7 @@ import { Ambient } from './Ambient';
 import { BlurTarget } from './blurTarget';
 import { PressableSurface } from './PressableSurface';
 import { Meta, Title } from './Text';
-import { ArrowDownIcon, ChevronLeftIcon } from './icons';
+import { ArrowRightIcon } from './icons';
 
 /**
  * Base de toda tela. O `Ambient` fica atras de tudo: e o campo de luz que as
@@ -45,15 +45,13 @@ type HeaderProps = {
   /** Linha de dado sob o titulo — "Segunda · 14 set". Nunca frase de boas-vindas. */
   subtitle?: string;
   /**
-   * Como a tela saiu, e portanto como volta:
-   * - `push` entrou da direita — volta com ‹ (dia, catalogo, biblioteca).
-   * - `modal` subiu de baixo — desce com ↓ (treino, peso, conta, resultado).
+   * Botao de voltar: uma seta para a direita, sempre no canto superior direito.
    *
-   * Mora aqui, e nao em cada tela, porque a seta tem que concordar com o
-   * movimento da transicao. Antes toda tela escolhia o proprio icone, e varias
-   * que entravam da direita saiam com uma seta para baixo.
+   * Um icone e um lugar so, em toda tela que sai — push ou modal. Antes cada
+   * tela escolhia o proprio (chevron, seta para baixo) e o lugar mudava; agora
+   * o polegar sempre acha a saida no mesmo ponto.
    */
-  back?: 'push' | 'modal';
+  back?: boolean;
   /** Quem nao e rota (o painel do `ExercisePicker`) fecha por conta propria. */
   onBack?: () => void;
   /** Acao a direita: um unico botao redondo, como nos mockups. */
@@ -61,20 +59,13 @@ type HeaderProps = {
   secondaryAction?: { icon: ReactNode; onPress: () => void; accessibilityLabel?: string };
 };
 
-/** Cabecalho de tela: voltar e titulo a esquerda, acoes redondas a direita. */
+/** Cabecalho de tela: titulo a esquerda; acoes e o voltar, redondos, a direita. */
 export function Header({ title, subtitle, back, onBack, action, secondaryAction }: HeaderProps) {
   const router = useRouter();
 
   return (
     <View style={styles.header}>
       <View style={styles.lead}>
-        {back ? (
-          <RoundButton
-            icon={back === 'push' ? <ChevronLeftIcon size={20} /> : <ArrowDownIcon size={20} />}
-            onPress={onBack ?? (() => router.back())}
-            accessibilityLabel={back === 'push' ? 'Voltar' : 'Fechar'}
-          />
-        ) : null}
         <View style={styles.title}>
           <Title numberOfLines={1}>{title}</Title>
           {subtitle ? <Meta numberOfLines={1}>{subtitle}</Meta> : null}
@@ -83,6 +74,13 @@ export function Header({ title, subtitle, back, onBack, action, secondaryAction 
       <View style={styles.actions}>
         {secondaryAction ? <RoundButton {...secondaryAction} /> : null}
         {action ? <RoundButton {...action} /> : null}
+        {back ? (
+          <RoundButton
+            icon={<ArrowRightIcon size={20} />}
+            onPress={onBack ?? (() => router.back())}
+            accessibilityLabel="Voltar"
+          />
+        ) : null}
       </View>
     </View>
   );

@@ -66,7 +66,7 @@ export default function LibraryScreen() {
 
   return (
     <Screen>
-      <Header title="Biblioteca" back="push" />
+      <Header title="Biblioteca" back />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xxl }]}
