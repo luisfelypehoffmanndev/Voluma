@@ -53,6 +53,26 @@ export function useTiming() {
 }
 
 /**
+ * Config de `withTiming` com ATRASO, para sequencias — hoje so a abertura do
+ * onboarding (ver a excecao em Design/design.md §10).
+ *
+ * Com movimento reduzido o atraso tambem zera, e nao so a duracao: uma entrada
+ * em cinco tempos com duracao 0 e atraso intacto viraria cinco saltos com
+ * pausas, que e pior que animar. Tudo aparece no primeiro quadro.
+ */
+export function useStaged() {
+  const reduceMotion = useReducedMotion();
+
+  return useCallback(
+    (delay: number, duration: number) => ({
+      delay: reduceMotion ? 0 : delay,
+      config: { duration: reduceMotion ? 0 : duration, easing: SETTLE },
+    }),
+    [reduceMotion],
+  );
+}
+
+/**
  * Um booleano virando 0..1 animado — a base de quase tudo: pressionado,
  * concluido, selecionado, aba em foco.
  *
