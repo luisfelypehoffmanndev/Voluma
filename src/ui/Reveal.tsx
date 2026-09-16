@@ -11,11 +11,16 @@ import { useTiming } from './motion';
  * uma vez.
  *
  * Era o corte mais visivel do app, e o que fazia a TROCA DE ABA parecer aspera
- * mesmo ela ja sendo animada: o `TabScene` fazia seu fade sobre um
- * `ActivityIndicator`, a consulta resolvia, e a tela inteira surgia sem
- * transicao nenhuma. O fade daqui e a continuacao natural daquele — mesma
- * curva, e `enter` porque isto e conteudo entrando no layout, nao um valor se
- * acomodando.
+ * mesmo ela ja sendo animada: a transicao entregava um `ActivityIndicator`, a
+ * consulta resolvia, e a tela inteira surgia sem transicao nenhuma. O fade
+ * daqui e a continuacao natural daquela — mesma curva, e `enter` porque isto e
+ * conteudo entrando no layout, nao um valor se acomodando.
+ *
+ * A transicao de aba em si mudou depois disto: era um fade de entrada feito a
+ * mao, que passava pelo fundo do app, e virou o cross-fade nativo do navegador
+ * (ver `useTabAnimation` em `motion.ts`). Este componente nao muda com isso —
+ * ele cobre o corte do spinner para o dado, que acontece dentro da tela e so na
+ * primeira carga.
  *
  * **E um fade so, do bloco inteiro** — deliberadamente. Animar item a item
  * seria a "cascata de tudo que entra na tela" que o §10 proibe pelo nome, e que

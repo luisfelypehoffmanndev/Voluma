@@ -5,6 +5,7 @@ import { useOnboarding } from '@/store/onboarding';
 import { colors, radius } from '@/theme/tokens';
 import { GlassSurface } from '@/ui/GlassSurface';
 import { ChartIcon, ListIcon, PersonIcon, PlayIcon } from '@/ui/icons';
+import { tabTransitionSpec, useTabAnimation } from '@/ui/motion';
 import { TabIcon } from '@/ui/TabIcon';
 import { useTabBarGeometry } from '@/ui/tabBar';
 
@@ -23,6 +24,7 @@ import { useTabBarGeometry } from '@/ui/tabBar';
 export default function TabsLayout() {
   const bar = useTabBarGeometry();
   const onboarding = useOnboarding((state) => state.status);
+  const tabAnimation = useTabAnimation();
 
   // Banco vazio: antes da home, o onboarding. O `_layout` raiz so solta o
   // splash depois de saber a resposta, entao esta troca nunca aparece na tela.
@@ -33,6 +35,18 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: false,
+        /*
+          A troca de aba e um cross-fade do proprio navegador: as duas cenas se
+          sobrepoem, uma apagando enquanto a outra acende. Ver `useTabAnimation`.
+
+          O `transitionSpec` so vai junto quando ha animacao. O navegador
+          resolve o default por parametro, e ele so vale se o valor chegar
+          `undefined` — mandar o nosso de 160ms com `animation: 'none'` tiraria
+          do usuario exatamente a instantaneidade que ele pediu ao ligar
+          "reduzir movimento".
+        */
+        animation: tabAnimation,
+        transitionSpec: tabAnimation === 'fade' ? tabTransitionSpec : undefined,
         // As duas iguais: o estado agora vem da opacidade do `TabIcon`, nao
         // da cor. Deixar o inativo em `textSecondary` aplicaria os dois
         // efeitos um sobre o outro e o icone apagado sumiria.

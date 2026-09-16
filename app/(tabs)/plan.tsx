@@ -12,7 +12,6 @@ import { PressableSurface } from '@/ui/PressableSurface';
 import { LoadError } from '@/ui/LoadError';
 import { Header, Screen } from '@/ui/Screen';
 import { useTabBarClearance } from '@/ui/tabBar';
-import { TabScene } from '@/ui/TabScene';
 import { Body, Label, Meta } from '@/ui/Text';
 import { ChevronRightIcon } from '@/ui/icons';
 
@@ -45,51 +44,49 @@ export default function PlanScreen() {
   const counts = data?.counts ?? [];
 
   return (
-    <TabScene>
-      <Screen>
-        <Header title="Plano" />
+    <Screen>
+      <Header title="Plano" />
 
-        {error ? <LoadError error={error} onRetry={reload} /> : (
-        <ScrollView
-          contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
-          showsVerticalScrollIndicator={false}
-        >
-          <Card>
-            <Label>Semana</Label>
-            {days.map((day, weekday) => {
-              const count = counts[weekday] ?? 0;
-              return (
-                <PressableSurface
-                  key={weekday}
-                  feedback="solid"
-                  style={styles.row}
-                  onPress={() => router.push({ pathname: '/day/[weekday]', params: { weekday } })}
-                  accessibilityLabel={`Editar ${weekdayName(weekday as Weekday)}`}
-                >
-                  <View style={styles.rowText}>
-                    <Body numberOfLines={1}>{weekdayName(weekday as Weekday)}</Body>
-                    <Meta>{daySummary(day?.name ?? '', count)}</Meta>
-                  </View>
-                  <ChevronRightIcon size={16} color={colors.textSecondary} />
-                </PressableSurface>
-              );
-            })}
-          </Card>
+      {error ? <LoadError error={error} onRetry={reload} /> : (
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
+        showsVerticalScrollIndicator={false}
+      >
+        <Card>
+          <Label>Semana</Label>
+          {days.map((day, weekday) => {
+            const count = counts[weekday] ?? 0;
+            return (
+              <PressableSurface
+                key={weekday}
+                feedback="solid"
+                style={styles.row}
+                onPress={() => router.push({ pathname: '/day/[weekday]', params: { weekday } })}
+                accessibilityLabel={`Editar ${weekdayName(weekday as Weekday)}`}
+              >
+                <View style={styles.rowText}>
+                  <Body numberOfLines={1}>{weekdayName(weekday as Weekday)}</Body>
+                  <Meta>{daySummary(day?.name ?? '', count)}</Meta>
+                </View>
+                <ChevronRightIcon size={16} color={colors.textSecondary} />
+              </PressableSurface>
+            );
+          })}
+        </Card>
 
-          <Card onPress={() => router.push('/catalog')}>
-            <Label>Catálogo</Label>
-            <View style={styles.row}>
-              <View style={styles.rowText}>
-                <Body style={styles.catalogCount}>{data?.exercises.length ?? 0} movimentos</Body>
-                <Meta>adicionar, apagar e organizar por grupo</Meta>
-              </View>
-              <ChevronRightIcon size={16} color={colors.textSecondary} />
+        <Card onPress={() => router.push('/catalog')}>
+          <Label>Catálogo</Label>
+          <View style={styles.row}>
+            <View style={styles.rowText}>
+              <Body style={styles.catalogCount}>{data?.exercises.length ?? 0} movimentos</Body>
+              <Meta>adicionar, apagar e organizar por grupo</Meta>
             </View>
-          </Card>
-        </ScrollView>
-        )}
-      </Screen>
-    </TabScene>
+            <ChevronRightIcon size={16} color={colors.textSecondary} />
+          </View>
+        </Card>
+      </ScrollView>
+      )}
+    </Screen>
   );
 }
 
