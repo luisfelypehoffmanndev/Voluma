@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react';
+import { Easing as RNEasing, type Animated as RNAnimated } from 'react-native';
 import {
   Easing,
   FadeIn,
@@ -33,6 +34,21 @@ import { motion } from '@/theme/tokens';
  * nada — e o que deixa `composite.test.ts` roda-lo em Node puro.
  */
 export const SETTLE = Easing.bezier(...motion.easing);
+
+/**
+ * A MESMA curva, para quem nao fala Reanimated.
+ *
+ * O `Easing.bezier` do Reanimated nao devolve uma funcao: devolve um
+ * `EasingFunctionFactory` — `{ factory: () => EasingFunction }` — que so o
+ * `withTiming` dele sabe desembrulhar. A troca de aba nao roda no Reanimated:
+ * o `transitionSpec` do bottom-tabs cai num `Animated.timing` do proprio React
+ * Native, com driver nativo, e la o `easing` precisa ser `(t) => number` puro.
+ *
+ * Isto nao e uma segunda curva. Os quatro numeros continuam morando so em
+ * `motion.easing`; o que existe em dois lugares e o RUNTIME que os resolve, que
+ * e a mesma divisao que ja separa o `SETTLE` do `animationType` do `Modal`.
+ */
+export const TAB_SETTLE = RNEasing.bezier(...motion.easing);
 
 /**
  * Config de `withTiming` ja com a curva e o gating aplicados.
@@ -144,3 +160,45 @@ export function useListMotion() {
 export function useModalAnimation(): 'none' | 'slide' {
   return useReducedMotion() ? 'none' : 'slide';
 }
+
+/**
+ * Como a troca de aba anima, atras do mesmo portao.
+ *
+ * `'fade'` e o cross-fade nativo do bottom-tabs: a aba que sai e a que entra
+ * se sobrepoem, uma apagando enquanto a outra acende. Antes disto havia um fade
+ * feito a mao (`TabScene`) que so animava a ENTRADA — a tela velha sumia no
+ * mesmo quadro e a nova subia de zero, entao o fundo do app aparecia inteiro no
+ * meio. Era a piscada.
+ *
+ * Com movimento reduzido cai para `'none'` e o navegador troca as cenas por
+ * `display`, sem opacidade nenhuma envolvida. O contrato de sempre: o estado
+ * final e o mesmo, so o caminho ate ele desaparece.
+ */
+export function useTabAnimation(): 'none' | 'fade' {
+  return useReducedMotion() ? 'none' : 'fade';
+}
+
+/**
+ * A duracao e a curva do cross-fade de aba.
+ *
+ * `motion.duration.state` e o mesmo numero que o `TabIcon` ja usa ao lado — a
+ * aba e o icone dela continuam se acomodando no mesmo tempo. Nenhum numero novo
+ * entra no orcamento.
+ *
+ * `'timing'`, nunca `'spring'`: o tipo do bottom-tabs aceita as duas e o §10
+ * proibe mola pelo nome.
+ *
+ * **Passe isto so quando houver animacao.** O navegador resolve o default por
+ * parametro — `transitionSpec = NAMED_TRANSITIONS_PRESETS[animation].transitionSpec`
+ * — e esse default so vale quando o valor chega `undefined`. Mandar este objeto
+ * junto com `animation: 'none'` substituiria o preset de duracao zero pelo
+ * nosso de 160ms, que e o oposto do que "reduzir movimento" pediu. Quem gateia
+ * e o call site, com o valor de `useTabAnimation()`.
+ */
+export const tabTransitionSpec: {
+  animation: 'timing';
+  config: Omit<RNAnimated.TimingAnimationConfig, 'toValue' | keyof RNAnimated.AnimationConfig>;
+} = {
+  animation: 'timing',
+  config: { duration: motion.duration.state, easing: TAB_SETTLE },
+};

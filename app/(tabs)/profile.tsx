@@ -16,7 +16,6 @@ import { relativeTime } from '@/ui/relative';
 import { LoadError } from '@/ui/LoadError';
 import { Header, Screen } from '@/ui/Screen';
 import { useTabBarClearance } from '@/ui/tabBar';
-import { TabScene } from '@/ui/TabScene';
 import { Body, Label, Meta } from '@/ui/Text';
 import { ChevronRightIcon, SyncIcon } from '@/ui/icons';
 
@@ -35,48 +34,46 @@ export default function ProfileScreen() {
   const latest = weights?.[0] ?? null;
 
   return (
-    <TabScene>
-      <Screen>
-        <Header title="Perfil" />
+    <Screen>
+      <Header title="Perfil" />
 
-        <ScrollView
-          contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* So o peso le o banco nesta tela; vibracao, nuvem e creditos
-              continuam funcionando mesmo se a consulta falhar. */}
-          {error ? <LoadError error={error} onRetry={reload} /> : null}
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* So o peso le o banco nesta tela; vibracao, nuvem e creditos
+            continuam funcionando mesmo se a consulta falhar. */}
+        {error ? <LoadError error={error} onRetry={reload} /> : null}
 
-          <Card onPress={() => router.push('/bodyweight')}>
-            <Label>Peso corporal</Label>
-            <View style={styles.row}>
-              <View style={styles.rowText}>
-                <Body>{latest ? `${formatWeight(latest.weightKg)} kg` : 'Registrar peso'}</Body>
-                <Meta>{latest ? relativeTime(latest.loggedAt) : 'sem registro ainda'}</Meta>
-              </View>
-              <ChevronRightIcon size={16} color={colors.textSecondary} />
+        <Card onPress={() => router.push('/bodyweight')}>
+          <Label>Peso corporal</Label>
+          <View style={styles.row}>
+            <View style={styles.rowText}>
+              <Body>{latest ? `${formatWeight(latest.weightKg)} kg` : 'Registrar peso'}</Body>
+              <Meta>{latest ? relativeTime(latest.loggedAt) : 'sem registro ainda'}</Meta>
             </View>
-          </Card>
+            <ChevronRightIcon size={16} color={colors.textSecondary} />
+          </View>
+        </Card>
 
-          <Card onPress={() => router.push('/onboarding?replay=1')}>
-            <Label>Ajuda</Label>
-            <View style={styles.row}>
-              <View style={styles.rowText}>
-                <Body>Como o Voluma funciona</Body>
-                <Meta>plano, treino e histórico em duas telas</Meta>
-              </View>
-              <ChevronRightIcon size={16} color={colors.textSecondary} />
+        <Card onPress={() => router.push('/onboarding?replay=1')}>
+          <Label>Ajuda</Label>
+          <View style={styles.row}>
+            <View style={styles.rowText}>
+              <Body>Como o Voluma funciona</Body>
+              <Meta>plano, treino e histórico em duas telas</Meta>
             </View>
-          </Card>
+            <ChevronRightIcon size={16} color={colors.textSecondary} />
+          </View>
+        </Card>
 
-          <MotionCard />
+        <MotionCard />
 
-          <SyncCard />
+        <SyncCard />
 
-          <CreditsCard />
-        </ScrollView>
-      </Screen>
-    </TabScene>
+        <CreditsCard />
+      </ScrollView>
+    </Screen>
   );
 }
 

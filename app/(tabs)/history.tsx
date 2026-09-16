@@ -7,7 +7,6 @@ import { CalendarPanel } from '@/ui/history/CalendarPanel';
 import { StatsPanel } from '@/ui/history/StatsPanel';
 import { Header, Screen } from '@/ui/Screen';
 import { Segmented } from '@/ui/Segmented';
-import { TabScene } from '@/ui/TabScene';
 
 type HistoryView = 'calendar' | 'numbers';
 
@@ -35,15 +34,13 @@ export default function HistoryScreen() {
   }, [params.view]);
 
   return (
-    <TabScene>
-      <Screen>
-        <Header title="Histórico" />
-        <View style={styles.segmented}>
-          <Segmented options={OPTIONS} value={view} onChange={setView} />
-        </View>
-        {view === 'calendar' ? <CalendarPanel /> : <StatsPanel />}
-      </Screen>
-    </TabScene>
+    <Screen>
+      <Header title="Histórico" />
+      <View style={styles.segmented}>
+        <Segmented options={OPTIONS} value={view} onChange={setView} />
+      </View>
+      {view === 'calendar' ? <CalendarPanel /> : <StatsPanel />}
+    </Screen>
   );
 }
 

@@ -47,7 +47,6 @@ import { Header, Screen } from '@/ui/Screen';
 import { StatNumber } from '@/ui/StatNumber';
 import { useTabBarClearance } from '@/ui/tabBar';
 import { Reveal } from '@/ui/Reveal';
-import { TabScene } from '@/ui/TabScene';
 import { Body, Label, Meta, Mono } from '@/ui/Text';
 
 /**
@@ -100,129 +99,123 @@ export default function HomeScreen() {
 
   if (error) {
     return (
-      <TabScene>
-        <Screen>
-          <Header title="Hoje" subtitle={todaySubtitle()} />
-          <LoadError error={error} onRetry={reload} />
-        </Screen>
-      </TabScene>
+      <Screen>
+        <Header title="Hoje" subtitle={todaySubtitle()} />
+        <LoadError error={error} onRetry={reload} />
+      </Screen>
     );
   }
 
   if (loading || !data) {
     return (
-      <TabScene>
-        <Screen>
-          <Header title="Hoje" subtitle={todaySubtitle()} />
-          <ActivityIndicator color={colors.textSecondary} />
-        </Screen>
-      </TabScene>
+      <Screen>
+        <Header title="Hoje" subtitle={todaySubtitle()} />
+        <ActivityIndicator color={colors.textSecondary} />
+      </Screen>
     );
   }
 
   const { today, upcoming, weekVolume, bodyWeight, dots, streak } = data;
 
   return (
-    <TabScene>
-      <Screen>
-        <Header title="Hoje" subtitle={todaySubtitle()} />
+    <Screen>
+      <Header title="Hoje" subtitle={todaySubtitle()} />
 
-        {/* O `Header` fica FORA do fade: ele ja estava na tela durante o
-            carregamento, e faze-lo acender de novo seria animar uma troca que
-            nao aconteceu. So o conteudo, que ate agora era um spinner, entra. */}
-        <Reveal style={styles.reveal}>
-        <ScrollView
-          contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* O card do dia deixou de ser tocavel: quem abre o treino e o botao
-              logo abaixo. Um card que as vezes e botao ensina a tocar em todo
-              card, e os outros daqui levam a outras telas. */}
-          <Card>
-            <View style={styles.todayHead}>
-              <View style={styles.todayText}>
-                <Label>{weekdayName(today.weekday).toUpperCase()}</Label>
-                <Body numberOfLines={1} style={styles.todayName}>
-                  {today.name}
-                </Body>
-              </View>
-              <ProgressRing progress={today.state.progress} value={String(today.plannedSets)} />
+      {/* O `Header` fica FORA do fade: ele ja estava na tela durante o
+          carregamento, e faze-lo acender de novo seria animar uma troca que
+          nao aconteceu. So o conteudo, que ate agora era um spinner, entra. */}
+      <Reveal style={styles.reveal}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* O card do dia deixou de ser tocavel: quem abre o treino e o botao
+            logo abaixo. Um card que as vezes e botao ensina a tocar em todo
+            card, e os outros daqui levam a outras telas. */}
+        <Card>
+          <View style={styles.todayHead}>
+            <View style={styles.todayText}>
+              <Label>{weekdayName(today.weekday).toUpperCase()}</Label>
+              <Body numberOfLines={1} style={styles.todayName}>
+                {today.name}
+              </Body>
             </View>
-
-            {today.exercises.slice(0, MAX_TODAY_ROWS).map((item) => (
-              <View key={item.id} style={styles.exerciseRow}>
-                <Body numberOfLines={1} style={styles.exerciseName}>
-                  {item.exerciseName}
-                </Body>
-                <Mono style={styles.exerciseTargets}>{targetsLabel(item)}</Mono>
-              </View>
-            ))}
-
-            {today.exercises.length > MAX_TODAY_ROWS ? (
-              <Meta style={styles.moreRow}>
-                {`+${today.exercises.length - MAX_TODAY_ROWS} exercícios`}
-              </Meta>
-            ) : null}
-
-            {today.state.kind === 'rest' ? (
-              <Meta style={styles.moreRow}>Hoje é descanso no seu plano.</Meta>
-            ) : null}
-          </Card>
-
-          <TodayAction state={today.state} onPress={openWorkout} />
-
-          <View style={styles.row}>
-            <Card style={styles.half} onPress={() => router.push('/bodyweight')}>
-              <StatNumber
-                value={bodyWeight ? formatWeight(bodyWeight.weightKg) : '—'}
-                unit="kg"
-                size={fontSize.numberSm}
-              />
-              <View style={styles.cardFoot}>
-                <Body>Peso corporal</Body>
-                <Meta>{bodyWeight ? relativeTime(bodyWeight.loggedAt) : 'sem registro'}</Meta>
-              </View>
-            </Card>
-
-            {/* Vidro normal: o accent da tela e do botao de treino. */}
-            <Card style={styles.half} onPress={() => router.push('/history?view=numbers')}>
-              <StatNumber value={formatVolume(weekVolume)} unit="kg" size={fontSize.numberSm} />
-              <View style={styles.cardFoot}>
-                <Body>Volume</Body>
-                <Meta>últimos 7 dias</Meta>
-              </View>
-            </Card>
+            <ProgressRing progress={today.state.progress} value={String(today.plannedSets)} />
           </View>
 
-          <Card>
-            <DotMatrix dots={dots} width={matrixWidth} showRecord={false} />
-            <View style={styles.matrixFoot}>
-              <ProgressRing progress={streak > 0 ? 1 : 0} value={String(streak)} size={40} />
-              <View style={styles.matrixText}>
-                <Body numberOfLines={1}>{streak === 1 ? 'dia seguido' : 'dias seguidos'}</Body>
-                <Meta>{`últimos ${MATRIX_MONTHS} meses`}</Meta>
-              </View>
+          {today.exercises.slice(0, MAX_TODAY_ROWS).map((item) => (
+            <View key={item.id} style={styles.exerciseRow}>
+              <Body numberOfLines={1} style={styles.exerciseName}>
+                {item.exerciseName}
+              </Body>
+              <Mono style={styles.exerciseTargets}>{targetsLabel(item)}</Mono>
+            </View>
+          ))}
+
+          {today.exercises.length > MAX_TODAY_ROWS ? (
+            <Meta style={styles.moreRow}>
+              {`+${today.exercises.length - MAX_TODAY_ROWS} exercícios`}
+            </Meta>
+          ) : null}
+
+          {today.state.kind === 'rest' ? (
+            <Meta style={styles.moreRow}>Hoje é descanso no seu plano.</Meta>
+          ) : null}
+        </Card>
+
+        <TodayAction state={today.state} onPress={openWorkout} />
+
+        <View style={styles.row}>
+          <Card style={styles.half} onPress={() => router.push('/bodyweight')}>
+            <StatNumber
+              value={bodyWeight ? formatWeight(bodyWeight.weightKg) : '—'}
+              unit="kg"
+              size={fontSize.numberSm}
+            />
+            <View style={styles.cardFoot}>
+              <Body>Peso corporal</Body>
+              <Meta>{bodyWeight ? relativeTime(bodyWeight.loggedAt) : 'sem registro'}</Meta>
             </View>
           </Card>
 
-          <Card>
-            <Label>Próximos</Label>
-            {upcoming.map((day) => (
-              <View key={day.weekday} style={styles.upcomingRow}>
-                <Body numberOfLines={1} style={styles.exerciseName}>
-                  {day.name}
-                </Body>
-                <Meta>{weekdayName(day.weekday)}</Meta>
-              </View>
-            ))}
-            {upcoming.length === 0 ? (
-              <Meta style={styles.moreRow}>Nenhum treino nos próximos dias.</Meta>
-            ) : null}
+          {/* Vidro normal: o accent da tela e do botao de treino. */}
+          <Card style={styles.half} onPress={() => router.push('/history?view=numbers')}>
+            <StatNumber value={formatVolume(weekVolume)} unit="kg" size={fontSize.numberSm} />
+            <View style={styles.cardFoot}>
+              <Body>Volume</Body>
+              <Meta>últimos 7 dias</Meta>
+            </View>
           </Card>
-        </ScrollView>
-        </Reveal>
-      </Screen>
-    </TabScene>
+        </View>
+
+        <Card>
+          <DotMatrix dots={dots} width={matrixWidth} showRecord={false} />
+          <View style={styles.matrixFoot}>
+            <ProgressRing progress={streak > 0 ? 1 : 0} value={String(streak)} size={40} />
+            <View style={styles.matrixText}>
+              <Body numberOfLines={1}>{streak === 1 ? 'dia seguido' : 'dias seguidos'}</Body>
+              <Meta>{`últimos ${MATRIX_MONTHS} meses`}</Meta>
+            </View>
+          </View>
+        </Card>
+
+        <Card>
+          <Label>Próximos</Label>
+          {upcoming.map((day) => (
+            <View key={day.weekday} style={styles.upcomingRow}>
+              <Body numberOfLines={1} style={styles.exerciseName}>
+                {day.name}
+              </Body>
+              <Meta>{weekdayName(day.weekday)}</Meta>
+            </View>
+          ))}
+          {upcoming.length === 0 ? (
+            <Meta style={styles.moreRow}>Nenhum treino nos próximos dias.</Meta>
+          ) : null}
+        </Card>
+      </ScrollView>
+      </Reveal>
+    </Screen>
   );
 }
 
