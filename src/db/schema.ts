@@ -14,10 +14,13 @@ export const SCHEMA_VERSION = 4;
 
 export const MIGRATIONS: readonly string[] = [
   // v1 — schema inicial
+  //
+  // Os PRAGMAs que ficavam aqui (journal_mode e foreign_keys) mudaram para o
+  // `open()`: cada migration roda dentro de uma transacao agora, e la dentro
+  // `journal_mode` da erro e `foreign_keys` vira no-op silencioso. Alem disso
+  // `foreign_keys` e por CONEXAO — no array de migrations ele valia so no boot
+  // em que esta rodou, e nunca mais.
   `
-  PRAGMA journal_mode = WAL;
-  PRAGMA foreign_keys = ON;
-
   CREATE TABLE IF NOT EXISTS exercises (
     id           TEXT PRIMARY KEY NOT NULL,
     name         TEXT NOT NULL,
@@ -214,6 +217,26 @@ export const MIGRATIONS: readonly string[] = [
   ALTER TABLE sessions ADD COLUMN completed_at TEXT;
   `,
 ];
+
+/**
+ * Os indices das migrations que ainda faltam rodar, dada a versao atual do
+ * banco.
+ *
+ * Funcao pura por ser a parte da migracao que da para testar sem abrir arquivo
+ * nenhum — e a que erra em silencio se alguem acrescentar uma migration e
+ * esquecer de subir `SCHEMA_VERSION`.
+ *
+ * Banco de versao FUTURA (usuario que voltou para uma build antiga) devolve
+ * lista vazia: rodar migration para tras nao existe, e e melhor o app tentar
+ * abrir um schema adiantado do que reaplicar DDL por cima.
+ */
+export function pendingMigrations(current: number): number[] {
+  const indices: number[] = [];
+  for (let version = Math.max(0, current); version < MIGRATIONS.length; version += 1) {
+    indices.push(version);
+  }
+  return indices;
+}
 
 /** Tabelas que participam do sync, na ordem em que devem subir (pais antes de filhos). */
 export const SYNCED_TABLES = [

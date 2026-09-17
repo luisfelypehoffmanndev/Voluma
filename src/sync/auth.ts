@@ -1,4 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
+import { makeRedirectUri } from 'expo-auth-session';
+import { getQueryParams } from 'expo-auth-session/build/QueryParams';
+import * as WebBrowser from 'expo-web-browser';
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 import { create } from 'zustand';
@@ -6,8 +9,16 @@ import { create } from 'zustand';
 import { resetDb } from '@/db/client';
 import { bumpData } from '@/store/data';
 
-import { pendingCount, sync, type SyncOutcome } from './engine';
+import {
+  inFlightSync,
+  invalidateSync,
+  pendingCount,
+  sync,
+  type SyncOutcome,
+} from './engine';
 import { isCloudConfigured, supabase } from './supabase';
+
+WebBrowser.maybeCompleteAuthSession();
 
 /**
  * Estado de conta e de sincronizacao.
@@ -19,6 +30,9 @@ import { isCloudConfigured, supabase } from './supabase';
 
 export type AuthStatus = 'loading' | 'local' | 'signedOut' | 'signedIn';
 
+/** O listener de sessao ativo, para nao acumular um por `bootstrap`. */
+let authSubscription: { unsubscribe: () => void } | null = null;
+
 type AuthState = {
   status: AuthStatus;
   email: string | null;
@@ -27,8 +41,7 @@ type AuthState = {
   pending: number;
 
   bootstrap: () => Promise<void>;
-  signIn: (email: string, password: string) => Promise<string | null>;
-  signUp: (email: string, password: string) => Promise<string | null>;
+  signInWithGoogle: () => Promise<string | null>;
   signOut: () => Promise<void>;
   runSync: () => Promise<void>;
   refreshPending: () => Promise<void>;
@@ -50,27 +63,54 @@ export const useAuth = create<AuthState>((set, get) => ({
     const { data } = await supabase.auth.getSession();
     applySession(set, data.session);
 
-    supabase.auth.onAuthStateChange((_event, session) => applySession(set, session));
+    // Desinscreve o anterior antes de assinar de novo: `bootstrap` rodando duas
+    // vezes (Fast Refresh, ou o hook montado de dois lugares) acumularia
+    // listeners pelo resto da vida do app, cada um reprocessando todo evento.
+    authSubscription?.unsubscribe();
+    authSubscription = supabase.auth.onAuthStateChange((_event, session) =>
+      applySession(set, session),
+    ).data.subscription;
 
     await get().refreshPending();
     if (data.session) void get().runSync();
   },
 
-  signIn: async (email, password) => {
+  /**
+   * Login com conta Google, unico jeito de entrar.
+   *
+   * Sem senha propria de proposito: uma senha a mais e uma senha a mais para
+   * vazar, e o app nao tem por que guardar a de ninguem.
+   */
+  signInWithGoogle: async () => {
     if (!supabase) return 'Nuvem não configurada';
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
+
+    // `voluma://`, o scheme do app.json. E o mesmo redirect no dev client e no
+    // build de producao, e o unico que precisa estar liberado no Supabase.
+    const redirectTo = makeRedirectUri();
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo, skipBrowserRedirect: true },
     });
     if (error) return translate(error.message);
-    await get().runSync();
-    return null;
-  },
 
-  signUp: async (email, password) => {
-    if (!supabase) return 'Nuvem não configurada';
-    const { error } = await supabase.auth.signUp({ email: email.trim(), password });
-    if (error) return translate(error.message);
+    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+    // Desistir nao e falha: quem fechou a janela do Google nao precisa de uma
+    // mensagem de erro na tela.
+    if (result.type !== 'success') return null;
+
+    const { params, errorCode } = getQueryParams(result.url);
+    if (errorCode) return translate(errorCode);
+
+    const { access_token, refresh_token } = params;
+    if (!access_token || !refresh_token) return 'Não foi possível entrar';
+
+    const { error: sessionError } = await supabase.auth.setSession({
+      access_token,
+      refresh_token,
+    });
+    if (sessionError) return translate(sessionError.message);
+
     await get().runSync();
     return null;
   },
@@ -78,6 +118,16 @@ export const useAuth = create<AuthState>((set, get) => ({
   signOut: async () => {
     if (!supabase) return;
     await supabase.auth.signOut();
+
+    // Pode haver um ciclo de sync no ar — o AppState dispara `runSync` sozinho
+    // quando o app volta do background, que e justamente quando alguem abre o
+    // Perfil. Esse ciclo ainda carrega o userId ANTIGO, e o INSERT do pull dele
+    // cairia DEPOIS do resetDb, deixando no aparelho exatamente os dados que o
+    // logout existe para apagar. Invalida (o pull desiste antes de escrever) e
+    // espera ele morrer.
+    invalidateSync();
+    await inFlightSync()?.catch(() => undefined);
+
     // Limpa o banco local: deixar os dados de uma conta visiveis para a
     // proxima seria pior do que perder o cache, que o pull reconstroi.
     await resetDb();
@@ -88,10 +138,17 @@ export const useAuth = create<AuthState>((set, get) => ({
   runSync: async () => {
     if (get().syncing) return;
     set({ syncing: true });
-    const outcome = await sync();
-    set({ syncing: false, lastSync: outcome });
-    if (outcome.pulled > 0) bumpData();
-    await get().refreshPending();
+    try {
+      const outcome = await sync();
+      set({ lastSync: outcome });
+      if (outcome.pulled > 0) bumpData();
+      await get().refreshPending();
+    } finally {
+      // No finally, e nao no caminho feliz: `syncing` preso em true desliga
+      // todo sync futuro, porque a primeira linha daqui e justamente
+      // `if (get().syncing) return`.
+      set({ syncing: false });
+    }
   },
 
   refreshPending: async () => {
@@ -133,10 +190,6 @@ export function useSyncLifecycle(): void {
 
 /** Mensagens do Supabase sao em ingles e tecnicas demais para uma tela de login. */
 function translate(message: string): string {
-  if (message.includes('Invalid login credentials')) return 'E-mail ou senha incorretos';
-  if (message.includes('already registered')) return 'Esse e-mail já tem conta';
-  if (message.includes('Password should be')) return 'A senha precisa de ao menos 6 caracteres';
-  if (message.includes('Unable to validate email')) return 'E-mail inválido';
   if (message.toLowerCase().includes('network')) return 'Sem conexão';
   return message;
 }

@@ -139,11 +139,22 @@ begin
   ]
   loop
     execute format('drop policy if exists own_rows on public.%I', target);
+    -- `(select auth.uid())` e nao `auth.uid()` direto: dentro de subquery
+    -- escalar o Postgres avalia UMA vez por query (InitPlan) em vez de uma vez
+    -- por linha. Com um usuario nao se nota; com a academia inteira e
+    -- session_sets crescendo uma linha por serie de cada treino de cada pessoa,
+    -- passa a pesar em todo select.
+    --
+    -- `to authenticated` nao e o que protege (com anon, auth.uid() e null e
+    -- `null = user_id` ja nega) — e o que evita avaliar a policy a toa em
+    -- request anonimo. Quem protege continua sendo o par using/with check: o
+    -- `with check` e o que impede reatribuir user_id para outra pessoa.
     execute format(
       'create policy own_rows on public.%I
          for all
-         using (auth.uid() = user_id)
-         with check (auth.uid() = user_id)',
+         to authenticated
+         using ((select auth.uid()) = user_id)
+         with check ((select auth.uid()) = user_id)',
       target
     );
   end loop;

@@ -1,7 +1,7 @@
 # Voluma
 
-App de academia minimalista para uso pessoal. Expo (iOS + Android), testável no
-Expo Go. Interface em português, estética definida em [`Design/design.md`](Design/design.md).
+App de academia minimalista. Expo (iOS + Android). Interface em português,
+estética definida em [`Design/design.md`](Design/design.md).
 
 ## Rodar
 
@@ -10,8 +10,10 @@ npm install
 npx expo start
 ```
 
-Leia o QR code com o Expo Go. Nenhum build nativo é necessário — todas as
-dependências são JS puro ou já vêm embarcadas no Expo Go.
+Leia o QR code com o Expo Go. O app inteiro funciona ali — **menos o login com
+Google**, que precisa do scheme `voluma://` registrado e por isso exige dev
+client (`eas build --profile development`) ou `npx expo run:android` /
+`npx expo run:ios`. Sem login, o app roda 100% local, que é o modo padrão.
 
 ```bash
 npm test        # domínio (volume, semana, streak) e a conta do vidro
@@ -68,16 +70,34 @@ Sem `.env`, o app roda inteiro offline e não mostra login. Para ligar backup e
 sincronização entre aparelhos:
 
 1. Crie um projeto em [supabase.com](https://supabase.com).
-2. **Authentication → Providers**: deixe apenas Email e **desative "Confirm
-   email"**, senão o primeiro login trava esperando confirmação.
-3. **SQL Editor**: rode [`supabase/schema.sql`](supabase/schema.sql) inteiro.
+2. **SQL Editor**: rode [`supabase/schema.sql`](supabase/schema.sql) inteiro.
    Ele cria as tabelas, os índices e o RLS.
+3. Configure o login com Google (abaixo).
 4. Copie `.env.example` para `.env` e preencha URL e anon key
    (**Project Settings → Data API**).
 5. Reinicie o `expo start` — variáveis `EXPO_PUBLIC_*` entram no bundle em
    tempo de build, não em tempo de execução.
-6. No app: **Perfil → Nuvem → Entrar**, e use "Criar conta com este e-mail"
-   na primeira vez.
+6. No app: **Perfil → Nuvem → Entrar → Continuar com Google**.
+
+### Login com Google
+
+O app não tem senha própria — entrar é sempre com conta Google, resolvida pelo
+provider OAuth do Supabase. Uma senha a menos para guardar e para vazar.
+
+1. No [Google Cloud Console](https://console.cloud.google.com/apis/credentials),
+   crie uma credencial **OAuth client ID** do tipo **Web application**. Em
+   "Authorized redirect URIs", cole a URL de callback que o Supabase mostra no
+   passo seguinte.
+2. No Supabase: **Authentication → Providers → Google**, ative e cole o
+   **Client ID** e o **Client Secret** do passo 1.
+3. **Authentication → URL Configuration → Redirect URLs**: adicione
+   `voluma://`. É o `scheme` do `app.json`, e é o único caminho de volta que
+   precisa estar liberado — não muda por build nem por aparelho.
+
+**Não funciona no Expo Go**: o scheme `voluma://` não está registrado lá, então
+o Google não tem como devolver a sessão ao app. Use o dev client
+(`eas build --profile development`) ou `npx expo run:android` /
+`npx expo run:ios`.
 
 A anon key é pública por design. O que protege os dados é o RLS: cada linha
 carrega `user_id` e a policy só libera `auth.uid() = user_id`.
