@@ -1,41 +1,33 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { useAuth } from '@/sync/auth';
-import { colors, fontSize, fonts, radius, spacing, surfaces } from '@/theme/tokens';
+import { colors, fontSize, radius, spacing, surfaces } from '@/theme/tokens';
 import { PressableSurface } from '@/ui/PressableSurface';
+import { GoogleIcon } from '@/ui/icons';
 import { Header, Screen } from '@/ui/Screen';
-import { Body, Label, Meta } from '@/ui/Text';
+import { Body, Meta } from '@/ui/Text';
 
 /**
- * Login por e-mail e senha.
+ * Login com conta Google.
  *
  * A tela nao bloqueia o app: quem nao entra continua usando tudo local. Por
  * isso ela e alcancada pelo Perfil, e nao imposta no boot.
+ *
+ * Um botao so, sem formulario: nao ha senha propria para digitar.
  */
 export default function LoginScreen() {
   const router = useRouter();
-  const signIn = useAuth((state) => state.signIn);
-  const signUp = useAuth((state) => state.signUp);
+  const signInWithGoogle = useAuth((state) => state.signInWithGoogle);
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const submit = async (mode: 'in' | 'up') => {
+  const submit = async () => {
     setBusy(true);
     setError(null);
-    const result = mode === 'in' ? await signIn(email, password) : await signUp(email, password);
+    const result = await signInWithGoogle();
     setBusy(false);
 
     if (result) {
@@ -49,36 +41,10 @@ export default function LoginScreen() {
     <Screen>
       <Header title="Conta" back />
 
-      <KeyboardAvoidingView
-        behavior={Platform.select({ ios: 'padding', default: undefined })}
-        style={styles.body}
-      >
-        <View style={styles.field}>
-          <Label>E-mail</Label>
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-            textContentType="emailAddress"
-            placeholder="voce@exemplo.com"
-            placeholderTextColor={colors.textSecondary}
-            style={styles.input}
-          />
-        </View>
-
-        <View style={styles.field}>
-          <Label>Senha</Label>
-          <TextInput
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            textContentType="password"
-            placeholder="••••••••"
-            placeholderTextColor={colors.textSecondary}
-            style={styles.input}
-          />
+      <View style={styles.body}>
+        <View style={styles.intro}>
+          <Body>Entrar com o Google</Body>
+          <Meta>backup e segundo aparelho · seus treinos continuam no aparelho</Meta>
         </View>
 
         {/* Erro em texto branco, nao em vermelho: o brief proibe segunda cor. */}
@@ -86,22 +52,21 @@ export default function LoginScreen() {
 
         <PressableSurface
           disabled={busy}
-          onPress={() => submit('in')}
+          onPress={submit}
           pressedOpacity={0.8}
           borderRadius={radius.pill}
           style={styles.primary}
         >
           {busy ? (
-            <ActivityIndicator color={colors.bg} />
+            <ActivityIndicator color={colors.textPrimary} />
           ) : (
-            <Body style={styles.primaryLabel}>Entrar</Body>
+            <View style={styles.primaryContent}>
+              <GoogleIcon size={18} />
+              <Body>Continuar com Google</Body>
+            </View>
           )}
         </PressableSurface>
-
-        <Pressable disabled={busy} onPress={() => submit('up')} style={styles.secondary}>
-          <Meta>Criar conta com este e-mail</Meta>
-        </Pressable>
-      </KeyboardAvoidingView>
+      </View>
     </Screen>
   );
 }
@@ -112,19 +77,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     gap: spacing.lg,
   },
-  field: {
+  intro: {
     gap: spacing.sm,
-  },
-  input: {
-    height: 52,
-    paddingHorizontal: spacing.lg,
-    backgroundColor: surfaces.raised,
-    borderRadius: radius.inner,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    fontFamily: fonts.sans,
-    fontSize: fontSize.bodyLg,
-    color: colors.textPrimary,
+    marginTop: spacing.xl,
   },
   error: {
     fontSize: fontSize.body,
@@ -132,16 +87,16 @@ const styles = StyleSheet.create({
   primary: {
     height: 54,
     borderRadius: radius.pill,
-    backgroundColor: colors.textPrimary,
+    backgroundColor: surfaces.raised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: spacing.sm,
   },
-  primaryLabel: {
-    color: colors.bg,
-  },
-  secondary: {
+  primaryContent: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.md,
+    gap: spacing.sm,
   },
 });

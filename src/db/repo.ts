@@ -17,6 +17,7 @@ import { runTargetsFromSets } from '@/domain/run';
 import { resolveTargets, targetsFromSets } from '@/domain/targets';
 import { fromDateKey, toDateKey, weekStartKey, weekdayOf } from '@/domain/week';
 
+import { pickCanonicalRun, RUN_EXERCISE_NAME } from './canonical';
 import { getDb } from './client';
 import type { SyncedTable } from './schema';
 import {
@@ -134,20 +135,18 @@ export async function createExercise(
  * inventar um uuid em SQL puro, e porque assim ela some de vez se o usuario
  * apagar — sem reaparecer no proximo boot.
  *
- * O desempate por nome existe porque `kind = 'run'` deixou de ser exclusivo da
- * corrida: a biblioteca (`src/movements/library.ts`) tambem cria caminhada,
- * bicicleta e remo assim, que sao os movimentos medidos em distancia e tempo.
- * Sem ele, quem adicionasse a caminhada primeiro veria o botao de corrida
- * colocar caminhada no dia.
+ * A escolha entre os candidatos fica em `pickCanonicalRun`, que e pura e
+ * testavel: o SQL traz os medidos em distancia e tempo (um punhado de linhas,
+ * sem custo em trazer todas) e a regra de qual deles e a corrida mora la.
  */
 export async function ensureRunExercise(): Promise<Exercise> {
   const db = await getDb();
-  const existing = await db.getFirstAsync<ExerciseRow>(
-    `SELECT * FROM exercises WHERE kind = 'run' AND deleted_at IS NULL
-     ORDER BY (name = 'Corrida') DESC, updated_at, id LIMIT 1`,
+  const candidates = await db.getAllAsync<ExerciseRow>(
+    `SELECT * FROM exercises WHERE kind = 'run' AND deleted_at IS NULL`,
   );
+  const existing = pickCanonicalRun(candidates);
   if (existing) return toExercise(existing);
-  return createExercise('Corrida', 'Cardio', 'run');
+  return createExercise(RUN_EXERCISE_NAME, 'Cardio', 'run');
 }
 
 /**

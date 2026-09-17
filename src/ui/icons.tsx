@@ -229,6 +229,25 @@ export function PersonIcon(props: IconProps) {
   );
 }
 
+/**
+ * O "G" do Google, em cor unica.
+ *
+ * Monocromatico e nao a marca colorida: o arquivo inteiro e outline sem
+ * preenchimento colorido (§ do brief), e a variante mono e justamente a que o
+ * guia de marca do Google permite sobre botao escuro. O desenho e preenchido
+ * porque a marca e um glifo, nao um traco — e a unica excecao do arquivo.
+ */
+export function GoogleIcon({ size = 22, color = colors.textPrimary }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path
+        d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12s3.36-7.27 7.19-7.27c3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.56 2 12.19 2C6.42 2 2.03 6.8 2.03 12c0 5.05 4.13 10 10.16 10 5.35 0 9.25-3.67 9.25-9.09 0-1.15-.15-1.81-.15-1.81Z"
+        fill={color}
+      />
+    </Svg>
+  );
+}
+
 export function SyncIcon(props: IconProps) {
   const { size, common } = base(props);
   return (

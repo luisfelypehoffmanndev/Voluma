@@ -1,6 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 
-import { MIGRATIONS, SCHEMA_VERSION } from './schema';
+import { MIGRATIONS, pendingMigrations } from './schema';
 
 /**
  * Abertura unica do banco local.
@@ -16,14 +16,33 @@ const DB_NAME = 'cleangym.db';
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
 export function getDb(): Promise<SQLite.SQLiteDatabase> {
-  dbPromise ??= open();
+  // A promise fica cacheada para que chamadas concorrentes compartilhem a mesma
+  // abertura — mas uma REJEITADA nao pode ficar. Sem limpar, toda chamada
+  // futura receberia a mesma falha, e o app so voltaria a abrir o banco se
+  // fosse fechado e reaberto, mesmo que a causa tenha sido passageira.
+  dbPromise ??= open().catch((error: unknown) => {
+    dbPromise = null;
+    throw error;
+  });
   return dbPromise;
 }
 
 async function open(): Promise<SQLite.SQLiteDatabase> {
-  const db = await SQLite.openDatabaseAsync(DB_NAME);
+  // `serializeTransactions` ANTES de migrar: a migracao agora roda dentro de
+  // transacao, e precisa da versao corrigida daqui, nao da da biblioteca (o
+  // porque esta documentado em `serializeTransactions`). Trocar um metodo e
+  // devolver o mesmo objeto e seguro neste ponto — `dbPromise` ainda nao
+  // resolveu, entao ninguem mais alcanca este banco.
+  const db = serializeTransactions(await SQLite.openDatabaseAsync(DB_NAME));
+
+  // Fora de qualquer transacao, e por isso sairam da migration v1: o SQLite
+  // recusa trocar `journal_mode` dentro de uma, e `foreign_keys` vira no-op
+  // la dentro. `journal_mode` fica gravado no arquivo (reaplicar e barato);
+  // `foreign_keys` e por conexao e precisa ser reaplicado toda abertura.
+  await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
+
   await migrate(db);
-  return serializeTransactions(db);
+  return db;
 }
 
 /**
@@ -132,16 +151,66 @@ const delay = (ms: number): Promise<void> =>
     setTimeout(resolve, ms);
   });
 
+/**
+ * Aplica as migrations que faltam, UMA TRANSACAO POR MIGRATION, com o
+ * `user_version` gravado dentro dela.
+ *
+ * O que isso compra: no SQLite o DDL e transacional (`ALTER TABLE`,
+ * `CREATE INDEX`, ate o `CREATE TEMP TABLE` da v2 fazem rollback) e o
+ * `user_version` mora no header do arquivo, que e journaled como qualquer
+ * pagina. Entao ou a migration inteira entra e a versao sobe junto, ou nada
+ * entra. Antes disto, o `user_version` so era gravado depois do loop inteiro:
+ * o SO matando o app no meio — coisa rotineira em celular — deixava o schema
+ * adiantado com o header em zero, e no boot seguinte a v3 reaplicava
+ * `ALTER TABLE exercises ADD COLUMN kind` e falhava com "duplicate column
+ * name" para sempre. O app simplesmente nao abria mais o banco.
+ */
 async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
   const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
-  const current = row?.user_version ?? 0;
+  const current = (row?.user_version ?? 0) || (await detectVersion(db));
 
-  if (current >= SCHEMA_VERSION) return;
-
-  for (let version = current; version < MIGRATIONS.length; version += 1) {
-    await db.execAsync(MIGRATIONS[version]);
+  for (const version of pendingMigrations(current)) {
+    await db.withTransactionAsync(async () => {
+      await db.execAsync(MIGRATIONS[version]);
+      await db.execAsync(`PRAGMA user_version = ${version + 1}`);
+    });
   }
-  await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+}
+
+/**
+ * A versao deduzida do proprio schema, para os bancos que o bug antigo deixou
+ * pelo caminho: header em zero com tabelas e colunas de versoes posteriores ja
+ * aplicadas. Sem esta ponte eles continuariam travados mesmo depois da
+ * correcao acima, porque a migration recomecaria do zero e falharia igual.
+ *
+ * So roda quando o header diz zero, que e ou banco novo (devolve zero, nada
+ * mudou) ou banco daquele acidente. Imperfeita apenas para quem morreu no meio
+ * da v2: a deduplicacao de rotinas e pulada, o que e cosmetico e nao impede o
+ * app de abrir.
+ */
+async function detectVersion(db: SQLite.SQLiteDatabase): Promise<number> {
+  if (!(await hasTable(db, 'exercises'))) return 0;
+  if (!(await hasTable(db, 'week_targets'))) return 1;
+  if (!(await hasColumn(db, 'exercises', 'kind'))) return 2;
+  if (!(await hasColumn(db, 'sessions', 'completed_at'))) return 3;
+  return 4;
+}
+
+async function hasTable(db: SQLite.SQLiteDatabase, table: string): Promise<boolean> {
+  const row = await db.getFirstAsync<{ name: string }>(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+    table,
+  );
+  return row != null;
+}
+
+async function hasColumn(
+  db: SQLite.SQLiteDatabase,
+  table: string,
+  column: string,
+): Promise<boolean> {
+  const columns = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`);
+  return columns.some((item) => item.name === column);
 }
 
 /** Apaga tudo — usado ao trocar de conta, para nao misturar dados de usuarios. */
