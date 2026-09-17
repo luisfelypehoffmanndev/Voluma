@@ -1,6 +1,6 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { BackHandler, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { createPushPullLegs, startEmpty } from '@/db/onboarding';
@@ -80,6 +80,27 @@ export default function OnboardingScreen() {
       setSaving(false);
     }
   };
+
+  /**
+   * O voltar do Android (botao ou gesto) anda um passo, como o ‹ da tela.
+   *
+   * Os passos sao estado interno, nao rotas, entao o voltar do sistema agia na
+   * navegacao inteira: na revisao pelo Perfil fechava tudo de uma vez, e na
+   * primeira abertura — em que o onboarding e a unica tela da pilha — mandava
+   * o app para segundo plano no meio da escolha. No passo 0 da primeira
+   * abertura o gesto e engolido (`true`): so o botao decide quando ela termina.
+   */
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (step > 0) {
+        setStep(step - 1);
+        return true;
+      }
+      // Na revisao, sair e legitimo: o Perfil esta atras.
+      return !replay;
+    });
+    return () => subscription.remove();
+  }, [step, replay]);
 
   const toggleDay = (weekday: Weekday) =>
     setDays((current) =>
