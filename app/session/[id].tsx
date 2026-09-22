@@ -725,7 +725,7 @@ function ExerciseMenu({
         actions={[
           {
             label: 'Pular hoje',
-            detail: 'só neste treino · o plano não muda',
+            detail: 'só neste treino, o plano não muda',
             onPress: () => {
               beforeLeave();
               onSkip(sessionId, item);

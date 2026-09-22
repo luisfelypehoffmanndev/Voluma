@@ -8,6 +8,7 @@ import { create } from 'zustand';
 
 import { resetDb } from '@/db/client';
 import { bumpData } from '@/store/data';
+import { useFriends } from '@/store/friends';
 import { useProfile } from '@/store/profile';
 
 import {
@@ -140,6 +141,7 @@ export const useAuth = create<AuthState>((set, get) => ({
     await resetDb();
     bumpData();
     useProfile.getState().clear();
+    useFriends.getState().clear();
     set({
       status: 'signedOut',
       email: null,
@@ -187,10 +189,16 @@ function applySession(
     displayName: (user?.user_metadata?.full_name as string | undefined) ?? null,
   });
 
-  // O perfil e remoto e so existe com conta: entra junto com a sessao e sai
-  // junto com ela, senao o handle de uma conta fica na tela para a proxima.
-  if (user) void useProfile.getState().load(user.id);
-  else useProfile.getState().clear();
+  // Perfil e amigos sao remotos e so existem com conta: entram junto com a
+  // sessao e saem junto com ela, senao o handle e a lista de amigos de uma
+  // conta ficam na tela para a proxima pessoa que entrar no aparelho.
+  if (user) {
+    void useProfile.getState().load(user.id);
+    void useFriends.getState().load();
+  } else {
+    useProfile.getState().clear();
+    useFriends.getState().clear();
+  }
 }
 
 /**

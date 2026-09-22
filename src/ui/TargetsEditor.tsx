@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 
 import { formatDistance, formatPace } from '@/domain/run';
+import { formatWeight } from '@/domain/volume';
 import type { ExerciseKind, Targets } from '@/domain/types';
 import { colors, spacing } from '@/theme/tokens';
 
@@ -16,9 +17,6 @@ import { Meta } from './Text';
  *  para o proprio debounce por serie — o mesmo motivo de existir, so que um
  *  timer por linha em vez de um so para o exercicio inteiro. */
 export const COMMIT_DELAY = 400;
-
-const formatWeight = (value: number): string =>
-  Number.isInteger(value) ? String(value) : value.toFixed(1).replace('.', ',');
 
 /** Respiro entre a figura e o que vem dos dois lados dela. */
 const FIGURE_GAP = spacing.md;
@@ -197,6 +195,7 @@ export function TargetsEditor({
             max={600}
             suffix="min"
             editable
+            integer
             onChange={(durationMin) => change({ durationMin })}
           />
 
@@ -232,6 +231,8 @@ export function TargetsEditor({
           value={targets.sets}
           min={1}
           max={12}
+          editable
+          integer
           onChange={(sets) => change({ sets })}
         />
         <Stepper
@@ -241,6 +242,8 @@ export function TargetsEditor({
           value={targets.reps}
           min={1}
           max={100}
+          editable
+          integer
           onChange={(reps) => change({ reps })}
         />
         <Stepper

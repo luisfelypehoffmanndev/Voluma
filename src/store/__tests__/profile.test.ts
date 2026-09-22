@@ -15,7 +15,14 @@ const sync = jest.requireMock('@/sync/profile') as {
 };
 
 function makeProfile(overrides: Partial<Profile> = {}): Profile {
-  return { id: 'u1', handle: 'luis', age: null, trainingYears: null, ...overrides };
+  return {
+    id: 'u1',
+    handle: 'luis',
+    age: null,
+    trainingYears: null,
+    sharesStats: false,
+    ...overrides,
+  };
 }
 
 beforeEach(() => {

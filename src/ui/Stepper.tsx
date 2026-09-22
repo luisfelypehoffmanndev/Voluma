@@ -38,10 +38,17 @@ type Props = {
    */
   layout?: 'stacked' | 'row';
   /**
-   * Deixa o numero tocavel para digitar direto. Opt-in: so faz sentido onde o
-   * salto pode ser grande (carga), nunca em reps, onde o passo unico ja resolve.
+   * Deixa o numero tocavel para digitar direto, para quando digitar e mais
+   * rapido que contar toques — um numero especifico em mente, ou um salto
+   * grande (carga).
    */
   editable?: boolean;
+  /**
+   * O valor so faz sentido inteiro (series, reps, idade, anos). Troca o
+   * teclado decimal pelo numerico e trunca o que for digitado, em vez de
+   * arredondar em duas casas como um peso ou uma distancia.
+   */
+  integer?: boolean;
   /**
    * Largura do rotulo, medida, so no layout `row`.
    *
@@ -51,19 +58,28 @@ type Props = {
    * longo de cada modalidade e com a fonte do sistema.
    */
   onLabelWidth?: (width: number) => void;
-  onChange: (value: number) => void;
+  /**
+   * `source` diz de onde veio a mudanca: `'step'` e um toque no + ou no -,
+   * `'type'` e um numero digitado. So importa para quem, como o perfil, precisa
+   * tratar os dois de um jeito diferente (ver `land()` em `ProfileForm.tsx`) —
+   * a maioria dos usos ignora o segundo argumento.
+   */
+  onChange: (value: number, source: 'step' | 'type') => void;
 };
 
 /**
- * Ajuste de reps/peso por toque, sem teclado.
+ * Ajuste de reps/peso por toque, sem teclado — com a opcao de digitar.
  *
  * Teclado no meio do treino e o pior caso do app: cobre metade da tela, exige
  * precisao com a mao suada e derruba o foco. Botoes grandes com hitSlop
- * resolvem 95% dos ajustes reais, que sao de um passo por vez.
+ * resolvem a maioria dos ajustes reais, que sao de um passo por vez.
  *
- * Os outros 5% sao o primeiro valor de uma carga: sair de 0 para 100kg de 2,5
- * em 2,5 sao 40 toques. Para esses, `editable` abre o teclado numerico ao tocar
- * no proprio numero — sem tirar os botoes de quem so quer ajustar um passo.
+ * Mas tem quem chega com um numero em mente — 45 anos, 8 series — e digitar
+ * e mais rapido que contar toques, principalmente comecando de longe. Para
+ * esses, `editable` abre o teclado ao tocar no proprio numero, sem tirar os
+ * botoes de quem so quer ajustar um passo. `integer` troca o teclado decimal
+ * pelo numerico e faz o que for digitado virar numero inteiro — sem casa
+ * decimal, nunca faz sentido em series, reps, idade ou anos de treino.
  */
 export function Stepper({
   label,
@@ -75,12 +91,14 @@ export function Stepper({
   format = String,
   layout = 'stacked',
   editable = false,
+  integer = false,
   onLabelWidth,
   onChange,
 }: Props) {
   const clamp = (next: number) => Math.min(max, Math.max(min, next));
-  // Evita 62.50000000000001 ao somar 2.5 repetidas vezes.
-  const round = (next: number) => Math.round(next * 100) / 100;
+  // Inteiro trunca ("digitado 3,7 vira 3"); o resto evita 62.50000000000001 ao
+  // somar 2.5 repetidas vezes, arredondando em duas casas.
+  const round = (next: number) => (integer ? Math.trunc(next) : Math.round(next * 100) / 100);
 
   // `null` = nao esta editando. O ref anda junto porque `onSubmitEditing` e
   // `onBlur` disparam os dois no mesmo toque do "done": sem ele o segundo ainda
@@ -92,7 +110,14 @@ export function Stepper({
     setDraft(next);
   };
 
-  const startEditing = () => setBoth(String(value).replace('.', ','));
+  // O rascunho parte do valor guardado, nao do formatado: se o formato
+  // arredondasse, confirmar sem mexer gravaria outro numero. A excecao e quando
+  // a caixa nem mostra numero — o "—" da idade em branco no perfil —: ai comeca
+  // vazio, porque o valor interno por tras (-1) nao e algo que alguem deva ver.
+  const startEditing = () => {
+    const shown = format(value).replace(',', '.');
+    setBoth(Number.isFinite(Number(shown)) ? String(value).replace('.', ',') : '');
+  };
 
   const commitDraft = () => {
     const current = draftRef.current;
@@ -102,14 +127,15 @@ export function Stepper({
     const parsed = Number(current.trim().replace(',', '.'));
     // Campo vazio ou lixo digitado: mantem o valor que ja estava, nao zera.
     if (current.trim() === '' || !Number.isFinite(parsed)) return;
-    onChange(clamp(round(parsed)));
+    onChange(clamp(round(parsed)), 'type');
   };
 
   const controls = (
     <View style={styles.row}>
       <PressableSurface
+        accessibilityLabel={`Diminuir ${label.toLowerCase()}`}
         hitSlop={hitSlop}
-        onPress={() => onChange(clamp(round(value - step)))}
+        onPress={() => onChange(clamp(round(value - step)), 'step')}
         pressedOpacity={0.5}
         borderRadius={radius.pill}
         style={styles.button}
@@ -118,6 +144,7 @@ export function Stepper({
       </PressableSurface>
 
       <Pressable
+        accessibilityLabel={editable ? `Digitar ${label.toLowerCase()}` : undefined}
         onPress={editable ? startEditing : undefined}
         disabled={!editable || draft !== null}
         style={[styles.valueBox, editable && styles.valueBoxEditable]}
@@ -126,11 +153,12 @@ export function Stepper({
           <Mono style={styles.value}>{format(value)}</Mono>
         ) : (
           <TextInput
+            accessibilityLabel={label}
             value={draft}
             onChangeText={setBoth}
             onBlur={commitDraft}
             onSubmitEditing={commitDraft}
-            keyboardType="decimal-pad"
+            keyboardType={integer ? 'number-pad' : 'decimal-pad'}
             returnKeyType="done"
             selectTextOnFocus
             autoFocus
@@ -141,8 +169,9 @@ export function Stepper({
       </Pressable>
 
       <PressableSurface
+        accessibilityLabel={`Aumentar ${label.toLowerCase()}`}
         hitSlop={hitSlop}
-        onPress={() => onChange(clamp(round(value + step)))}
+        onPress={() => onChange(clamp(round(value + step)), 'step')}
         pressedOpacity={0.5}
         borderRadius={radius.pill}
         style={styles.button}

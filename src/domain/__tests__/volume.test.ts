@@ -147,4 +147,15 @@ describe('formatWeight', () => {
   it('usa virgula na fracao', () => {
     expect(formatWeight(22.5)).toBe('22,5');
   });
+
+  // Anilha de 1,25 kg: arredondar para uma casa mostraria um peso que ninguem
+  // levantou.
+  it('mostra ate duas casas, sem zero sobrando', () => {
+    expect(formatWeight(61.25)).toBe('61,25');
+    expect(formatWeight(62.5)).toBe('62,5');
+  });
+
+  it('corta o erro de ponto flutuante', () => {
+    expect(formatWeight(0.1 + 0.2)).toBe('0,3');
+  });
 });

@@ -196,3 +196,167 @@ create policy own_profile on public.profiles
   to authenticated
   using ((select auth.uid()) = id)
   with check ((select auth.uid()) = id);
+
+-- ------------------------------------------------------------ v6: amigos
+-- Amizade com aceite, e o toggle que libera os numeros.
+--
+-- A regra que organiza tudo: nada de uma pessoa aparece para outra sem DOIS
+-- consentimentos — a amizade aceita E o toggle ligado. Um so nao basta.
+
+alter table public.profiles
+  add column if not exists shares_stats boolean not null default false;
+
+-- Desligado por padrao, de proposito: opt-in. Nada e compartilhado ate alguem
+-- escolher compartilhar, que e o mesmo principio do login opcional e do "nada
+-- criado as escondidas" do onboarding.
+
+create table if not exists public.friendships (
+  requester_id uuid not null references auth.users (id) on delete cascade,
+  addressee_id uuid not null references auth.users (id) on delete cascade,
+  status       text not null check (status in ('pending', 'accepted')),
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  primary key (requester_id, addressee_id),
+  check (requester_id <> addressee_id)
+);
+
+-- Um par, uma linha, em qualquer direcao. Sem isto, duas pessoas que se pedem
+-- ao mesmo tempo criam A->B e B->A: duas amizades entre as mesmas duas
+-- pessoas, e cada uma aparece duas vezes na lista da outra.
+create unique index if not exists idx_friendship_pair on public.friendships (
+  least(requester_id::text, addressee_id::text),
+  greatest(requester_id::text, addressee_id::text)
+);
+
+create index if not exists idx_friendship_addressee
+  on public.friendships (addressee_id, status);
+
+alter table public.friendships enable row level security;
+
+-- Quatro policies, e nao uma `for all`: aqui cada verbo tem dono diferente,
+-- porque quem pede nao e quem aceita. Uma policy unica daria ao requester o
+-- poder de aceitar o proprio pedido.
+
+drop policy if exists friendship_select on public.friendships;
+create policy friendship_select on public.friendships
+  for select
+  to authenticated
+  using ((select auth.uid()) in (requester_id, addressee_id));
+
+drop policy if exists friendship_insert on public.friendships;
+create policy friendship_insert on public.friendships
+  for insert
+  to authenticated
+  with check ((select auth.uid()) = requester_id and status = 'pending');
+
+drop policy if exists friendship_update on public.friendships;
+create policy friendship_update on public.friendships
+  for update
+  to authenticated
+  using ((select auth.uid()) = addressee_id)
+  with check ((select auth.uid()) = addressee_id);
+
+-- Recusar, cancelar e desfazer sao a mesma operacao, e qualquer um dos dois
+-- lados pode faze-la: ninguem fica preso numa amizade que nao quer.
+drop policy if exists friendship_delete on public.friendships;
+create policy friendship_delete on public.friendships
+  for delete
+  to authenticated
+  using ((select auth.uid()) in (requester_id, addressee_id));
+
+-- ------------------------------------------------------------------ RPCs
+-- A policy de `profiles` e "cada um le so o seu". Ler o @handle de um amigo
+-- exige sair disso, e a escolha aqui e funcao `security definer` em vez de
+-- afrouxar o RLS: abrir `profiles` para leitura ampla exporia todo mundo a
+-- todo mundo, e uma vez aberto nao da para fechar por caso.
+
+create or replace function public.find_profile_by_handle(target text)
+returns table (id uuid, handle text)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select p.id, p.handle
+  from public.profiles p
+  where lower(p.handle) = lower(target)
+  limit 1;
+$$;
+
+revoke all on function public.find_profile_by_handle(text) from public, anon;
+grant execute on function public.find_profile_by_handle(text) to authenticated;
+
+create or replace function public.request_friendship(target_handle text)
+returns text
+language plpgsql
+security definer
+volatile
+set search_path = public
+as $$
+declare
+  me uuid := (select auth.uid());
+  target uuid;
+begin
+  if me is null then return 'unauthenticated'; end if;
+
+  select p.id into target
+  from public.profiles p
+  where lower(p.handle) = lower(target_handle)
+  limit 1;
+
+  if target is null then return 'not-found'; end if;
+  if target = me then return 'self'; end if;
+
+  -- O indice do par e quem decide se ja existe relacao, inclusive na direcao
+  -- contraria. Consultar antes nao fecharia a corrida entre duas pessoas se
+  -- pedindo no mesmo instante, so encurtaria a janela.
+  begin
+    insert into public.friendships (requester_id, addressee_id, status)
+    values (me, target, 'pending');
+  exception
+    when unique_violation then return 'already';
+  end;
+
+  return 'ok';
+end;
+$$;
+
+revoke all on function public.request_friendship(text) from public, anon;
+grant execute on function public.request_friendship(text) to authenticated;
+
+create or replace function public.list_friends()
+returns table (
+  id uuid,
+  handle text,
+  status text,
+  direction text,
+  shares_stats boolean,
+  age int,
+  training_years int
+)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select
+    p.id,
+    p.handle,
+    f.status,
+    case when f.requester_id = (select auth.uid()) then 'outgoing' else 'incoming' end,
+    p.shares_stats,
+    -- Idade e anos de treino so saem do servidor com os DOIS consentimentos.
+    -- Filtrar no cliente nao serviria: o dado ja teria atravessado a rede.
+    case when p.shares_stats and f.status = 'accepted' then p.age end,
+    case when p.shares_stats and f.status = 'accepted' then p.training_years end
+  from public.friendships f
+  join public.profiles p
+    on p.id = case
+      when f.requester_id = (select auth.uid()) then f.addressee_id
+      else f.requester_id
+    end
+  where (select auth.uid()) in (f.requester_id, f.addressee_id);
+$$;
+
+revoke all on function public.list_friends() from public, anon;
+grant execute on function public.list_friends() to authenticated;

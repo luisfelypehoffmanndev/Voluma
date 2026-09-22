@@ -333,6 +333,15 @@ export const fontSize = {
 export const hitSlop = { top: 12, bottom: 12, left: 12, right: 12 } as const;
 
 /**
+ * Quanto tempo o "Desfazer" fica na tela. Tempo de ler, achar o botao e tocar.
+ *
+ * Mora aqui, e nao no `UndoToast`, porque o store de amigos tambem precisa
+ * dele: la a escrita no servidor so sai quando esta janela fecha, e os dois
+ * relogios tem que medir a mesma coisa.
+ */
+export const UNDO_WINDOW = 5000;
+
+/**
  * Icone de aba: o estado vem de aceso/apagado, nao de duas cores.
  *
  * O §7 do brief ja define estado assim — "aceso/apagado na mesma matiz" — e

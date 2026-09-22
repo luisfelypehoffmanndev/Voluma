@@ -65,8 +65,8 @@ export default function ProfileSetupScreen() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Meta>
           {editing
-            ? 'o que seus amigos veem · idade e anos de treino são opcionais'
-            : 'seus treinos continuam seus · isto é só como amigos te acham'}
+            ? 'o que seus amigos veem, idade e anos de treino são opcionais'
+            : 'seus treinos continuam seus, isto é só como amigos te acham'}
         </Meta>
 
         <ProfileForm

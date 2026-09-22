@@ -69,7 +69,13 @@ export function formatVolume(kg: number): string {
   return String(Math.round(kg));
 }
 
-/** Peso de uma serie: "60" ou "62,5" — sem casa decimal inutil. */
+/**
+ * Peso de uma serie: "60", "62,5" ou "61,25" — sem casa decimal inutil.
+ *
+ * Ate duas casas, porque e o que o `Stepper` aceita digitado: anilha de
+ * 1,25 kg existe, e mostrar "61,3" para 61,25 poria na tela um peso que
+ * ninguem levantou.
+ */
 export function formatWeight(kg: number): string {
-  return Number.isInteger(kg) ? String(kg) : kg.toFixed(1).replace('.', ',');
+  return String(Math.round(kg * 100) / 100).replace('.', ',');
 }

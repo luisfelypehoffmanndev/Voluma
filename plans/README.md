@@ -21,8 +21,17 @@ como verificar. A ideia é resolver um de cada vez.
 | [08](08-testes-puros.md) | Testes puros das correções 01 e 02 | — | **feito** |
 | [07](07-login-google.md) | Migração do login para conta Google | decisão de produto | **feito** — testado no aparelho, login funcionando |
 | [11](11-perfil-handle.md) | Perfil público: @handle, idade e anos de treino | feature | **feito** — v5 rodada, RLS confirmado, testado no aparelho |
+| [12](12-amigos.md) | Amigos e o toggle de compartilhamento | feature | aberto — v6 rodada, RLS confirmado; falta testar com duas contas |
 
 ## Pendências fora do código
+
+Concluída em 2026-09-22:
+
+4. **Item 12** — a seção `-- v6: amigos` foi rodada no SQL Editor duas vezes
+   seguidas, sem erro. RLS confirmado com `set local role anon`: leitura de
+   `friendships` devolve lista vazia; `insert` em `friendships` e chamada a
+   `list_friends()` são rejeitados (`42501`). Falta o teste com duas contas
+   reais no aparelho.
 
 Concluída em 2026-09-21:
 

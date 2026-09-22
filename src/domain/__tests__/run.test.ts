@@ -104,6 +104,7 @@ describe('formatDistance / formatDuration', () => {
   it('distancia inteira nao ganha casa decimal', () => {
     expect(formatDistance(5)).toBe('5');
     expect(formatDistance(5.5)).toBe('5,5');
+    expect(formatDistance(5.25)).toBe('5,25');
   });
 
   it('duracao abaixo de uma hora fica em minutos', () => {

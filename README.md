@@ -32,11 +32,12 @@ leitura: nenhuma tela consulta o Supabase diretamente. Toda escrita grava
 localmente e enfileira a linha em `outbox`; o serviço de sync drena a fila
 quando há rede. É o que permite registrar séries dentro da academia sem sinal.
 
-**Uma exceção, e só uma:** o perfil público (`src/sync/profile.ts`) lê e grava
-no Supabase direto. Ele não tem par no SQLite porque é dado social — o @handle
-com que amigos acham a pessoa, mais idade e anos de treino — e não tem o que
-fazer offline. Quem usa o app sem conta simplesmente não tem perfil, e não
-perde nada por isso. Tudo que é treino continua local-first.
+**Uma exceção, e só uma:** a camada social — o perfil público
+(`src/sync/profile.ts`) e os amigos (`src/sync/friends.ts`) — lê e grava no
+Supabase direto. Ela não tem par no SQLite porque é dado social — o @handle com
+que amigos acham a pessoa, idade, anos de treino e quem é amigo de quem — e não
+tem o que fazer offline. Quem usa o app sem conta simplesmente não tem perfil
+nem amigos, e não perde nada por isso. Tudo que é treino continua local-first.
 
 ```
 app/            telas (expo-router, file-based)
