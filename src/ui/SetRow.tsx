@@ -46,7 +46,16 @@ export function SetRow({ index, reps, weightKg, onChangeReps, onChangeWeight, on
         ) : null}
       </View>
 
-      <Stepper layout="row" label="REPS" value={reps} min={1} max={100} onChange={onChangeReps} />
+      <Stepper
+        layout="row"
+        label="REPS"
+        value={reps}
+        min={1}
+        max={100}
+        editable
+        integer
+        onChange={onChangeReps}
+      />
       <Stepper
         layout="row"
         label="PESO"

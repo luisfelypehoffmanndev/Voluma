@@ -22,6 +22,7 @@ export type ProfileExtras = {
 
 export type ProfilePatch = ProfileExtras & {
   handle?: string;
+  sharesStats?: boolean;
 };
 
 /** O handle pedido pertence a outra conta. */
@@ -32,6 +33,7 @@ type Row = {
   handle: string;
   age: number | null;
   training_years: number | null;
+  shares_stats: boolean;
 };
 
 export async function fetchProfile(userId: string): Promise<Profile | null> {
@@ -39,7 +41,7 @@ export async function fetchProfile(userId: string): Promise<Profile | null> {
 
   const { data, error } = await client
     .from('profiles')
-    .select('id, handle, age, training_years')
+    .select('id, handle, age, training_years, shares_stats')
     .eq('id', userId)
     .maybeSingle();
 
@@ -70,7 +72,7 @@ export async function claimHandle(
         age: extras.age ?? null,
         training_years: extras.trainingYears ?? null,
       })
-      .select('id, handle, age, training_years')
+      .select('id, handle, age, training_years, shares_stats')
       .single();
 
     if (!error) return toProfile(data as Row);
@@ -94,12 +96,13 @@ export async function updateProfile(
   if (patch.handle !== undefined) changes.handle = patch.handle;
   if (patch.age !== undefined) changes.age = patch.age;
   if (patch.trainingYears !== undefined) changes.training_years = patch.trainingYears;
+  if (patch.sharesStats !== undefined) changes.shares_stats = patch.sharesStats;
 
   const { data, error } = await client
     .from('profiles')
     .update(changes)
     .eq('id', userId)
-    .select('id, handle, age, training_years')
+    .select('id, handle, age, training_years, shares_stats')
     .single();
 
   if (error) {
@@ -115,6 +118,7 @@ function toProfile(row: Row): Profile {
     handle: row.handle,
     age: row.age,
     trainingYears: row.training_years,
+    sharesStats: row.shares_stats,
   };
 }
 

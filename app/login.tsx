@@ -56,7 +56,7 @@ export default function LoginScreen() {
       <View style={styles.body}>
         <View style={styles.intro}>
           <Body>Entrar com o Google</Body>
-          <Meta>backup e segundo aparelho · seus treinos continuam no aparelho</Meta>
+          <Meta>backup e segundo aparelho, seus treinos continuam no aparelho</Meta>
         </View>
 
         {/* Erro em texto branco, nao em vermelho: o brief proibe segunda cor. */}

@@ -132,4 +132,13 @@ export type Profile = {
   age: number | null;
   /** Ha quantos anos a pessoa treina. Respondido uma vez, nao derivado do uso. */
   trainingYears: number | null;
+  /**
+   * Libera estatisticas, idade e anos de treino para amigos aceitos.
+   *
+   * Um toggle so para tudo, e desligado por padrao. Permissao por campo
+   * multiplicaria a superficie de decisao e a de bug de privacidade; o
+   * @handle fica de fora dele, porque e o que permite reconhecer a pessoa e
+   * nao um dado de treino.
+   */
+  sharesStats: boolean;
 };

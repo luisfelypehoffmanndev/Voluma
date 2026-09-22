@@ -1,4 +1,4 @@
-import { render, screen, userEvent } from '@testing-library/react-native';
+import { fireEvent, render, screen, userEvent } from '@testing-library/react-native';
 
 import { ProfileForm } from '../ProfileForm';
 
@@ -7,6 +7,9 @@ import { ProfileForm } from '../ProfileForm';
  * que a regra do handle (dominio), o campo de texto (tela) e a recusa do banco
  * se encontram. Testar so a funcao pura deixaria de fora justamente a parte que
  * mais erra — deixar salvar o que o `check` do Postgres vai recusar.
+ *
+ * Pelo mesmo motivo cobre o `Stepper` digitavel da idade e dos anos: a regra de
+ * sair do "em branco" so existe no encontro do stepper com o formulario.
  */
 
 async function setup(overrides: Partial<React.ComponentProps<typeof ProfileForm>> = {}) {
@@ -105,5 +108,68 @@ describe('ProfileForm', () => {
     await user.press(salvar());
 
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Idade e anos de treino saem do "em branco" de dois jeitos: o "+" pousa num
+ * valor plausivel, e o numero digitado vale como foi digitado. Sem distinguir
+ * os dois, digitar 45 a partir do em branco virava 25.
+ */
+describe('idade e anos de treino', () => {
+  // Troca o texto inteiro de uma vez: no aparelho o `selectTextOnFocus` faz a
+  // primeira tecla substituir o numero antigo, e o `user.clear` da biblioteca
+  // termina com um blur que fecharia a edicao antes da digitacao.
+  async function digitar(user: ReturnType<typeof userEvent.setup>, rotulo: string, texto: string) {
+    await user.press(screen.getByLabelText(`Digitar ${rotulo.toLowerCase()}`));
+    const campoNumero = screen.getByLabelText(rotulo);
+    await fireEvent.changeText(campoNumero, texto);
+    await fireEvent(campoNumero, 'submitEditing');
+  }
+
+  it('o + a partir do em branco pousa no valor de partida', async () => {
+    const { onSubmit, user } = await setup();
+
+    await user.press(screen.getByLabelText('Aumentar idade'));
+    await user.press(salvar());
+
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ age: 25 }));
+  });
+
+  it('digitar a partir do em branco usa o numero digitado', async () => {
+    const { onSubmit, user } = await setup();
+
+    await digitar(user, 'Idade', '45');
+    await user.press(salvar());
+
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ age: 45 }));
+  });
+
+  // "Acabei de comecar" e uma resposta, nao um toque acidental no +.
+  it('zero anos de treino digitado fica zero', async () => {
+    const { onSubmit, user } = await setup();
+
+    await digitar(user, 'Anos de treino', '0');
+    await user.press(salvar());
+
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ trainingYears: 0 }));
+  });
+
+  it('trunca o que foi digitado com casa decimal', async () => {
+    const { onSubmit, user } = await setup({ initialTrainingYears: 2 });
+
+    await digitar(user, 'Anos de treino', '3,7');
+    await user.press(salvar());
+
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ trainingYears: 3 }));
+  });
+
+  it('idade abaixo do minimo volta para o em branco', async () => {
+    const { onSubmit, user } = await setup({ initialAge: 30 });
+
+    await digitar(user, 'Idade', '5');
+    await user.press(salvar());
+
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ age: null }));
   });
 });

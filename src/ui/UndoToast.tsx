@@ -2,15 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 
-import { radius, spacing } from '@/theme/tokens';
+import { radius, spacing, UNDO_WINDOW } from '@/theme/tokens';
 
 import { GlassSurface } from './GlassSurface';
 import { useFlag } from './motion';
 import { PressableSurface } from './PressableSurface';
 import { Body } from './Text';
-
-/** Quanto tempo o "Desfazer" fica na tela. Tempo de ler, achar o botao e tocar. */
-const UNDO_WINDOW = 5000;
 
 export type UndoOffer = {
   /** Muda a cada oferta, para uma segunda acao reiniciar o prazo. */

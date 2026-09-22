@@ -47,35 +47,62 @@ Primeira etapa da camada social. Decisões que valem daqui pra frente:
   atrás do mesmo toggle de compartilhamento das estatísticas, quando ele
   existir; identidade (handle) fica fora do toggle.
 
-## Amigos e comparação de estatísticas (ideia, não iniciado)
+## Amigos e o toggle de compartilhamento
 
-**Data:** 2026-09-16 (atualizado em 2026-09-21)
+**Data:** 2026-09-22
+**Status:** implementado, v6 rodada no Supabase e RLS confirmado; falta o
+teste com duas contas reais — ver [`plans/12-amigos.md`](plans/12-amigos.md)
+
+A regra que organiza tudo: **nada de uma pessoa aparece para outra sem dois
+consentimentos** — a amizade aceita *e* o toggle ligado. Um só não basta.
+
+- **Tabela `friendships`** (`requester_id`, `addressee_id`,
+  `status: pending | accepted`), com índice único sobre o par ordenado: `A→B`
+  e `B→A` nunca coexistem. Quatro policies, uma por verbo, porque quem pede
+  não é quem aceita — só o `requester` insere (e só como `pending`), só o
+  `addressee` aceita, os dois lados apagam.
+- **Aceite obrigatório**, nunca adição direta: acompanhar o treino de alguém
+  sem essa pessoa saber não pode ser possível.
+- **Busca por @handle, sempre match exato** — nunca substring ou
+  autocomplete, pra não virar diretório pesquisável da academia inteira.
+- **RPCs `security definer`, nunca RLS afrouxado.** Ler o @ de um amigo passa
+  por `list_friends()`, que devolve idade e anos de treino **só quando o
+  toggle do amigo está ligado** — o corte é no SQL, não no cliente.
+- **Um toggle só, desligado por padrão.** Cobre estatísticas, idade e anos de
+  treino juntos; o @handle fica fora dele, porque é o que permite reconhecer a
+  pessoa. Opt-in, como o resto do app.
+- **Recusar é apagar, não um status.** Guardar "recusado" deixaria o pedido
+  na tabela pra sempre e, pelo índice do par, impediria pedir de novo.
+- **Recusar, cancelar e desfazer usam "Desfazer", não "tem certeza?" — e a
+  escrita é adiada, não invertida.** O RLS acima impede a inversão: quem
+  recusou é o `addressee`, que não pode recriar o pedido; e "desfazer" o fim
+  de uma amizade viraria um pedido novo que a outra pessoa teria que aceitar
+  de novo. Então a linha some da tela na hora e o `DELETE` só sai do aparelho
+  quando a janela de 5s fecha (ou ao sair da tela / mandar o app para segundo
+  plano). "Desfazer" é não mandar nada. Quem segura o tempo é o store
+  (`src/store/friends.ts`), não a tela.
+
+## Comparação de estatísticas entre amigos (ideia, não iniciado)
+
+**Data:** 2026-09-16 (atualizado em 2026-09-22)
 **Status:** rascunho de abordagem, não implementado
 
-Conexão entre usuários pra comparar evolução na aba de Estatísticas, com
-pedido e aceite. Abordagem proposta, mantendo o app simples:
+Próximo passo depois dos amigos: comparar evolução na aba de Estatísticas.
 
-- Uma tabela nova no Supabase, `friendships` (`requester_id`, `addressee_id`,
-  `status: pending | accepted`), com RLS liberando cada linha só pros dois
-  lados do relacionamento.
-- Busca por **@handle**, sempre match exato — nunca substring ou autocomplete,
-  pra não virar diretório pesquisável da academia inteira. Via função
-  `security definer` devolvendo só `id` e `handle`, em vez de abrir `select`
-  em `profiles`.
 - **Ranking por frequência, não por carga.** Comparar volume ou carga absoluta
   entre pessoas de níveis diferentes desmotiva em vez de motivar; dias
   treinados é comparável entre iniciante e avançado. Peso corporal e carga
-  ficam visíveis no perfil individual, nunca em gráfico lado a lado.
+  ficam visíveis no perfil individual, nunca em gráfico lado a lado. A
+  ordenação já existe como função pura (`rankByFrequency`, em
+  `src/domain/friends.ts`): quem não compartilha vai para o fim sem virar zero.
 - A comparação em si **não** abre RLS das tabelas de treino pros amigos —
   isso exporia dado demais e complicaria a política de acesso. Em vez disso,
   uma função `security definer` (`friend_weekly_volume(friend_id)`) confere
-  se a amizade está aceita e devolve só o agregado (volume por dia), nunca a
-  linha crua.
-- UI: card "Amigos" no Perfil (convidar por e-mail, aceitar/recusar,
-  listar) e uma seção nova no painel de Números comparando com cada amigo
-  aceito, buscada ao vivo (sem entrar no SQLite local — é dado social,
-  só faz sentido com rede).
+  se a amizade está aceita **e o toggle ligado** e devolve só o agregado
+  (volume por dia), nunca a linha crua.
+- UI: uma seção nova no painel de Números comparando com cada amigo aceito,
+  buscada ao vivo (sem entrar no SQLite local — é dado social, só faz sentido
+  com rede).
 
-Isso mantém a superfície pequena: uma tabela + duas funções RPC, zero mudança
-no sync engine existente (`src/sync/engine.ts`), nenhuma tabela de treino
-ganha exposição a terceiros.
+Zero mudança no sync engine existente (`src/sync/engine.ts`), nenhuma tabela
+de treino ganha exposição a terceiros.

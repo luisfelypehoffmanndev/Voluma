@@ -50,9 +50,9 @@ export function formatPace(distanceKm: number, durationMin: number): string | nu
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-/** "5" ou "5,5" — distancia sem casa decimal inutil. */
+/** "5", "5,5" ou "5,25" — distancia sem casa decimal inutil, ate duas casas. */
 export function formatDistance(km: number): string {
-  return Number.isInteger(km) ? String(km) : km.toFixed(1).replace('.', ',');
+  return String(Math.round(km * 100) / 100).replace('.', ',');
 }
 
 /** "28 min" ou "1 h 12" — o mesmo formato de duracao usado no resto do app. */

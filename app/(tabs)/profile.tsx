@@ -6,6 +6,7 @@ import { listBodyWeightLogs } from '@/db/repo';
 import type { Profile } from '@/domain/types';
 import { formatWeight } from '@/domain/volume';
 import { useQuery } from '@/store/data';
+import { useFriends } from '@/store/friends';
 import { useProfile } from '@/store/profile';
 import { useAuth } from '@/sync/auth';
 import { isCloudConfigured } from '@/sync/supabase';
@@ -73,6 +74,10 @@ export default function ProfileScreen() {
 
         <PublicProfileCard />
 
+        <FriendsCard />
+
+        <SharingCard />
+
         <SyncCard />
 
         <CreditsCard />
@@ -101,7 +106,7 @@ function MotionCard() {
       <View style={styles.row}>
         <View style={styles.rowText}>
           <Body>Ao confirmar</Body>
-          <Meta>um toque ao marcar concluído · nunca ao navegar</Meta>
+          <Meta>um toque ao marcar concluído, nunca ao navegar</Meta>
         </View>
         <CheckCell
           checked={haptics}
@@ -160,7 +165,7 @@ function profileMeta({
 }): string {
   if (loading) return 'carregando…';
   // Sem cor de estado: a falha se comunica por texto, como no resto da tela.
-  if (error) return `${error} · toque para tentar de novo`;
+  if (error) return `${error}, toque para tentar de novo`;
   if (!profile) return 'é assim que seus amigos vão te achar';
 
   const traits = [
@@ -169,6 +174,84 @@ function profileMeta({
   ].filter(Boolean);
 
   return traits.length > 0 ? traits.join(' · ') : 'idade e anos de treino em branco';
+}
+
+/**
+ * Amigos: quantos sao, e quantos pedidos esperam resposta.
+ *
+ * Pedido pendente aparece no subtitulo e nao como sinal colorido — o brief
+ * proibe cor de estado, e um numero ja diz o que precisa ser dito.
+ */
+function FriendsCard() {
+  const router = useRouter();
+  const status = useAuth((state) => state.status);
+  const lists = useFriends((state) => state.lists);
+
+  if (status !== 'signedIn') return null;
+
+  return (
+    <Card onPress={() => router.push('/friends')}>
+      <Label>Amigos</Label>
+      <View style={styles.row}>
+        <View style={styles.rowText}>
+          <Body>{friendsTitle(lists.accepted.length)}</Body>
+          <Meta>{friendsMeta(lists.incoming.length)}</Meta>
+        </View>
+        <ChevronRightIcon size={16} color={colors.textSecondary} />
+      </View>
+    </Card>
+  );
+}
+
+function friendsTitle(count: number): string {
+  if (count === 0) return 'Adicionar amigos';
+  return count === 1 ? '1 amigo' : `${count} amigos`;
+}
+
+function friendsMeta(pending: number): string {
+  if (pending === 0) return 'pelo @ · com aceite dos dois lados';
+  return pending === 1 ? '1 pedido esperando você' : `${pending} pedidos esperando você`;
+}
+
+/**
+ * O toggle unico de compartilhamento.
+ *
+ * Um so para tudo — volume, treinos, idade, anos de treino — e desligado por
+ * padrao. Permissao por campo multiplicaria a superficie de decisao e a de bug
+ * de privacidade, e um padrao que compartilha sem ninguem ter escolhido seria
+ * o oposto do resto do app.
+ *
+ * O @handle NAO entra aqui: e o que permite reconhecer a pessoa, nao um dado
+ * de treino.
+ *
+ * A caixa e a mesma `CheckCell` da vibracao, nao um `Switch` — §7 proibe toggle
+ * redondo, e o app tem uma linguagem so para celula marcavel.
+ */
+function SharingCard() {
+  const status = useAuth((state) => state.status);
+  const { profile, save } = useProfile();
+
+  if (status !== 'signedIn' || !profile) return null;
+
+  return (
+    <Card>
+      <Label>Compartilhar</Label>
+      <View style={styles.row}>
+        <View style={styles.rowText}>
+          <Body>Com seus amigos</Body>
+          <Meta>
+            {profile.sharesStats
+              ? 'volume, treinos, idade e anos de treino'
+              : 'ninguém vê seus números, só o seu @'}
+          </Meta>
+        </View>
+        <CheckCell
+          checked={profile.sharesStats}
+          onPress={() => void save({ sharesStats: !profile.sharesStats })}
+        />
+      </View>
+    </Card>
+  );
 }
 
 /**

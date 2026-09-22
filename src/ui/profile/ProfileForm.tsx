@@ -107,8 +107,10 @@ export function ProfileForm({
         value={age}
         min={UNSET}
         max={120}
+        editable
+        integer
         format={(value) => (value === UNSET ? '—' : String(value))}
-        onChange={(next) => setAge(land(age, next, AGE_START, 13))}
+        onChange={(next, source) => setAge(land(age, next, AGE_START, 13, source))}
       />
 
       <Stepper
@@ -117,8 +119,10 @@ export function ProfileForm({
         value={years}
         min={UNSET}
         max={80}
+        editable
+        integer
         format={(value) => (value === UNSET ? '—' : String(value))}
-        onChange={(next) => setYears(land(years, next, YEARS_START, 0))}
+        onChange={(next, source) => setYears(land(years, next, YEARS_START, 0, source))}
       />
 
       <PressableSurface
@@ -142,13 +146,32 @@ export function ProfileForm({
  * Descendo abaixo do minimo, volta ao vazio em vez de parar num numero que o
  * `check` do banco recusaria.
  */
-function land(current: number, next: number, start: number, floor: number): number {
-  if (current === UNSET) return next > current ? start : UNSET;
+/**
+ * Sai do "em branco" (UNSET) de um jeito, entra de outro.
+ *
+ * Um toque no "+" a partir do em branco pousa num valor plausivel (`start`),
+ * nao em UNSET + 1 — ninguem tem "0 anos de treino" so porque tocou uma vez.
+ * Um numero digitado e diferente: quem digitou ja escolheu o valor, entao usa
+ * o que foi digitado direto, sem pousar em lugar nenhum — so `source` diz qual
+ * dos dois aconteceu.
+ *
+ * Descer abaixo do piso (`floor`) sempre volta para UNSET, tocando ou
+ * digitando: um numero fora do que faz sentido (idade negativa) e o mesmo que
+ * nao ter respondido.
+ */
+function land(
+  current: number,
+  next: number,
+  start: number,
+  floor: number,
+  source: 'step' | 'type',
+): number {
+  if (current === UNSET && source === 'step') return next > current ? start : UNSET;
   return next < floor ? UNSET : next;
 }
 
 function hint({ empty, short, taken }: { empty: boolean; short: boolean; taken: boolean }): string {
-  if (taken) return 'esse @ já é de outra pessoa · escolha outro';
+  if (taken) return 'esse @ já é de outra pessoa, escolha outro';
   if (empty) return `${HANDLE_MIN} a ${HANDLE_MAX} caracteres · letras, números, ponto`;
   if (short) return `${HANDLE_MIN} a ${HANDLE_MAX} caracteres · letras, números, ponto`;
   return 'é assim que seus amigos vão te achar';
