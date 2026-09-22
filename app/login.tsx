@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
+import { useProfile } from '@/store/profile';
 import { useAuth } from '@/sync/auth';
 import { colors, fontSize, radius, spacing, surfaces } from '@/theme/tokens';
 import { PressableSurface } from '@/ui/PressableSurface';
@@ -28,13 +29,24 @@ export default function LoginScreen() {
     setBusy(true);
     setError(null);
     const result = await signInWithGoogle();
-    setBusy(false);
 
     if (result) {
+      setBusy(false);
       setError(result);
       return;
     }
-    router.back();
+
+    // `applySession` ja disparou a carga do perfil, mas pode nao ter chegado:
+    // sem esperar, quem ja tem @ veria a tela de escolher um por um instante.
+    const { userId } = useAuth.getState();
+    if (userId) await useProfile.getState().load(userId);
+    const hasProfile = useProfile.getState().profile !== null;
+
+    setBusy(false);
+    // Troca o modal em vez de empilhar: voltar do perfil tem que cair no
+    // Perfil, nao numa tela de login de uma conta em que a pessoa ja entrou.
+    if (hasProfile) router.back();
+    else router.replace('/profile-setup');
   };
 
   return (

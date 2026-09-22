@@ -3,8 +3,10 @@ import { useCallback } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { listBodyWeightLogs } from '@/db/repo';
+import type { Profile } from '@/domain/types';
 import { formatWeight } from '@/domain/volume';
 import { useQuery } from '@/store/data';
+import { useProfile } from '@/store/profile';
 import { useAuth } from '@/sync/auth';
 import { isCloudConfigured } from '@/sync/supabase';
 import { colors, spacing } from '@/theme/tokens';
@@ -69,6 +71,8 @@ export default function ProfileScreen() {
 
         <MotionCard />
 
+        <PublicProfileCard />
+
         <SyncCard />
 
         <CreditsCard />
@@ -112,6 +116,59 @@ function MotionCard() {
       </View>
     </Card>
   );
+}
+
+/**
+ * O perfil publico — o @ com que amigos acham a pessoa.
+ *
+ * So aparece com conta, porque o perfil vive so no Supabase: nao ha o que
+ * mostrar a amigos de quem usa o app so neste aparelho.
+ *
+ * Tambem e a porta de entrada de quem ja estava logado antes desta tela
+ * existir: essa pessoa nao passa mais pelo login, entao o card em estado
+ * "definir" e o unico caminho ate o @ dela.
+ */
+function PublicProfileCard() {
+  const router = useRouter();
+  const status = useAuth((state) => state.status);
+  const { profile, loading, error } = useProfile();
+
+  if (status !== 'signedIn') return null;
+
+  return (
+    <Card onPress={() => router.push('/profile-setup')}>
+      <Label>Perfil</Label>
+      <View style={styles.row}>
+        <View style={styles.rowText}>
+          <Body>{profile ? `@${profile.handle}` : 'Escolher seu @'}</Body>
+          <Meta>{profileMeta({ profile, loading, error })}</Meta>
+        </View>
+        <ChevronRightIcon size={16} color={colors.textSecondary} />
+      </View>
+    </Card>
+  );
+}
+
+function profileMeta({
+  profile,
+  loading,
+  error,
+}: {
+  profile: Profile | null;
+  loading: boolean;
+  error: string | null;
+}): string {
+  if (loading) return 'carregando…';
+  // Sem cor de estado: a falha se comunica por texto, como no resto da tela.
+  if (error) return `${error} · toque para tentar de novo`;
+  if (!profile) return 'é assim que seus amigos vão te achar';
+
+  const traits = [
+    profile.age === null ? null : `${profile.age} anos`,
+    profile.trainingYears === null ? null : `${profile.trainingYears} de treino`,
+  ].filter(Boolean);
+
+  return traits.length > 0 ? traits.join(' · ') : 'idade e anos de treino em branco';
 }
 
 /**

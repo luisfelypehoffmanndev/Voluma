@@ -8,6 +8,7 @@ import { create } from 'zustand';
 
 import { resetDb } from '@/db/client';
 import { bumpData } from '@/store/data';
+import { useProfile } from '@/store/profile';
 
 import {
   inFlightSync,
@@ -36,6 +37,10 @@ let authSubscription: { unsubscribe: () => void } | null = null;
 type AuthState = {
   status: AuthStatus;
   email: string | null;
+  /** Uuid de `auth.users`. E a chave do perfil publico, que nao vive no SQLite. */
+  userId: string | null;
+  /** Nome da conta Google, so para sugerir o primeiro @handle. Nao e guardado. */
+  displayName: string | null;
   syncing: boolean;
   lastSync: SyncOutcome | null;
   pending: number;
@@ -50,6 +55,8 @@ type AuthState = {
 export const useAuth = create<AuthState>((set, get) => ({
   status: 'loading',
   email: null,
+  userId: null,
+  displayName: null,
   syncing: false,
   lastSync: null,
   pending: 0,
@@ -132,7 +139,15 @@ export const useAuth = create<AuthState>((set, get) => ({
     // proxima seria pior do que perder o cache, que o pull reconstroi.
     await resetDb();
     bumpData();
-    set({ status: 'signedOut', email: null, pending: 0, lastSync: null });
+    useProfile.getState().clear();
+    set({
+      status: 'signedOut',
+      email: null,
+      userId: null,
+      displayName: null,
+      pending: 0,
+      lastSync: null,
+    });
   },
 
   runSync: async () => {
@@ -160,10 +175,22 @@ function applySession(
   set: (partial: Partial<AuthState>) => void,
   session: Session | null,
 ): void {
+  const user = session?.user ?? null;
+
   set({
     status: session ? 'signedIn' : 'signedOut',
-    email: session?.user.email ?? null,
+    email: user?.email ?? null,
+    userId: user?.id ?? null,
+    // O nome vem do Google e so serve para sugerir o primeiro handle. Nao vai
+    // para lugar nenhum: o que identifica a pessoa para os amigos e o handle
+    // que ela escolheu, nao o nome que a conta dela carrega.
+    displayName: (user?.user_metadata?.full_name as string | undefined) ?? null,
   });
+
+  // O perfil e remoto e so existe com conta: entra junto com a sessao e sai
+  // junto com ela, senao o handle de uma conta fica na tela para a proxima.
+  if (user) void useProfile.getState().load(user.id);
+  else useProfile.getState().clear();
 }
 
 /**

@@ -1,8 +1,9 @@
-# Planos de correção
+# Planos
 
 Uma revisão geral de código e segurança (2026-09-16) encontrou 10 problemas no
 caminho de virar um app multiusuário, usado numa academia real — ver
-[`../DECISIONS.md`](../DECISIONS.md).
+[`../DECISIONS.md`](../DECISIONS.md). Do 11 em diante são features da camada
+social, no mesmo formato.
 
 Cada arquivo aqui é autocontido: problema, arquivo e linha, correção proposta e
 como verificar. A ideia é resolver um de cada vez.
@@ -19,8 +20,15 @@ como verificar. A ideia é resolver um de cada vez.
 | [06](06-auth-listener.md) | `onAuthStateChange` nunca desinscrito | baixa | **feito** |
 | [08](08-testes-puros.md) | Testes puros das correções 01 e 02 | — | **feito** |
 | [07](07-login-google.md) | Migração do login para conta Google | decisão de produto | **feito** — testado no aparelho, login funcionando |
+| [11](11-perfil-handle.md) | Perfil público: @handle, idade e anos de treino | feature | **feito** — v5 rodada, RLS confirmado, testado no aparelho |
 
 ## Pendências fora do código
+
+Concluída em 2026-09-21:
+
+3. **Item 11** — a seção `-- v5: perfil` foi rodada no SQL Editor. RLS
+   confirmado do mesmo jeito que o item 04: leitura anônima de `profiles`
+   devolve lista vazia, escrita anônima é rejeitada (`42501`).
 
 Ambas concluídas em 2026-09-17:
 

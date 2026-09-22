@@ -159,3 +159,40 @@ begin
     );
   end loop;
 end $$;
+
+-- ------------------------------------------------------------ v5: perfil
+-- O perfil publico: o @handle com que amigos se acham, mais idade e anos de
+-- treino. Nao tem par no SQLite e nao entra no sync: e dado social, so existe
+-- para ser mostrado a outra pessoa, e quem nao entra na conta nao tem a quem
+-- mostrar. Uma tabela, nenhuma migration local, zero mudanca no engine.
+
+create table if not exists public.profiles (
+  id             uuid primary key references auth.users (id) on delete cascade,
+  handle         text not null check (handle ~ '^[a-z0-9._]{3,20}$'),
+  age            int check (age is null or age between 13 and 120),
+  training_years int check (training_years is null or training_years between 0 and 80),
+  updated_at     timestamptz not null default now()
+);
+
+-- Os `check` vao inline no create table, e nao em `alter table add constraint`
+-- depois: o Postgres nao aceita `add constraint if not exists`, e a segunda
+-- colagem deste arquivo abortaria. E o mesmo motivo de v3 e v4 usarem
+-- `add column if not exists`.
+
+-- Unicidade sobre lower(handle), nao sobre handle: o cliente ja grava
+-- normalizado, mas e o indice que garante que `luis` e `LUIS` nunca coexistam
+-- se o cliente algum dia errar.
+create unique index if not exists idx_profiles_handle
+  on public.profiles (lower(handle));
+
+alter table public.profiles enable row level security;
+
+-- Fora do loop acima de proposito: aqui a chave do dono e a PK `id`, que
+-- referencia auth.users direto, e nao uma coluna `user_id`. Mesmas razoes do
+-- item 04 para `(select auth.uid())` e `to authenticated`.
+drop policy if exists own_profile on public.profiles;
+create policy own_profile on public.profiles
+  for all
+  to authenticated
+  using ((select auth.uid()) = id)
+  with check ((select auth.uid()) = id);

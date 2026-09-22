@@ -51,6 +51,20 @@ Hoje ambos valem 4. Quem adicionar uma migration esquecendo de subir a versão
 quebra o teste — em vez de quebrar o app do usuário, que é onde isso apareceria
 hoje.
 
+## Atualização (2026-09-21, item [11](11-perfil-handle.md))
+
+O contrato acima continua valendo como padrão: nenhum teste abre banco, e a
+lógica é extraída como função pura. Uma exceção foi aberta de propósito —
+`@testing-library/react-native` entrou no projeto para um único teste de render,
+`src/ui/profile/__tests__/ProfileForm.test.tsx`. O motivo é o mesmo raciocínio
+desta página, aplicado ao contrário: ali a regra do @handle, o campo de texto e
+a recusa do banco se encontram, e testar só a função pura deixaria de fora a
+parte que mais erra. Fora disso, o padrão não mudou.
+
+O Reanimated carrega worklets nativos no import e quebra dentro do Jest; o que
+resolve é o resolver oficial (`react-native-worklets/jest/resolver.js`, ligado
+no `package.json`), não um mock.
+
 ## Verificar
 
 - `npm test` — os 187 testes atuais continuam passando, mais estes.
