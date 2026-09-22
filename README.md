@@ -16,9 +16,14 @@ client (`eas build --profile development`) ou `npx expo run:android` /
 `npx expo run:ios`. Sem login, o app roda 100% local, que é o modo padrão.
 
 ```bash
-npm test        # domínio (volume, semana, streak) e a conta do vidro
+npm test        # domínio (volume, semana, streak), a conta do vidro e o perfil
 npm run typecheck
 ```
+
+Quase todo teste é de função pura, sem banco e sem render — a convenção está em
+[`plans/08-testes-puros.md`](plans/08-testes-puros.md). A exceção é
+`src/ui/profile/`, que usa `@testing-library/react-native` porque é onde a regra
+do @handle, o campo de texto e a recusa do banco se encontram.
 
 ## Como funciona
 
@@ -26,6 +31,12 @@ O app é **local-first**. O SQLite do aparelho é a fonte de verdade para
 leitura: nenhuma tela consulta o Supabase diretamente. Toda escrita grava
 localmente e enfileira a linha em `outbox`; o serviço de sync drena a fila
 quando há rede. É o que permite registrar séries dentro da academia sem sinal.
+
+**Uma exceção, e só uma:** o perfil público (`src/sync/profile.ts`) lê e grava
+no Supabase direto. Ele não tem par no SQLite porque é dado social — o @handle
+com que amigos acham a pessoa, mais idade e anos de treino — e não tem o que
+fazer offline. Quem usa o app sem conta simplesmente não tem perfil, e não
+perde nada por isso. Tudo que é treino continua local-first.
 
 ```
 app/            telas (expo-router, file-based)
@@ -48,7 +59,7 @@ A barra tem quatro abas sem rótulo visível (cada uma com
 | **Hoje** | o treino do dia e o botão "Começar / Continuar treino" |
 | **Plano** | os sete dias da semana e o catálogo de movimentos |
 | **Histórico** | calendário e números, num seletor segmentado |
-| **Perfil** | peso corporal, vibração, nuvem e créditos |
+| **Perfil** | peso corporal, vibração, @handle, nuvem e créditos |
 
 Na primeira abertura (banco sem plano e sem exercícios) o app passa por um
 onboarding: duas telas explicando Plano → Hoje → Histórico e a escolha entre um
@@ -71,7 +82,8 @@ sincronização entre aparelhos:
 
 1. Crie um projeto em [supabase.com](https://supabase.com).
 2. **SQL Editor**: rode [`supabase/schema.sql`](supabase/schema.sql) inteiro.
-   Ele cria as tabelas, os índices e o RLS.
+   Ele cria as tabelas, os índices e o RLS. O arquivo é idempotente: rodar de
+   novo depois de cada versão nova (hoje até a `v5: perfil`) não quebra nada.
 3. Configure o login com Google (abaixo).
 4. Copie `.env.example` para `.env` e preencha URL e anon key
    (**Project Settings → Data API**).

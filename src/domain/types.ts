@@ -115,3 +115,21 @@ export type BodyWeightLog = Syncable & {
   loggedAt: string;
   weightKg: number;
 };
+
+/**
+ * O perfil publico: como amigos acham e reconhecem uma pessoa.
+ *
+ * Nao e `Syncable` de proposito — vive so no Supabase, fora do outbox e do
+ * last-write-wins. E dado social: nao tem par no SQLite porque nao tem o que
+ * fazer offline, e quem usa o app sem conta simplesmente nao tem perfil.
+ *
+ * `id` e o mesmo uuid de `auth.users`, nao um id gerado no cliente.
+ */
+export type Profile = {
+  id: string;
+  handle: string;
+  /** Opcionais: a tela de cadastro permite pular os dois. */
+  age: number | null;
+  /** Ha quantos anos a pessoa treina. Respondido uma vez, nao derivado do uso. */
+  trainingYears: number | null;
+};

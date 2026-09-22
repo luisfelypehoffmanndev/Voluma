@@ -84,6 +84,7 @@ export default function RootLayout() {
             <Stack.Screen name="library" />
             <Stack.Screen name="bodyweight" options={{ presentation: 'modal' }} />
             <Stack.Screen name="login" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="profile-setup" options={{ presentation: 'modal' }} />
           </Stack>
         </BlurTargetProvider>
       </SafeAreaProvider>
