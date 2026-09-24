@@ -21,6 +21,7 @@ import {
   volumeByDate,
   type WeekExercise,
 } from '@/db/repo';
+import { applyOrder } from '@/domain/order';
 import { buildDotMatrix, currentStreak } from '@/domain/streak';
 import { formatDistance, formatDuration } from '@/domain/run';
 import { workoutState, type WorkoutState } from '@/domain/today';
@@ -297,7 +298,8 @@ async function loadHome() {
       routineId: todayRoutine?.id ?? null,
       weekday: weekdayOf(now),
       name: dayTitle(todayRoutine?.name ?? '', todayExercises.length),
-      exercises: todayExercises,
+      // Na ordem que o usuario arrastou no treino de hoje, se arrastou.
+      exercises: applyOrder(todayExercises, session?.exerciseOrder ?? [], (item) => item.exerciseId),
       plannedSets,
       state: workoutState({
         plannedExerciseIds: todayExercises.map((item) => item.exerciseId),

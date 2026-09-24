@@ -68,6 +68,7 @@ export type SessionRow = {
   started_at: string;
   finished_at: string | null;
   skipped_exercise_ids: string;
+  exercise_order: string;
   completed_at: string | null;
   updated_at: string;
   deleted_at: string | null;
@@ -149,15 +150,17 @@ export const toSession = (row: SessionRow): Session => ({
   startedAt: row.started_at,
   finishedAt: row.finished_at,
   skippedExerciseIds: parseIdList(row.skipped_exercise_ids),
+  exerciseOrder: parseIdList(row.exercise_order),
   completedAt: row.completed_at,
   updatedAt: row.updated_at,
   deletedAt: row.deleted_at,
 });
 
 /**
- * A lista JSON de `skipped_exercise_ids`. Lixo vira lista vazia: um valor
- * corrompido pelo sync nao pode derrubar a tela do treino — no pior caso um
- * exercicio pulado reaparece.
+ * As listas JSON da sessao (`skipped_exercise_ids`, `exercise_order`). Lixo
+ * vira lista vazia: um valor corrompido pelo sync nao pode derrubar a tela do
+ * treino — no pior caso um exercicio pulado reaparece, ou a ordem volta a do
+ * plano.
  */
 function parseIdList(raw: string | null): string[] {
   if (!raw) return [];

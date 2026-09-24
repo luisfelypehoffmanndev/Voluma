@@ -719,6 +719,7 @@ export async function getOrCreateSessionForDate(when = new Date()): Promise<Sess
     startedAt: when.toISOString(),
     finishedAt: when.toISOString(),
     skippedExerciseIds: [],
+    exerciseOrder: [],
     completedAt: null,
     updatedAt: timestamp,
     deletedAt: null,
@@ -755,6 +756,7 @@ export async function startSession(routineId: string | null, when = new Date()):
     startedAt: when.toISOString(),
     finishedAt: null,
     skippedExerciseIds: [],
+    exerciseOrder: [],
     completedAt: null,
     updatedAt: now(),
     deletedAt: null,
@@ -866,6 +868,23 @@ export async function skipSessionExercise(sessionId: string, exerciseId: string)
 /** O "Desfazer" de `skipSessionExercise`. */
 export async function unskipSessionExercise(sessionId: string, exerciseId: string): Promise<void> {
   await updateSkipped(sessionId, (ids) => ids.filter((id) => id !== exerciseId));
+}
+
+/** A ordem arrastada na tela do treino. Vale so para esta sessao; o plano nao muda. */
+export async function setSessionExerciseOrder(
+  sessionId: string,
+  exerciseIds: readonly string[],
+): Promise<void> {
+  const db = await getDb();
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      'UPDATE sessions SET exercise_order = ?, updated_at = ? WHERE id = ?',
+      JSON.stringify(exerciseIds),
+      now(),
+      sessionId,
+    );
+    await enqueue(db, 'sessions', sessionId);
+  });
 }
 
 async function updateSkipped(

@@ -4,11 +4,14 @@ import {
   ActivityIndicator,
   AppState,
   Pressable,
-  ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
-import Animated, { LayoutAnimationConfig, useAnimatedStyle } from 'react-native-reanimated';
+import Animated, {
+  LayoutAnimationConfig,
+  useAnimatedRef,
+  useAnimatedStyle,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -22,6 +25,7 @@ import {
   listSessionSets,
   removeRoutineExercise,
   removeSet,
+  setSessionExerciseOrder,
   setSessionExerciseSets,
   setSessionExerciseTargets,
   skipSessionExercise,
@@ -31,6 +35,7 @@ import {
   type WeekExercise,
 } from '@/db/repo';
 import type { ExerciseKind, SessionSet, Targets } from '@/domain/types';
+import { applyOrder } from '@/domain/order';
 import { formatDistance, formatDuration, runTargetsFromSets } from '@/domain/run';
 import { type SetDraft, sameSetDrafts, summarizeSets } from '@/domain/sets';
 import { sameTargets, targetsFromSets } from '@/domain/targets';
@@ -50,6 +55,7 @@ import { artSlugFor } from '@/movements/library';
 import { DEFAULT_RUN_TARGETS, DEFAULT_TARGETS, ExercisePicker } from '@/ui/ExercisePicker';
 import { shortDate } from '@/ui/relative';
 import { Reveal } from '@/ui/Reveal';
+import { ReorderableList } from '@/ui/ReorderableList';
 import { EmptyState } from '@/ui/EmptyState';
 import { LoadError } from '@/ui/LoadError';
 import { Header, Screen } from '@/ui/Screen';
@@ -137,6 +143,7 @@ export default function SessionScreen() {
   const reloadStable = useCallback(() => reloadRef.current(), []);
 
   const [picking, setPicking] = useState(false);
+  const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const listMotion = useListMotion();
   const [undo, setUndo] = useState<UndoOffer | null>(null);
 
@@ -184,7 +191,28 @@ export default function SessionScreen() {
     });
   }, []);
 
-  const items = data?.items;
+  /**
+   * A ordem que o usuario acabou de arrastar, na frente do que veio do banco.
+   *
+   * Sem `reload()` depois do drop: a tela e a dona do dado (ver `liveUpdates`
+   * acima), e recarregar recriaria todos os cards com escrita adiada pendente
+   * so para confirmar uma ordem que a tela ja mostra.
+   */
+  const [localOrder, setLocalOrder] = useState<string[] | null>(null);
+
+  const reorder = useCallback(
+    (exerciseIds: string[]) => {
+      setLocalOrder(exerciseIds);
+      void setSessionExerciseOrder(id, exerciseIds).then(() => bumpData());
+    },
+    [id],
+  );
+
+  const loaded = data?.items;
+  const items = useMemo(
+    () => (loaded && localOrder ? applyOrder(loaded, localOrder, exerciseKey) : loaded),
+    [loaded, localOrder],
+  );
   const sessionVolume = useMemo(() => {
     if (!items) return undefined;
     return items.reduce(
@@ -339,7 +367,8 @@ export default function SessionScreen() {
           `useQuery` troca o placeholder pelos dados — que e a animacao de
           "tudo que entra na tela" que ficou deliberadamente de fora. */}
       <LayoutAnimationConfig skipEntering>
-      <ScrollView
+      <Animated.ScrollView
+        ref={scrollRef}
         contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
         // Sem isto, com o teclado do peso aberto, o primeiro toque em qualquer
@@ -347,19 +376,26 @@ export default function SessionScreen() {
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets
       >
-        {exercises.map((item) => (
-          <Animated.View key={item.id} {...listMotion}>
-            <ExerciseCard
-              item={item}
-              sessionId={session.id}
-              everyDay={everyDay}
-              onDraft={reportDraft}
-              onStructuralChange={reloadStable}
-              onSkip={skipToday}
-              registerSettle={registerSettle}
-            />
-          </Animated.View>
-        ))}
+        {exercises.length > 0 ? (
+          <ReorderableList
+            data={exercises}
+            keyOf={exerciseKey}
+            onReorder={reorder}
+            scrollableRef={scrollRef}
+            gap={spacing.lg}
+            renderItem={(item) => (
+              <ExerciseCard
+                item={item}
+                sessionId={session.id}
+                everyDay={everyDay}
+                onDraft={reportDraft}
+                onStructuralChange={reloadStable}
+                onSkip={skipToday}
+                registerSettle={registerSettle}
+              />
+            )}
+          />
+        ) : null}
 
         {exercises.length === 0 ? (
           <EmptyState
@@ -368,12 +404,16 @@ export default function SessionScreen() {
             action={{ label: 'Adicionar exercício', onPress: () => setPicking(true) }}
           />
         ) : (
-          <Pressable style={styles.addExercise} onPress={() => setPicking(true)}>
-            <PlusIcon size={16} color={colors.textPrimary} />
-            <Body style={styles.addExerciseText}>Adicionar exercício</Body>
-          </Pressable>
+          // Anda junto com os cards quando um deles abre; sem a transicao ele
+          // pulava para o lugar final no primeiro quadro.
+          <Animated.View layout={'layout' in listMotion ? listMotion.layout : undefined}>
+            <Pressable style={styles.addExercise} onPress={() => setPicking(true)}>
+              <PlusIcon size={16} color={colors.textPrimary} />
+              <Body style={styles.addExerciseText}>Adicionar exercício</Body>
+            </Pressable>
+          </Animated.View>
         )}
-      </ScrollView>
+      </Animated.ScrollView>
       </LayoutAnimationConfig>
       </Reveal>
 
@@ -1072,7 +1112,7 @@ function StrengthExerciseCard(props: CardProps) {
   const setsMotion = useListMotion();
 
   return (
-    <Card>
+    <Card resizes>
       <View style={[styles.itemHead, expanded && styles.itemHeadSpaced]}>
         <ExerciseMenu
           {...props}
@@ -1227,10 +1267,15 @@ async function loadSession(id: string) {
 
   return {
     session,
-    items,
+    items: applyOrder(items, session.exerciseOrder, exerciseKey),
     catalog,
     routineId: session.routineId,
   };
+}
+
+/** A chave da ordem do treino: um exercicio aparece uma vez so por sessao. */
+function exerciseKey(item: SessionExercise): string {
+  return item.exerciseId;
 }
 
 /** O que ja existe no banco para um exercicio deste treino. */
