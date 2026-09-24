@@ -10,7 +10,7 @@
  * last-write-wins do sync. Nada e apagado de verdade: delete e soft delete.
  */
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export const MIGRATIONS: readonly string[] = [
   // v1 — schema inicial
@@ -215,6 +215,14 @@ export const MIGRATIONS: readonly string[] = [
   -- porque a cascata de alvos (lastPerformedTargets) exige finished_at. Nulo =
   -- nunca finalizado.
   ALTER TABLE sessions ADD COLUMN completed_at TEXT;
+  `,
+
+  `
+  -- A ordem que o usuario arrastou SO neste treino, como lista JSON de
+  -- exercise_id — o mesmo formato de skipped_exercise_ids, pelo mesmo motivo.
+  -- Vazia = ordem do plano. Arrastar no editor do dia muda o plano
+  -- (routine_exercises.position), e nao passa por aqui.
+  ALTER TABLE sessions ADD COLUMN exercise_order TEXT NOT NULL DEFAULT '[]';
   `,
 ];
 

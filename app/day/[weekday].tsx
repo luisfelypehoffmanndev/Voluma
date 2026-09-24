@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import Animated, { LayoutAnimationConfig } from 'react-native-reanimated';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import Animated, { LayoutAnimationConfig, useAnimatedRef } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -11,12 +11,14 @@ import {
   ensureRunExercise,
   listExercises,
   removeRoutineExercise,
+  reorderRoutineExercises,
   setWeekTarget,
   targetsForWeek,
   updateRoutine,
   type TargetSource,
   type WeekExercise,
 } from '@/db/repo';
+import { applyOrder } from '@/domain/order';
 import type { Targets, Weekday } from '@/domain/types';
 import { addWeeks, everyWeekday, weekRangeLabel, weekStartKey, weekdayName, weeksBetween } from '@/domain/week';
 import { bumpData, useQuery } from '@/store/data';
@@ -26,8 +28,8 @@ import { ConfirmModal } from '@/ui/ConfirmModal';
 import { artSlugFor } from '@/movements/library';
 import { DEFAULT_RUN_TARGETS, DEFAULT_TARGETS, ExercisePicker } from '@/ui/ExercisePicker';
 import { FloatingGlassButton } from '@/ui/FloatingGlassButton';
-import { useListMotion } from '@/ui/motion';
 import { Reveal } from '@/ui/Reveal';
+import { ReorderableList } from '@/ui/ReorderableList';
 import { EmptyState } from '@/ui/EmptyState';
 import { LoadError } from '@/ui/LoadError';
 import { Header, RoundButton, Screen } from '@/ui/Screen';
@@ -71,7 +73,7 @@ export default function DayScreen() {
 
   const weekday = Number(params.weekday) as Weekday;
   const [weekStart, setWeekStart] = useState(() => weekStartKey(new Date()));
-  const listMotion = useListMotion();
+  const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const [picking, setPicking] = useState(false);
   const [removing, setRemoving] = useState<WeekExercise | null>(null);
 
@@ -87,6 +89,27 @@ export default function DayScreen() {
       ]);
       return { routine, items, catalog };
     }, [weekday, weekStart]),
+  );
+
+  // O que acabou de ser arrastado, na frente do banco ate a recarga chegar —
+  // sem isso o card voltaria ao lugar antigo por um quadro depois do drop.
+  const [localOrder, setLocalOrder] = useState<string[] | null>(null);
+
+  const reorder = useCallback(
+    (ids: string[]) => {
+      setLocalOrder(ids);
+      void reorderRoutineExercises(ids).then(() => {
+        bumpData();
+        reload();
+      });
+    },
+    [reload],
+  );
+
+  const loaded = data?.items;
+  const ordered = useMemo(
+    () => (loaded && localOrder ? applyOrder(loaded, localOrder, routineExerciseKey) : loaded),
+    [loaded, localOrder],
   );
 
   if (error) {
@@ -107,7 +130,8 @@ export default function DayScreen() {
     );
   }
 
-  const { routine, items, catalog } = data;
+  const { routine, catalog } = data;
+  const items = ordered ?? data.items;
   const used = new Set(items.map((item) => item.exerciseId));
   const currentWeek = weekStartKey(new Date());
 
@@ -146,7 +170,8 @@ export default function DayScreen() {
           nao remonta os itens — a `key` e o id do routine_exercise, que nao
           muda com a semana —, entao a navegacao por semana nao dispara entrada. */}
       <LayoutAnimationConfig skipEntering>
-      <ScrollView
+      <Animated.ScrollView
+        ref={scrollRef}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 120 }]}
         showsVerticalScrollIndicator={false}
         // Sem isto, com o teclado do peso aberto, o primeiro toque em qualquer
@@ -178,15 +203,22 @@ export default function DayScreen() {
           </View>
         </Card>
 
-        {items.map((item) => (
-          <Animated.View key={item.id} {...listMotion}>
-            <ExerciseCard
-              item={item}
-              weekStart={weekStart}
-              onRemove={() => setRemoving(item)}
-            />
-          </Animated.View>
-        ))}
+        {items.length > 0 ? (
+          <ReorderableList
+            data={items}
+            keyOf={routineExerciseKey}
+            onReorder={reorder}
+            scrollableRef={scrollRef}
+            gap={spacing.lg}
+            renderItem={(item) => (
+              <ExerciseCard
+                item={item}
+                weekStart={weekStart}
+                onRemove={() => setRemoving(item)}
+              />
+            )}
+          />
+        ) : null}
 
         {items.length === 0 ? (
           <EmptyState
@@ -195,7 +227,7 @@ export default function DayScreen() {
             action={{ label: 'Adicionar exercício', onPress: () => setPicking(true) }}
           />
         ) : null}
-      </ScrollView>
+      </Animated.ScrollView>
       </LayoutAnimationConfig>
       </Reveal>
 
@@ -229,6 +261,11 @@ export default function DayScreen() {
       />
     </Screen>
   );
+}
+
+/** A ordem do plano e a dos routine_exercises. */
+function routineExerciseKey(item: WeekExercise): string {
+  return item.id;
 }
 
 /** "semana atual", "semana que vem", "há 2 semanas". */

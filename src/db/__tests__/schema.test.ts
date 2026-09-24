@@ -2,11 +2,11 @@ import { MIGRATIONS, SCHEMA_VERSION, pendingMigrations } from '../schema';
 
 describe('pendingMigrations', () => {
   it('roda todas num banco novo', () => {
-    expect(pendingMigrations(0)).toEqual([0, 1, 2, 3]);
+    expect(pendingMigrations(0)).toEqual([0, 1, 2, 3, 4]);
   });
 
   it('roda so o que falta num banco parcialmente migrado', () => {
-    expect(pendingMigrations(2)).toEqual([2, 3]);
+    expect(pendingMigrations(2)).toEqual([2, 3, 4]);
   });
 
   it('nao roda nada num banco em dia', () => {

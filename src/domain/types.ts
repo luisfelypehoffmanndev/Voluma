@@ -93,6 +93,8 @@ export type Session = Syncable & {
   finishedAt: string | null;
   /** Exercicios tirados so deste treino ("Pular hoje"); o plano nao muda. */
   skippedExerciseIds: string[];
+  /** Ordem arrastada so neste treino, por exercise_id. Vazia = ordem do plano. */
+  exerciseOrder: string[];
   /** Quando o usuario tocou em "Finalizar treino". Nulo = nunca finalizado. */
   completedAt: string | null;
 };

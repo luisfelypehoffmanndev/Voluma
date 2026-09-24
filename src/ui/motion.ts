@@ -135,7 +135,7 @@ export function useListMotion() {
     return {
       entering: FadeIn.duration(motion.duration.enter).easing(SETTLE),
       exiting: FadeOut.duration(motion.duration.exit).easing(SETTLE),
-      layout: LinearTransition.duration(motion.duration.state).easing(SETTLE),
+      layout: LinearTransition.duration(motion.duration.reflow).easing(SETTLE),
     };
   }, [reduceMotion]);
 }

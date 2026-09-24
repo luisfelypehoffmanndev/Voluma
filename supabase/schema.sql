@@ -107,6 +107,7 @@ alter table public.session_sets      add column if not exists duration_min integ
 
 alter table public.sessions          add column if not exists skipped_exercise_ids text not null default '[]';
 alter table public.sessions          add column if not exists completed_at timestamptz;
+alter table public.sessions          add column if not exists exercise_order text not null default '[]';
 
 -- ---------------------------------------------------------------- indices
 -- O pull filtra sempre por dono + updated_at, entao esse e o indice que importa.

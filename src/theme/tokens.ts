@@ -367,13 +367,18 @@ export const tabIcon = { idleOpacity: 0.515 } as const;
  * Toda animacao do app e ou um VALOR se acomodando (cor, opacidade) ou um
  * elemento entrando/saindo do layout. Nunca forma, nunca tamanho, nunca mola.
  *
- * Sao seis numeros e uma curva. "Contagem baixa" quer dizer poucos numeros, nao
+ * Sao sete numeros e uma curva. "Contagem baixa" quer dizer poucos numeros, nao
  * numeros pequenos — o sexto (`count`) existe porque marcar uma serie concluida
  * faz o volume levantado atravessar varios valores intermediarios legiveis a
  * caminho do numero final, e nenhum dos outros cinco dura o bastante pra isso
  * ler como contagem em vez de tremulacao. Ainda e so "um valor se acomodando";
  * a diferenca e que este se acomoda em texto, nao em estilo, e o caminho tem
  * que dar tempo pro olho seguir os digitos passando.
+ *
+ * O setimo (`reflow`) e a lista se reacomodando quando um card muda de altura.
+ * A distancia ali e a de um card inteiro de series, e a curva unica entrega
+ * quase tudo nos primeiros quadros: em `state` o card abria "no seco", com
+ * metade do caminho feito em ~30ms (medido quadro a quadro no aparelho).
  *
  * A curva fica aqui como tupla, e nao como `Easing.bezier`, porque este arquivo
  * NAO importa nada — e o que deixa `composite.test.ts` roda-lo em Node puro. A
@@ -415,6 +420,12 @@ export const motion = {
      * despedida, e o buraco na lista precisa fechar antes do proximo toque.
      */
     exit: 120,
+    /**
+     * A lista se reacomodando: um card abrindo ou fechando as series, e os
+     * vizinhos andando junto. O card e os vizinhos usam o MESMO numero — com
+     * duracoes diferentes, um abre buraco ou passa por cima do outro.
+     */
+    reflow: 260,
     /**
      * Um numero subindo (ou descendo) ate o valor final — o volume levantado
      * depois de marcar uma serie. Bem mais longo que `state` porque aqui a

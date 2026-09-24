@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import { accentGlow, colors, radius, spacing, surfaces } from '@/theme/tokens';
+import { useListMotion } from './motion';
 import { PressableSurface } from './PressableSurface';
 
 type Props = {
@@ -12,6 +14,12 @@ type Props = {
    * mais importante da tela — no maximo UM por tela, conforme o brief.
    */
   accent?: boolean;
+  /**
+   * O card muda de altura (abre e fecha): o vidro acompanha a mesma transicao
+   * de layout dos vizinhos, e o `overflow: 'hidden'` revela o conteudo novo
+   * enquanto ele cresce — em vez de o fundo pular para o tamanho final.
+   */
+  resizes?: boolean;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -31,7 +39,8 @@ type Props = {
  * elemento de cor da tela, e o glow precisa de uma forma opaca de onde o iOS
  * tire a sombra.
  */
-export function Card({ children, onPress, accent = false, style }: Props) {
+export function Card({ children, onPress, accent = false, resizes = false, style }: Props) {
+  const listMotion = useListMotion();
   const surface: StyleProp<ViewStyle> = [
     styles.card,
     accent ? styles.accent : styles.plain,
@@ -39,7 +48,12 @@ export function Card({ children, onPress, accent = false, style }: Props) {
   ];
 
   const inner = !onPress ? (
-    <View style={surface}>{children}</View>
+    <Animated.View
+      layout={resizes && 'layout' in listMotion ? listMotion.layout : undefined}
+      style={surface}
+    >
+      {children}
+    </Animated.View>
   ) : (
     // O card de vidro *acende*; o accent, solido, apaga. Baixar a opacidade
     // de uma superficie translucida apagaria o texto junto com ela e o card
