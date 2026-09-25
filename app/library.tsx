@@ -1,5 +1,4 @@
-import { useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -34,7 +33,6 @@ import { CheckIcon, PlusIcon } from '@/ui/icons';
  * laranja daria 288 deles.
  */
 export default function LibraryScreen() {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
 
   const [search, setSearch] = useState('');
@@ -55,14 +53,18 @@ export default function LibraryScreen() {
     [group, equipment, search],
   );
 
-  const add = async (movement: Movement) => {
-    // Guarda contra o toque duplo e contra o movimento que o usuario ja tem sob
-    // outro caminho: `exercises` nao tem unique por nome, e duplicata no
-    // catalogo quebra o historico, que e por exercicio.
-    if (owned.has(normalizeName(movement.name))) return;
-    await createExercise(movement.name, movement.muscleGroup, movement.kind);
-    bumpData();
-  };
+  // Estavel entre letras da busca — ver o `memo` de `MovementRow`.
+  const add = useCallback(
+    async (movement: Movement) => {
+      // Guarda contra o toque duplo e contra o movimento que o usuario ja tem sob
+      // outro caminho: `exercises` nao tem unique por nome, e duplicata no
+      // catalogo quebra o historico, que e por exercicio.
+      if (data?.has(normalizeName(movement.name))) return;
+      await createExercise(movement.name, movement.muscleGroup, movement.kind);
+      bumpData();
+    },
+    [data],
+  );
 
   return (
     <Screen>
@@ -102,7 +104,7 @@ export default function LibraryScreen() {
               key={movement.slug}
               movement={movement}
               owned={owned.has(normalizeName(movement.name))}
-              onAdd={() => add(movement)}
+              onAdd={add}
             />
           ))}
           {results.length === 0 ? (
@@ -173,15 +175,22 @@ function Chips({
   );
 }
 
-/** Figura, nome, equipamento e o botao de trazer para o catalogo. */
-function MovementRow({
+/**
+ * Figura, nome, equipamento e o botao de trazer para o catalogo.
+ *
+ * `memo`, e por isso `onAdd` recebe o movimento em vez de chegar numa closure
+ * por linha: a tela re-renderiza a cada letra da busca, e sem isso as ate 288
+ * linhas — varias com a figura em SVG — redesenhavam junto, mesmo as que nao
+ * mudaram.
+ */
+const MovementRow = memo(function MovementRow({
   movement,
   owned,
   onAdd,
 }: {
   movement: Movement;
   owned: boolean;
-  onAdd: () => void;
+  onAdd: (movement: Movement) => void;
 }) {
   return (
     <View style={styles.row}>
@@ -201,7 +210,7 @@ function MovementRow({
         </View>
       ) : (
         <PressableSurface
-          onPress={onAdd}
+          onPress={() => onAdd(movement)}
           feedback="control"
           borderRadius={radius.pill}
           style={styles.add}
@@ -211,7 +220,7 @@ function MovementRow({
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   content: {
@@ -270,9 +279,5 @@ const styles = StyleSheet.create({
     height: 32,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  empty: {
-    paddingVertical: spacing.xxl,
-    textAlign: 'center',
   },
 });

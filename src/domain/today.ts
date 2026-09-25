@@ -54,3 +54,14 @@ export function workoutState({
   if (done === 0) return { kind: 'notStarted', total, done: 0, progress: 0 };
   return { kind: 'inProgress', total, done, progress: done / total };
 }
+
+/**
+ * Como o dia se chama na tela: o rotulo que o usuario deu, ou o estado do dia
+ * quando ele nao deu nenhum. `fallback` cobre o dia sem rotulo e sem exercicio
+ * — "Descanso" no plano, "Treino livre" no calendario para um dia registrado.
+ */
+export function dayTitle(name: string, exerciseCount: number, fallback = 'Descanso'): string {
+  const label = name.trim();
+  if (label) return label;
+  return exerciseCount === 0 ? fallback : 'Sem nome';
+}

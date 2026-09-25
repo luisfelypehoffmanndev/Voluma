@@ -135,13 +135,6 @@ export default function SessionScreen() {
     });
   }, []);
 
-  // `reload` do `useQuery` e uma funcao nova a cada render; os cards sao
-  // memoizados e comparam props por referencia, entao ela precisa de uma
-  // identidade estavel para nao derrubar o `memo` de todos eles.
-  const reloadRef = useRef(reload);
-  reloadRef.current = reload;
-  const reloadStable = useCallback(() => reloadRef.current(), []);
-
   const [picking, setPicking] = useState(false);
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const listMotion = useListMotion();
@@ -175,21 +168,26 @@ export default function SessionScreen() {
    * "Pular hoje": sai desta sessao, o plano fica. Nao pergunta nada — e barato
    * de reverter, entao a protecao e o "Desfazer", nao um "tem certeza?".
    */
-  const skipToday = useCallback(async (sessionId: string, item: SessionExercise) => {
-    await skipSessionExercise(sessionId, item.exerciseId);
-    bumpData();
-    reloadRef.current();
-    setUndo({
-      id: Date.now(),
-      message: `${item.exerciseName} · pulado hoje`,
-      onUndo: () => {
-        void unskipSessionExercise(sessionId, item.exerciseId).then(() => {
-          bumpData();
-          reloadRef.current();
-        });
-      },
-    });
-  }, []);
+  // `reload` ja e estavel (`useQuery` o memoiza), entao os cards memoizados
+  // podem recebe-lo direto sem derrubar o `memo`.
+  const skipToday = useCallback(
+    async (sessionId: string, item: SessionExercise) => {
+      await skipSessionExercise(sessionId, item.exerciseId);
+      bumpData();
+      reload();
+      setUndo({
+        id: Date.now(),
+        message: `${item.exerciseName} · pulado hoje`,
+        onUndo: () => {
+          void unskipSessionExercise(sessionId, item.exerciseId).then(() => {
+            bumpData();
+            reload();
+          });
+        },
+      });
+    },
+    [reload],
+  );
 
   /**
    * A ordem que o usuario acabou de arrastar, na frente do que veio do banco.
@@ -389,7 +387,7 @@ export default function SessionScreen() {
                 sessionId={session.id}
                 everyDay={everyDay}
                 onDraft={reportDraft}
-                onStructuralChange={reloadStable}
+                onStructuralChange={reload}
                 onSkip={skipToday}
                 registerSettle={registerSettle}
               />
@@ -686,7 +684,7 @@ const ExerciseCard = memo(
     );
   },
   // `onDraft` e `onStructuralChange` vem memoizados da tela, entao comparar por
-  // referencia aqui e correto — ver `reportDraft`/`reloadStable`.
+  // referencia aqui e correto — ver `reportDraft` e o `reload` de `useQuery`.
   (prev, next) =>
     prev.sessionId === next.sessionId &&
     prev.everyDay === next.everyDay &&
@@ -837,7 +835,7 @@ function RunExerciseCard(props: CardProps) {
    * treino dele; um engasgo de banco nao tem autoridade para revogar. Falhou, o
    * estado continua pendente e a proxima escrita leva tudo junto.
    */
-  const { schedule, discard, settle } = useWriteBehind<{ targets: Targets; done: boolean }>(
+  const { schedule, flush, discard, settle } = useWriteBehind<{ targets: Targets; done: boolean }>(
     useCallback(
       (value) =>
         setSessionExerciseTargets(
@@ -899,7 +897,13 @@ function RunExerciseCard(props: CardProps) {
           setTargets(next);
           // Ja marcado: o numero novo tem que valer na hora, senao o peso do dia
           // ficaria com a carga antiga ate o usuario desmarcar e marcar de novo.
-          if (done) schedule({ targets: next, done: true });
+          // `flush` logo depois porque o `TargetsEditor` ja esperou a mao parar
+          // (`COMMIT_DELAY`) antes de chamar isto — agendar de novo somava um
+          // segundo debounce igual, e a escrita saia com o dobro do atraso.
+          if (done) {
+            schedule({ targets: next, done: true });
+            flush();
+          }
         }}
         resetKey={`${sessionId}:${item.exerciseId}`}
       />
@@ -1425,10 +1429,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     paddingVertical: spacing.sm,
-  },
-  empty: {
-    paddingVertical: spacing.xxxl,
-    textAlign: 'center',
   },
   addExercise: {
     flexDirection: 'row',

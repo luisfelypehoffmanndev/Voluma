@@ -10,9 +10,9 @@ import {
   listSessionSets,
   targetsForWeek,
   trainedDates,
-  volumeByDate,
   type WeekExercise,
 } from '@/db/repo';
+import { dayTitle } from '@/domain/today';
 import type { Routine } from '@/domain/types';
 import { formatDistance, formatDuration } from '@/domain/run';
 import { formatVolume, formatWeight, totalVolume, volumeByExercise } from '@/domain/volume';
@@ -62,13 +62,7 @@ export function CalendarPanel() {
   const lastKey = toDateKey(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0));
 
   const month = useQuery(
-    useCallback(async () => {
-      const [trained, volumes] = await Promise.all([
-        trainedDates(firstKey, lastKey),
-        volumeByDate(firstKey, lastKey),
-      ]);
-      return { trained, volumes };
-    }, [firstKey, lastKey]),
+    useCallback(async () => ({ trained: await trainedDates(firstKey, lastKey) }), [firstKey, lastKey]),
   );
 
   const day = useQuery(
@@ -270,13 +264,6 @@ function DayDetail({
       ))}
     </Card>
   );
-}
-
-/** O nome do dia na tela; `fallback` cobre o dia sem rotulo e sem exercicio. */
-function dayTitle(name: string, exerciseCount: number, fallback: string): string {
-  const label = name.trim();
-  if (label) return label;
-  return exerciseCount === 0 ? fallback : 'Sem nome';
 }
 
 const styles = StyleSheet.create({

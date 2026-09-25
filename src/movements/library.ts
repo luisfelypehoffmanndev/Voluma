@@ -121,11 +121,21 @@ export function libraryEquipment(): readonly string[] {
 
 
 /**
- * A biblioteca filtrada, na ordem em que a tela mostra.
+ * A biblioteca na ordem em que a tela mostra: os ilustrados primeiro, depois
+ * alfabetica. Numa grade de figuras, um bloco de placeholders no meio le como
+ * carregamento travado.
  *
- * Ordena os ilustrados primeiro dentro de cada grupo: numa grade de figuras, um
- * bloco de placeholders no meio le como carregamento travado.
+ * Ordenada uma vez so, ao carregar o modulo. A ordem nao depende dos filtros, e
+ * `filter` preserva a ordem de entrada — entao filtrar esta lista da o mesmo
+ * resultado que filtrar e ordenar, sem pagar 288 `localeCompare` a cada letra
+ * digitada na busca.
  */
+const DISPLAY_ORDER: readonly Movement[] = [...MOVEMENT_LIBRARY].sort((a, b) => {
+  if (a.illustrated !== b.illustrated) return a.illustrated ? -1 : 1;
+  return a.name.localeCompare(b.name, 'pt-BR');
+});
+
+/** A biblioteca filtrada, na ordem em que a tela mostra (ver `DISPLAY_ORDER`). */
 export function filterMovements(options: {
   group?: MuscleGroup | null;
   equipment?: string | null;
@@ -133,13 +143,10 @@ export function filterMovements(options: {
 }): Movement[] {
   const term = options.search ? normalizeName(options.search) : '';
 
-  return MOVEMENT_LIBRARY.filter((movement) => {
+  return DISPLAY_ORDER.filter((movement) => {
     if (options.group && movement.muscleGroup !== options.group) return false;
     if (options.equipment && movement.equipment !== options.equipment) return false;
     if (term && !HAYSTACK.get(movement.slug)!.includes(term)) return false;
     return true;
-  }).sort((a, b) => {
-    if (a.illustrated !== b.illustrated) return a.illustrated ? -1 : 1;
-    return a.name.localeCompare(b.name, 'pt-BR');
   });
 }

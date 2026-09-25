@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { listExercises, listRoutines, listRoutineExercises } from '@/db/repo';
+import { listExercises, listRoutines, routineExerciseCounts } from '@/db/repo';
 import type { Weekday } from '@/domain/types';
 import { weekPlan, weekdayName } from '@/domain/week';
 import { useQuery } from '@/store/data';
@@ -29,13 +29,15 @@ export default function PlanScreen() {
 
   const { data, error, reload } = useQuery(
     useCallback(async () => {
-      const [routines, exercises] = await Promise.all([listRoutines(), listExercises()]);
+      const [routines, exercises, perRoutine] = await Promise.all([
+        listRoutines(),
+        listExercises(),
+        routineExerciseCounts(),
+      ]);
       // Os sete dias sao sintetizados aqui; no banco so existe linha para os
       // dias que ja receberam nome ou exercicio.
       const days = weekPlan(routines);
-      const counts = await Promise.all(
-        days.map(async (day) => (day ? (await listRoutineExercises(day.id)).length : 0)),
-      );
+      const counts = days.map((day) => (day ? (perRoutine.get(day.id) ?? 0) : 0));
       return { days, counts, exercises };
     }, []),
   );

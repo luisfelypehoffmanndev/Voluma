@@ -1,5 +1,5 @@
 import 'react-native-url-polyfill/auto';
-import 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 // Imports por subcaminho, nao pelo indice do pacote: o indice reexporta todos
 // os pesos e o bundler acaba embarcando ~2 MB de TTF que o app nunca usa.
@@ -12,7 +12,6 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useOnboarding } from '@/store/onboarding';

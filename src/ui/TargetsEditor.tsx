@@ -167,6 +167,20 @@ export function TargetsEditor({
     timer.current = setTimeout(commit, COMMIT_DELAY);
   };
 
+  // A figura mora no vao que o `space-between` de cada linha ja deixava vazio,
+  // entre a coluna dos rotulos e a dos controles. Absoluta porque um wrapper em
+  // linha encolheria os steppers, e o comentario do topo registra que eles
+  // foram empilhados justamente por falta de largura.
+  //
+  // `pointerEvents="none"` nao e detalhe: a caixa do numero e tocavel onde
+  // `editable`, e uma camada por cima engoliria esse toque.
+  const figure =
+    size > 0 && figureSlug ? (
+      <View pointerEvents="none" style={[styles.figure, { left: labelWidth + FIGURE_GAP }]}>
+        <MovementFigure slug={figureSlug} size={size} animated />
+      </View>
+    ) : null;
+
   if (kind === 'run') {
     const pace = formatPace(targets.distanceKm, targets.durationMin);
     return (
@@ -199,18 +213,7 @@ export function TargetsEditor({
             onChange={(durationMin) => change({ durationMin })}
           />
 
-          {/* A figura mora no vao que o `space-between` de cada linha ja deixava
-              vazio, entre a coluna dos rotulos e a dos controles. Absoluta porque
-              um wrapper em linha encolheria os steppers, e o comentario do topo
-              registra que eles foram empilhados justamente por falta de largura.
-
-              `pointerEvents="none"` nao e detalhe: a caixa do numero e tocavel
-              onde `editable`, e uma camada por cima engoliria esse toque. */}
-          {size > 0 && figureSlug ? (
-            <View pointerEvents="none" style={[styles.figure, { left: labelWidth + FIGURE_GAP }]}>
-              <MovementFigure slug={figureSlug} size={size} animated />
-            </View>
-          ) : null}
+          {figure}
         </View>
 
         {/* Ritmo e derivado, nunca gravado: some quando falta distancia ou tempo.
@@ -258,18 +261,7 @@ export function TargetsEditor({
           onChange={(weightKg) => change({ weightKg })}
         />
 
-        {/* A figura mora no vao que o `space-between` de cada linha ja deixava
-            vazio, entre a coluna dos rotulos e a dos controles. Absoluta porque
-            um wrapper em linha encolheria os steppers, e o comentario do topo
-            registra que eles foram empilhados justamente por falta de largura.
-
-            `pointerEvents="none"` nao e detalhe: a caixa do numero e tocavel
-            onde `editable`, e uma camada por cima engoliria esse toque. */}
-        {size > 0 && figureSlug ? (
-          <View pointerEvents="none" style={[styles.figure, { left: labelWidth + FIGURE_GAP }]}>
-            <MovementFigure slug={figureSlug} size={size} animated />
-          </View>
-        ) : null}
+        {figure}
       </View>
     </View>
   );

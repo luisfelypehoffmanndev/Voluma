@@ -1,5 +1,5 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import Animated, { LayoutAnimationConfig, useAnimatedRef } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -68,7 +68,6 @@ const SOURCE_LABEL: Record<TargetSource, string> = {
  */
 export default function DayScreen() {
   const params = useLocalSearchParams<{ weekday: string }>();
-  const router = useRouter();
   const insets = useSafeAreaInsets();
 
   const weekday = Number(params.weekday) as Weekday;
@@ -211,11 +210,7 @@ export default function DayScreen() {
             scrollableRef={scrollRef}
             gap={spacing.lg}
             renderItem={(item) => (
-              <ExerciseCard
-                item={item}
-                weekStart={weekStart}
-                onRemove={() => setRemoving(item)}
-              />
+              <ExerciseCard item={item} weekStart={weekStart} onRemove={setRemoving} />
             )}
           />
         ) : null}
@@ -283,8 +278,13 @@ function weekOffsetLabel(weekStart: string, currentWeek: string): string {
  *
  * `resetKey` amarra o editor a semana: trocar de semana descarta a edicao
  * pendente em vez de grava-la na semana errada.
+ *
+ * `memo` porque a lista re-renderiza inteira ao pegar e ao soltar um card no
+ * arraste (`ReorderableList` guarda qual esta levantado), e cada card carrega
+ * steppers e a figura do movimento. Por isso `onRemove` recebe o item em vez de
+ * vir embrulhado numa closure nova a cada render.
  */
-function ExerciseCard({
+const ExerciseCard = memo(function ExerciseCard({
   item,
   weekStart,
   onRemove,
@@ -292,7 +292,7 @@ function ExerciseCard({
   item: WeekExercise;
   weekStart: string;
   /** Abre a pergunta; remover do plano nunca e a um toque. */
-  onRemove: () => void;
+  onRemove: (item: WeekExercise) => void;
 }) {
   const commit = useCallback(
     (targets: Targets) => {
@@ -310,7 +310,7 @@ function ExerciseCard({
         </View>
         <Pressable
           hitSlop={hitSlop}
-          onPress={onRemove}
+          onPress={() => onRemove(item)}
           accessibilityLabel={`Remover ${item.exerciseName} do plano`}
         >
           <TrashIcon size={16} color={colors.textSecondary} />
@@ -326,7 +326,7 @@ function ExerciseCard({
       />
     </Card>
   );
-}
+});
 
 /** O rotulo do dia, gravado depois que a mao para — como os steppers. */
 function DayNameInput({ routineId, value }: { routineId: string; value: string }) {
@@ -407,9 +407,5 @@ const styles = StyleSheet.create({
   },
   itemText: {
     flex: 1,
-  },
-  empty: {
-    paddingVertical: spacing.xxxl,
-    textAlign: 'center',
   },
 });
