@@ -8,23 +8,21 @@ import {
   useWindowDimensions,
 } from 'react-native';
 
-import { getDb } from '@/db/client';
 import {
   getOrCreateSessionForDate,
   getSessionByDate,
   listBodyWeightLogs,
-  listRoutineExercises,
   listRoutines,
   listSessionSets,
+  routineExerciseCounts,
   targetsForWeek,
-  trainedDates,
   volumeByDate,
   type WeekExercise,
 } from '@/db/repo';
 import { applyOrder } from '@/domain/order';
 import { buildDotMatrix, currentStreak } from '@/domain/streak';
 import { formatDistance, formatDuration } from '@/domain/run';
-import { workoutState, type WorkoutState } from '@/domain/today';
+import { dayTitle, workoutState, type WorkoutState } from '@/domain/today';
 import { formatVolume, formatWeight } from '@/domain/volume';
 import type { Routine, Weekday } from '@/domain/types';
 import {
@@ -87,7 +85,7 @@ export default function HomeScreen() {
   // card dos dois lados.
   const matrixWidth = width - spacing.xl * 4;
 
-  const { data, loading, error, reload } = useQuery(useCallback(loadHome, []));
+  const { data, loading, error, reload } = useQuery(useCallback(() => loadHome(), []));
 
   // Um treino por data: abrir de novo cai no mesmo registro, com os numeros que
   // ja foram gravados. "Comecar" e "continuar" abrem a mesma sessao; o que muda
@@ -261,8 +259,6 @@ function todaySubtitle(now = new Date()): string {
 }
 
 async function loadHome() {
-  await getDb();
-
   const now = new Date();
   const todayKey = toDateKey(now);
   // O mesmo numero alimenta a consulta e a grade: se divergirem, o dot-matrix
@@ -270,10 +266,10 @@ async function loadHome() {
   const matrixDays = daysSinceMonthStart(now, MATRIX_MONTHS);
   const window = lastNDays(now, matrixDays);
 
-  const [routines, volumes, trained, weights, session] = await Promise.all([
+  const [routines, volumes, counts, weights, session] = await Promise.all([
     listRoutines(),
     volumeByDate(window[0], todayKey),
-    trainedDates(window[0], todayKey),
+    routineExerciseCounts(),
     listBodyWeightLogs(1),
     getSessionByDate(todayKey),
   ]);
@@ -281,14 +277,13 @@ async function loadHome() {
   const weekStart = weekStartKey(now);
   const todayRoutine = routineForWeekday(routines, weekdayOf(now));
   // Os numeros da semana, ja resolvidos: e o que o card de hoje mostra e o que
-  // a sessao vai materializar quando o usuario tocar em treinar.
-  const todayExercises = todayRoutine ? await targetsForWeek(weekStart, todayRoutine.id) : [];
-  const plannedSets = todayExercises.reduce((sum, item) => sum + item.targets.sets, 0);
-
-  const [upcoming, sessionSets] = await Promise.all([
-    nextDays(routines, now, 3),
+  // a sessao vai materializar quando o usuario tocar em treinar. So depende das
+  // rotinas e da sessao, entao roda junto com as series de hoje.
+  const [todayExercises, sessionSets] = await Promise.all([
+    todayRoutine ? targetsForWeek(weekStart, todayRoutine.id) : Promise.resolve<WeekExercise[]>([]),
     session ? listSessionSets(session.id) : Promise.resolve([]),
   ]);
+  const plannedSets = todayExercises.reduce((sum, item) => sum + item.targets.sets, 0);
 
   const weekKeys = lastNDays(now, 7);
   const weekVolume = weekKeys.reduce((sum, key) => sum + (volumes.get(key) ?? 0), 0);
@@ -308,11 +303,13 @@ async function loadHome() {
         completed: session?.completedAt != null,
       }),
     },
-    upcoming,
+    upcoming: nextDays(routines, counts, now, 3),
     weekVolume,
     bodyWeight: weights[0] ?? null,
     dots: buildDotMatrix(volumes, now, matrixDays),
-    streak: currentStreak(trained, now),
+    // `volumeByDate` ja devolve toda data com sessao (o LEFT JOIN mantem as de
+    // volume zero), que e exatamente o conjunto de dias treinados.
+    streak: currentStreak(new Set(volumes.keys()), now),
   };
 }
 
@@ -340,57 +337,30 @@ function targetsLabel(item: WeekExercise): string {
 }
 
 /**
- * Como o dia se chama na tela: o rotulo que o usuario deu, ou o estado do dia
- * quando ele nao deu nenhum.
- */
-function dayTitle(name: string, exerciseCount: number): string {
-  const label = name.trim();
-  if (label) return label;
-  return exerciseCount === 0 ? 'Descanso' : 'Sem nome';
-}
-
-/**
  * Os proximos dias com treino, olhando ate uma semana a frente.
  *
  * Nunca conta hoje — hoje ja tem o card grande. E pula dia sem exercicio: com
  * os sete dias sempre existindo, "tem rotina" deixou de significar "treina
  * nesse dia", e so a contagem de exercicios distingue treino de descanso.
  */
-async function nextDays(
+function nextDays(
   routines: readonly Routine[],
+  counts: ReadonlyMap<string, number>,
   from: Date,
   count: number,
-): Promise<{ weekday: Weekday; name: string; exerciseCount: number }[]> {
-  const candidates: { weekday: Weekday; routine: Routine }[] = [];
+): { weekday: Weekday; name: string }[] {
+  const found: { weekday: Weekday; name: string }[] = [];
 
-  for (let daysAhead = 1; daysAhead <= 7; daysAhead += 1) {
+  for (let daysAhead = 1; daysAhead <= 7 && found.length < count; daysAhead += 1) {
     const date = new Date(from);
     date.setDate(date.getDate() + daysAhead);
     const weekday = weekdayOf(date);
 
     const routine = routineForWeekday(routines, weekday);
-    if (routine) candidates.push({ weekday, routine });
-  }
+    const exerciseCount = routine ? (counts.get(routine.id) ?? 0) : 0;
+    if (!routine || exerciseCount === 0) continue;
 
-  // As consultas rodam em paralelo, nao uma atras da outra: o card de
-  // "Proximos" nao precisa esperar ate sete idas e voltas ao SQLite em serie
-  // so para descobrir quais dias tem exercicio — o tempo total vira o da mais
-  // lenta, nao a soma de todas.
-  const itemsByCandidate = await Promise.all(
-    candidates.map((candidate) => listRoutineExercises(candidate.routine.id)),
-  );
-
-  const found: { weekday: Weekday; name: string; exerciseCount: number }[] = [];
-
-  for (let i = 0; i < candidates.length && found.length < count; i += 1) {
-    const items = itemsByCandidate[i];
-    if (items.length === 0) continue;
-
-    found.push({
-      weekday: candidates[i].weekday,
-      name: dayTitle(candidates[i].routine.name, items.length),
-      exerciseCount: items.length,
-    });
+    found.push({ weekday, name: dayTitle(routine.name, exerciseCount) });
   }
 
   return found;

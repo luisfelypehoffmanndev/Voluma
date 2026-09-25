@@ -1,6 +1,6 @@
 import type { Profile } from '@/domain/types';
 
-import { supabase } from './supabase';
+import { requireClient } from './requireClient';
 
 /**
  * Leitura e escrita do perfil publico.
@@ -120,9 +120,4 @@ function toProfile(row: Row): Profile {
     trainingYears: row.training_years,
     sharesStats: row.shares_stats,
   };
-}
-
-function requireClient() {
-  if (!supabase) throw new Error('Nuvem não configurada');
-  return supabase;
 }

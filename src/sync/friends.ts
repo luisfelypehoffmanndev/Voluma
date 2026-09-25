@@ -1,6 +1,6 @@
 import type { FriendDirection, FriendRow, FriendStatus } from '@/domain/friends';
 
-import { supabase } from './supabase';
+import { requireClient } from './requireClient';
 
 /**
  * Leitura e escrita das amizades.
@@ -108,9 +108,4 @@ function toFriend(row: Row): FriendRow {
     age: row.age,
     trainingYears: row.training_years,
   };
-}
-
-function requireClient() {
-  if (!supabase) throw new Error('Nuvem não configurada');
-  return supabase;
 }

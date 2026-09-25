@@ -360,7 +360,4 @@ const styles = StyleSheet.create({
     gap: 2,
     marginTop: spacing.sm,
   },
-  empty: {
-    paddingTop: spacing.lg,
-  },
 });

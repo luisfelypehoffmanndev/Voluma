@@ -1,15 +1,9 @@
 import { Canvas, Fill, Shader, Skia, type SkRuntimeEffect } from '@shopify/react-native-skia';
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 
+import { grayOf } from '@/theme/composite';
 import { ambient, colors } from '@/theme/tokens';
-
-/** O valor de cinza de um hex `#RRGGBB` — o mesmo `grayOf` de `composite.ts`. */
-function grayOf(hex: string): number {
-  const channel = hex.match(/^#([0-9a-f]{2})/i);
-  if (!channel) throw new Error(`Nao e um hex #RRGGBB: ${hex}`);
-  return parseInt(channel[1], 16);
-}
 
 /**
  * O SkSL e GERADO a partir dos tokens, e nao escrito a mao.
@@ -152,8 +146,12 @@ const source = compile();
  * Ele nao rola: fica fora do `ScrollView`, entao os cards deslizam por cima e
  * mudam de luminancia enquanto a lista anda. Essa paralaxe e o que vende o
  * vidro, e o brief a chama de arquitetura, nao efeito.
+ *
+ * `memo` porque nao tem props e mora dentro de todo `Screen`: sem ele, cada
+ * `setState` de uma tela (cada toque no treino, cada letra de uma busca)
+ * reconciliava o Canvas do Skia junto, para desenhar exatamente a mesma coisa.
  */
-export function Ambient() {
+export const Ambient = memo(function Ambient() {
   const { width, height } = useWindowDimensions();
   const uniforms = useMemo(() => ({ uSize: [width, height] }), [width, height]);
 
@@ -166,7 +164,7 @@ export function Ambient() {
       </Canvas>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   field: {

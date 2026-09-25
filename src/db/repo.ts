@@ -15,7 +15,7 @@ import type {
 } from '@/domain/types';
 import { runTargetsFromSets } from '@/domain/run';
 import { resolveTargets, targetsFromSets } from '@/domain/targets';
-import { fromDateKey, toDateKey, weekStartKey, weekdayOf } from '@/domain/week';
+import { fromDateKey, toDateKey, weekdayOf } from '@/domain/week';
 
 import { pickCanonicalRun, RUN_EXERCISE_NAME } from './canonical';
 import { getDb } from './client';
@@ -43,7 +43,7 @@ import {
  * as duas, a mudanca sumiria do sync — por isso a transacao.
  */
 
-export const newId = (): string => Crypto.randomUUID();
+const newId = (): string => Crypto.randomUUID();
 const now = (): string => new Date().toISOString();
 
 /** Marca uma linha como pendente de envio ao Supabase. */
@@ -170,19 +170,6 @@ export async function exerciseDayCounts(): Promise<Map<string, number>> {
   return new Map(rows.map((row) => [row.exercise_id, row.days]));
 }
 
-export async function renameExercise(id: string, name: string): Promise<void> {
-  const db = await getDb();
-  await db.withTransactionAsync(async () => {
-    await db.runAsync(
-      'UPDATE exercises SET name = ?, updated_at = ? WHERE id = ?',
-      name.trim(),
-      now(),
-      id,
-    );
-    await enqueue(db, 'exercises', id);
-  });
-}
-
 export async function deleteExercise(id: string): Promise<void> {
   await softDelete('exercises', id);
 }
@@ -195,12 +182,6 @@ export async function listRoutines(): Promise<Routine[]> {
     'SELECT * FROM routines WHERE deleted_at IS NULL ORDER BY weekday, position',
   );
   return rows.map(toRoutine);
-}
-
-export async function getRoutine(id: string): Promise<Routine | null> {
-  const db = await getDb();
-  const row = await db.getFirstAsync<RoutineRow>('SELECT * FROM routines WHERE id = ?', id);
-  return row ? toRoutine(row) : null;
 }
 
 export async function createRoutine(name: string, weekday: Weekday): Promise<Routine> {
@@ -241,19 +222,22 @@ export async function createRoutine(name: string, weekday: Weekday): Promise<Rou
  * `routine_id`. A busca e a criacao ficam na mesma transacao porque dois toques
  * rapidos em "adicionar exercicio" num dia vazio criariam duas rotinas para o
  * mesmo dia — exatamente a duplicata que a migracao v2 existe para limpar.
+ *
+ * Antes da transacao vem uma leitura simples, porque o caso comum e o dia ja
+ * existir: a tela do dia chama isto em toda recarga (cada ajuste de stepper),
+ * e abrir uma transacao de escrita so para ler entrava na fila de
+ * `serializeTransactions` atras das escritas de verdade. A transacao continua
+ * refazendo a busca, entao a corrida dos dois toques segue coberta.
  */
 export async function ensureDayRoutine(weekday: Weekday): Promise<Routine> {
   const db = await getDb();
+  const found = await findDayRoutine(db, weekday);
+  if (found) return toRoutine(found);
+
   let routine: Routine | null = null;
 
   await db.withTransactionAsync(async () => {
-    const existing = await db.getFirstAsync<RoutineRow>(
-      `SELECT * FROM routines
-        WHERE weekday = ? AND deleted_at IS NULL
-        ORDER BY position, updated_at, id
-        LIMIT 1`,
-      weekday,
-    );
+    const existing = await findDayRoutine(db, weekday);
     if (existing) {
       routine = toRoutine(existing);
       return;
@@ -286,6 +270,17 @@ export async function ensureDayRoutine(weekday: Weekday): Promise<Routine> {
   return routine;
 }
 
+/** A rotina canonica de um dia da semana — a mesma escolha que o resto do app faz. */
+function findDayRoutine(db: SQLiteDatabase, weekday: Weekday): Promise<RoutineRow | null> {
+  return db.getFirstAsync<RoutineRow>(
+    `SELECT * FROM routines
+      WHERE weekday = ? AND deleted_at IS NULL
+      ORDER BY position, updated_at, id
+      LIMIT 1`,
+    weekday,
+  );
+}
+
 export async function updateRoutine(
   id: string,
   patch: { name?: string; weekday?: Weekday },
@@ -303,10 +298,6 @@ export async function updateRoutine(
   });
 }
 
-export async function deleteRoutine(id: string): Promise<void> {
-  await softDelete('routines', id);
-}
-
 // ------------------------------------------------- exercicios de uma rotina
 
 export type RoutineExerciseWithName = RoutineExercise & {
@@ -314,7 +305,7 @@ export type RoutineExerciseWithName = RoutineExercise & {
   exerciseKind: ExerciseKind;
 };
 
-export async function listRoutineExercises(
+async function listRoutineExercises(
   routineId: string,
 ): Promise<RoutineExerciseWithName[]> {
   const db = await getDb();
@@ -368,49 +359,56 @@ export async function addExerciseToRoutine(
   });
 }
 
-export async function updateRoutineExercise(
-  id: string,
-  targets: Targets,
-): Promise<void> {
+/**
+ * Quantos exercicios cada rotina tem, pela mesma regra de `listRoutineExercises`
+ * (vinculo e exercicio vivos).
+ *
+ * Para as telas que so precisam do numero — o Plano e os "Proximos" da home —
+ * e que antes carregavam a lista inteira de cada dia so para ler `.length`: ate
+ * sete consultas viravam uma.
+ */
+export async function routineExerciseCounts(): Promise<Map<string, number>> {
   const db = await getDb();
-  await db.withTransactionAsync(async () => {
-    await db.runAsync(
-      `UPDATE routine_exercises
-          SET target_sets = ?, target_reps = ?, target_weight_kg = ?,
-              target_distance_km = ?, target_duration_min = ?, updated_at = ?
-        WHERE id = ?`,
-      targets.sets,
-      targets.reps,
-      targets.weightKg,
-      targets.distanceKm,
-      targets.durationMin,
-      now(),
-      id,
-    );
-    await enqueue(db, 'routine_exercises', id);
-  });
+  const rows = await db.getAllAsync<{ routine_id: string; count: number }>(
+    `SELECT re.routine_id AS routine_id, COUNT(*) AS count
+       FROM routine_exercises re
+       JOIN exercises e ON e.id = re.exercise_id
+      WHERE re.deleted_at IS NULL AND e.deleted_at IS NULL
+      GROUP BY re.routine_id`,
+  );
+  return new Map(rows.map((row) => [row.routine_id, row.count]));
 }
 
 export async function removeRoutineExercise(id: string): Promise<void> {
   await softDelete('routine_exercises', id);
 }
 
-/** Reordena aplicando a nova posicao de cada item — usado pelo drag da lista. */
+/**
+ * Reordena aplicando a nova posicao de cada item — usado pelo drag da lista.
+ *
+ * Uma UPDATE so, com a posicao saindo de um `CASE` sobre o id, e um enqueue em
+ * lote — em vez de UPDATE + enqueue por item, 2N idas ao SQLite em sequencia.
+ * Os ids vao por bind param como qualquer valor; a lista e curta (os
+ * exercicios de um dia), longe do limite de parametros do SQLite.
+ */
 export async function reorderRoutineExercises(orderedIds: readonly string[]): Promise<void> {
+  if (orderedIds.length === 0) return;
   const db = await getDb();
   const timestamp = now();
+  const cases = orderedIds.map(() => 'WHEN ? THEN ?').join(' ');
+  const positions = orderedIds.flatMap((id, position) => [id, position]);
+  const inList = orderedIds.map(() => '?').join(', ');
 
   await db.withTransactionAsync(async () => {
-    for (let position = 0; position < orderedIds.length; position += 1) {
-      const id = orderedIds[position];
-      await db.runAsync(
-        'UPDATE routine_exercises SET position = ?, updated_at = ? WHERE id = ?',
-        position,
-        timestamp,
-        id,
-      );
-      await enqueue(db, 'routine_exercises', id);
-    }
+    await db.runAsync(
+      `UPDATE routine_exercises
+          SET position = CASE id ${cases} END, updated_at = ?
+        WHERE id IN (${inList})`,
+      ...positions,
+      timestamp,
+      ...orderedIds,
+    );
+    await enqueueWhere(db, 'routine_exercises', `id IN (${inList})`, orderedIds, timestamp);
   });
 }
 
@@ -426,15 +424,21 @@ export type WeekExercise = RoutineExerciseWithName & {
 };
 
 /**
- * Os alvos de UM exercicio na ultima vez que ele foi treinado antes de `before`.
+ * Os alvos de cada exercicio na ultima vez que ele foi treinado antes de
+ * `before`. Exercicio sem historico fica fora do mapa.
  *
- * Duas leituras em vez de uma: a primeira acha a sessao, a segunda le as series
- * dela. Um `GROUP BY` sozinho nao resolve porque `reps` e `weight_kg` tem que
- * sair da mesma serie (a ultima), e nao de agregados independentes.
+ * Uma consulta para todos, nao uma por exercicio. `ranked` escolhe, por
+ * exercicio, a sessao que vale (`ROW_NUMBER` com a ordenacao descrita abaixo);
+ * o `SELECT` de fora le as series dessa sessao. Um `GROUP BY` sozinho nao
+ * resolveria porque `reps` e `weight_kg` tem que sair da mesma serie (a
+ * ultima), e nao de agregados independentes. Antes eram duas leituras POR
+ * exercicio, e esta funcao roda na home, no calendario, na tela do dia, na
+ * sessao e no resultado — um dia de sete exercicios custava quatorze idas ao
+ * SQLite, todas na mesma conexao.
  *
  * Tres filtros que parecem redundantes e nao sao. `finished_at IS NOT NULL`
  * exclui o treino em andamento; `deleted_at IS NULL` aproveita que
- * `finishSession` soft-deleta toda serie que ficou desmarcada; e `done = 1`
+ * `completeSession` soft-deleta toda serie que ficou desmarcada; e `done = 1`
  * pega o caso que escapa dos dois — desmarcar uma serie DEPOIS de finalizar o
  * treino deixa uma linha viva com `done = 0`, que e alvo, nao carga levantada.
  *
@@ -452,65 +456,82 @@ export type WeekExercise = RoutineExerciseWithName & {
  */
 async function lastPerformedTargets(
   db: SQLiteDatabase,
-  exerciseId: string,
-  kind: ExerciseKind,
+  exercises: readonly { exerciseId: string; exerciseKind: ExerciseKind }[],
   routineId: string,
   before: string,
-): Promise<Targets | null> {
-  const session = await db.getFirstAsync<{ session_id: string }>(
-    `SELECT ss.session_id AS session_id
-       FROM session_sets ss
-       JOIN sessions s ON s.id = ss.session_id
-      WHERE ss.exercise_id = ?
-        AND ss.done = 1
-        AND ss.deleted_at IS NULL
-        AND s.deleted_at IS NULL
-        AND s.finished_at IS NOT NULL
-        AND s.date < ?
-        AND s.date >= date(?, '-365 days')
-      GROUP BY s.id
-      ORDER BY CASE WHEN s.routine_id = ? AND s.date >= date(?, '-35 days')
-                    THEN 0 ELSE 1 END,
-               s.date DESC,
-               s.started_at DESC
-      LIMIT 1`,
-    exerciseId,
-    before,
-    before,
-    routineId,
-    before,
-  );
-  if (!session) return null;
+): Promise<Map<string, Targets | null>> {
+  const kinds = new Map(exercises.map((item) => [item.exerciseId, item.exerciseKind]));
+  if (kinds.size === 0) return new Map();
 
+  const ids = [...kinds.keys()];
   const sets = await db.getAllAsync<{
+    exercise_id: string;
     set_index: number;
     reps: number;
     weight_kg: number;
     distance_km: number;
     duration_min: number;
   }>(
-    `SELECT set_index, reps, weight_kg, distance_km, duration_min
-       FROM session_sets
-      WHERE session_id = ? AND exercise_id = ? AND done = 1 AND deleted_at IS NULL`,
-    session.session_id,
-    exerciseId,
+    `WITH ranked AS (
+       SELECT ss.exercise_id AS exercise_id,
+              s.id           AS session_id,
+              ROW_NUMBER() OVER (
+                PARTITION BY ss.exercise_id
+                ORDER BY CASE WHEN s.routine_id = ? AND s.date >= date(?, '-35 days')
+                              THEN 0 ELSE 1 END,
+                         s.date DESC,
+                         s.started_at DESC
+              ) AS rank
+         FROM session_sets ss
+         JOIN sessions s ON s.id = ss.session_id
+        WHERE ss.exercise_id IN (${ids.map(() => '?').join(', ')})
+          AND ss.done = 1
+          AND ss.deleted_at IS NULL
+          AND s.deleted_at IS NULL
+          AND s.finished_at IS NOT NULL
+          AND s.date < ?
+          AND s.date >= date(?, '-365 days')
+        GROUP BY ss.exercise_id, s.id
+     )
+     SELECT ss.exercise_id, ss.set_index, ss.reps, ss.weight_kg, ss.distance_km, ss.duration_min
+       FROM ranked r
+       JOIN session_sets ss
+         ON ss.session_id = r.session_id AND ss.exercise_id = r.exercise_id
+      WHERE r.rank = 1 AND ss.done = 1 AND ss.deleted_at IS NULL`,
+    routineId,
+    before,
+    ...ids,
+    before,
+    before,
   );
+
+  const byExercise = new Map<string, typeof sets>();
+  for (const set of sets) {
+    const bucket = byExercise.get(set.exercise_id);
+    if (bucket) bucket.push(set);
+    else byExercise.set(set.exercise_id, [set]);
+  }
 
   // Corrida soma as series (3 km + 2 km = 5 km); carga pega a ultima serie. As
   // duas regras vivem em `@/domain/run` e `@/domain/targets`, testadas la.
-  if (kind === 'run') {
-    return runTargetsFromSets(
-      sets.map((set) => ({
-        distanceKm: set.distance_km,
-        durationMin: set.duration_min,
-        done: true,
-      })),
+  const result = new Map<string, Targets | null>();
+  for (const [exerciseId, bucket] of byExercise) {
+    result.set(
+      exerciseId,
+      kinds.get(exerciseId) === 'run'
+        ? runTargetsFromSets(
+            bucket.map((set) => ({
+              distanceKm: set.distance_km,
+              durationMin: set.duration_min,
+              done: true,
+            })),
+          )
+        : targetsFromSets(
+            bucket.map((set) => ({ setIndex: set.set_index, reps: set.reps, weightKg: set.weight_kg })),
+          ),
     );
   }
-
-  return targetsFromSets(
-    sets.map((set) => ({ setIndex: set.set_index, reps: set.reps, weightKg: set.weight_kg })),
-  );
+  return result;
 }
 
 /**
@@ -525,57 +546,56 @@ export async function targetsForWeek(
   routineId: string,
 ): Promise<WeekExercise[]> {
   const db = await getDb();
-  const planned = await listRoutineExercises(routineId);
 
   // ORDER BY + Map: sem indice unico, o sync pode deixar duas linhas para o
   // mesmo slot. A ultima gravacao vence, e o `set` sobrescreve o que veio antes
   // porque a ordem crescente coloca a mais nova no fim.
-  const overrides = await db.getAllAsync<WeekTargetRow>(
-    `SELECT * FROM week_targets
-      WHERE week_start = ? AND deleted_at IS NULL
-      ORDER BY updated_at ASC, id ASC`,
-    weekStart,
-  );
+  const [planned, overrides] = await Promise.all([
+    listRoutineExercises(routineId),
+    db.getAllAsync<WeekTargetRow>(
+      `SELECT * FROM week_targets
+        WHERE week_start = ? AND deleted_at IS NULL
+        ORDER BY updated_at ASC, id ASC`,
+      weekStart,
+    ),
+  ]);
   const bySlot = new Map<string, WeekTarget>();
   for (const row of overrides) bySlot.set(row.routine_exercise_id, toWeekTarget(row));
 
-  // Uma consulta por exercicio, mas em PARALELO — nao uma esperando a
-  // anterior. Esta funcao roda de novo a cada `bumpData` (todo `write` de
-  // checkbox chama um), entao um treino de sete exercicios em serie somava
-  // sete idas e voltas ao SQLite a cada toque; em paralelo o tempo total vira
-  // o da mais lenta, nao a soma de todas.
-  const resolved: WeekExercise[] = await Promise.all(
-    planned.map(async (item) => {
-      const override = bySlot.get(item.id) ?? null;
-      const performed = override
-        ? null // ja tem decisao explicita; nao gasta consulta com o historico
-        : await lastPerformedTargets(db, item.exerciseId, item.exerciseKind, routineId, weekStart);
-
-      const overrideTargets = override
-        ? {
-            sets: override.targetSets,
-            reps: override.targetReps,
-            weightKg: override.targetWeightKg,
-            distanceKm: override.targetDistanceKm,
-            durationMin: override.targetDurationMin,
-          }
-        : null;
-
-      return {
-        ...item,
-        source: overrideTargets ? 'override' : performed ? 'lastActual' : 'plan',
-        targets: resolveTargets(overrideTargets, performed, {
-          sets: item.targetSets,
-          reps: item.targetReps,
-          weightKg: item.targetWeightKg,
-          distanceKm: item.targetDistanceKm,
-          durationMin: item.targetDurationMin,
-        }),
-      };
-    }),
+  // So quem nao tem ajuste explicito da semana consulta o historico.
+  const history = await lastPerformedTargets(
+    db,
+    planned.filter((item) => !bySlot.has(item.id)),
+    routineId,
+    weekStart,
   );
 
-  return resolved;
+  return planned.map((item): WeekExercise => {
+    const override = bySlot.get(item.id) ?? null;
+    const performed = override ? null : (history.get(item.exerciseId) ?? null);
+
+    const overrideTargets = override
+      ? {
+          sets: override.targetSets,
+          reps: override.targetReps,
+          weightKg: override.targetWeightKg,
+          distanceKm: override.targetDistanceKm,
+          durationMin: override.targetDurationMin,
+        }
+      : null;
+
+    return {
+      ...item,
+      source: overrideTargets ? 'override' : performed ? 'lastActual' : 'plan',
+      targets: resolveTargets(overrideTargets, performed, {
+        sets: item.targetSets,
+        reps: item.targetReps,
+        weightKg: item.targetWeightKg,
+        distanceKm: item.targetDistanceKm,
+        durationMin: item.targetDurationMin,
+      }),
+    };
+  });
 }
 
 /**
@@ -645,20 +665,6 @@ export async function setWeekTarget(
   });
 }
 
-/** Desfaz o ajuste de uma semana: o exercicio volta a herdar do historico. */
-export async function clearWeekTarget(
-  weekStart: string,
-  routineExerciseId: string,
-): Promise<void> {
-  const db = await getDb();
-  const rows = await db.getAllAsync<{ id: string }>(
-    'SELECT id FROM week_targets WHERE week_start = ? AND routine_exercise_id = ? AND deleted_at IS NULL',
-    weekStart,
-    routineExerciseId,
-  );
-  for (const row of rows) await softDelete('week_targets', row.id);
-}
-
 // ------------------------------------------------------------------ treinos
 
 export async function getSession(id: string): Promise<Session | null> {
@@ -676,22 +682,13 @@ export async function getSessionByDate(dateKey: string): Promise<Session | null>
   return row ? toSession(row) : null;
 }
 
-/** Treino ainda aberto (sem `finished_at`) — o app volta direto para ele. */
-export async function getOpenSession(): Promise<Session | null> {
-  const db = await getDb();
-  const row = await db.getFirstAsync<SessionRow>(
-    'SELECT * FROM sessions WHERE finished_at IS NULL AND deleted_at IS NULL ORDER BY started_at DESC LIMIT 1',
-  );
-  return row ? toSession(row) : null;
-}
-
 /**
  * O treino de uma data, criando-o se ainda nao existir.
  *
- * Nao materializa serie nenhuma, ao contrario de `startSession`: a tela de
- * registro le os alvos da semana via `targetsForWeek` e so grava linha quando o
- * usuario mexe num stepper. Materializar aqui gravaria como "levantado" um
- * treino que o usuario apenas abriu.
+ * Nao materializa serie nenhuma: a tela de registro le os alvos da semana via
+ * `targetsForWeek` e so grava linha quando o usuario mexe num stepper.
+ * Materializar aqui gravaria como "levantado" um treino que o usuario apenas
+ * abriu.
  *
  * Nasce com `finished_at` igual ao `started_at` porque nao ha mais treino em
  * andamento — a tela e edicao direta, nao cronometro. Sem isso o registro
@@ -740,102 +737,6 @@ export async function getOrCreateSessionForDate(when = new Date()): Promise<Sess
   });
 
   return session;
-}
-
-/**
- * Comeca um treino a partir de uma rotina, ja materializando as series-alvo
- * como linhas nao concluidas. Assim a tela de treino so precisa marcar
- * `done` e ajustar numeros, sem criar nada no meio do exercicio.
- */
-export async function startSession(routineId: string | null, when = new Date()): Promise<Session> {
-  const db = await getDb();
-  const session: Session = {
-    id: newId(),
-    routineId,
-    date: toDateKey(when),
-    startedAt: when.toISOString(),
-    finishedAt: null,
-    skippedExerciseIds: [],
-    exerciseOrder: [],
-    completedAt: null,
-    updatedAt: now(),
-    deletedAt: null,
-  };
-
-  // Os alvos saem da semana do treino, nao do plano estatico: e o que faz a
-  // sessao ja nascer com o peso que o usuario levantou da ultima vez.
-  const planned = routineId ? await targetsForWeek(weekStartKey(when), routineId) : [];
-
-  await db.withTransactionAsync(async () => {
-    await db.runAsync(
-      `INSERT INTO sessions (id, routine_id, date, started_at, finished_at, updated_at, deleted_at)
-       VALUES (?, ?, ?, ?, NULL, ?, NULL)`,
-      session.id,
-      session.routineId,
-      session.date,
-      session.startedAt,
-      session.updatedAt,
-    );
-    await enqueue(db, 'sessions', session.id);
-
-    for (const item of planned) {
-      // Corrida entra como UMA linha, com a distancia e o tempo alvo. Repetir a
-      // corrida em N linhas como se fossem series multiplicaria a quilometragem
-      // do dia pelo numero de series.
-      const rows = item.exerciseKind === 'run' ? 1 : item.targets.sets;
-
-      for (let index = 1; index <= rows; index += 1) {
-        const setId = newId();
-        await db.runAsync(
-          `INSERT INTO session_sets
-             (id, session_id, exercise_id, set_index, reps, weight_kg,
-              distance_km, duration_min, done, updated_at, deleted_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, NULL)`,
-          setId,
-          session.id,
-          item.exerciseId,
-          index,
-          item.targets.reps,
-          item.targets.weightKg,
-          item.targets.distanceKm,
-          item.targets.durationMin,
-          session.updatedAt,
-        );
-        await enqueue(db, 'session_sets', setId);
-      }
-    }
-  });
-
-  return session;
-}
-
-export async function finishSession(id: string): Promise<void> {
-  const db = await getDb();
-  const timestamp = now();
-  await db.withTransactionAsync(async () => {
-    await db.runAsync(
-      'UPDATE sessions SET finished_at = ?, updated_at = ? WHERE id = ?',
-      timestamp,
-      timestamp,
-      id,
-    );
-    await enqueue(db, 'sessions', id);
-    // Series nunca marcadas nao viraram carga levantada: descarta para nao
-    // poluir o historico com alvos que nao aconteceram.
-    const orphans = await db.getAllAsync<{ id: string }>(
-      'SELECT id FROM session_sets WHERE session_id = ? AND done = 0 AND deleted_at IS NULL',
-      id,
-    );
-    for (const orphan of orphans) {
-      await db.runAsync(
-        'UPDATE session_sets SET deleted_at = ?, updated_at = ? WHERE id = ?',
-        timestamp,
-        timestamp,
-        orphan.id,
-      );
-      await enqueue(db, 'session_sets', orphan.id);
-    }
-  });
 }
 
 /**
@@ -907,24 +808,39 @@ async function updateSkipped(
 }
 
 /**
- * "Finalizar treino": o que `finishSession` ja fazia (descartar series nunca
- * marcadas) mais `completed_at`, que e o marcador que a home e o resultado leem.
+ * "Finalizar treino": grava `finished_at` e `completed_at` e descarta as series
+ * nunca marcadas. `completed_at` e o marcador que a home e o resultado leem.
  *
  * `finished_at` nao serve de marcador porque `getOrCreateSessionForDate` ja cria
  * a sessao com ele preenchido — ver o comentario de la.
+ *
+ * Tudo numa transacao, com as series descartadas em lote: antes eram duas
+ * transacoes seguidas e uma UPDATE + um enqueue por serie orfa.
  */
 export async function completeSession(id: string): Promise<void> {
-  await finishSession(id);
   const db = await getDb();
   const timestamp = now();
   await db.withTransactionAsync(async () => {
     await db.runAsync(
-      'UPDATE sessions SET completed_at = ?, updated_at = ? WHERE id = ?',
+      'UPDATE sessions SET finished_at = ?, completed_at = ?, updated_at = ? WHERE id = ?',
+      timestamp,
       timestamp,
       timestamp,
       id,
     );
     await enqueue(db, 'sessions', id);
+
+    // Series nunca marcadas nao viraram carga levantada: descarta para nao
+    // poluir o historico com alvos que nao aconteceram. O enqueue vem antes da
+    // UPDATE porque e o mesmo `WHERE` que a UPDATE vai deixar de casar.
+    const orphans = 'session_id = ? AND done = 0 AND deleted_at IS NULL';
+    await enqueueWhere(db, 'session_sets', orphans, [id], timestamp);
+    await db.runAsync(
+      `UPDATE session_sets SET deleted_at = ?, updated_at = ? WHERE ${orphans}`,
+      timestamp,
+      timestamp,
+      id,
+    );
   });
 }
 
@@ -954,10 +870,6 @@ export async function previousVolumeSameWeekday(dateKey: string): Promise<number
   const weekday = weekdayOf(fromDateKey(dateKey));
   const match = rows.find((row) => weekdayOf(fromDateKey(row.date)) === weekday);
   return match ? match.volume : null;
-}
-
-export async function deleteSession(id: string): Promise<void> {
-  await softDelete('sessions', id);
 }
 
 // ------------------------------------------------------------------- series
@@ -1026,9 +938,8 @@ export async function updateSet(
  * Materializa um exercicio inteiro dentro de um treino ja em andamento, criando
  * as series-alvo de uma vez.
  *
- * Mesmo formato que `startSession` usa ao abrir o treino — series nao
- * concluidas, prontas para o usuario so marcar e ajustar. Tudo numa transacao:
- * meio exercicio criado seria pior que nenhum.
+ * Series nao concluidas, prontas para o usuario so marcar e ajustar. Tudo numa
+ * transacao: meio exercicio criado seria pior que nenhum.
  */
 export async function addExerciseToSession(
   sessionId: string,
@@ -1049,8 +960,8 @@ export async function addExerciseToSession(
     );
     const offset = last?.last_index ?? 0;
 
-    // Corrida ocupa uma linha so, pelo mesmo motivo de `startSession`: repetir
-    // a distancia em N series multiplicaria a quilometragem do dia.
+    // Corrida ocupa uma linha so: repetir a distancia em N series
+    // multiplicaria a quilometragem do dia.
     const rows = targets.distanceKm > 0 ? 1 : targets.sets;
 
     for (let index = 1; index <= rows; index += 1) {
@@ -1089,7 +1000,7 @@ export async function addExerciseToSession(
  * ajustados sobrevivem ao desmarcar, e nem o volume (`setVolume`) nem a cascata
  * (`lastPerformedTargets`) os enxergam, porque as duas exigem `done = 1`.
  *
- * Corrida ocupa uma linha so, mesma regra de `startSession` — repetir a
+ * Corrida ocupa uma linha so, mesma regra de `addExerciseToSession` — repetir a
  * distancia em N series multiplicaria a quilometragem do dia.
  */
 export async function setSessionExerciseTargets(

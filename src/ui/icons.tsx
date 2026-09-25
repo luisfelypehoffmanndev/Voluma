@@ -1,5 +1,5 @@
 import type { ColorValue } from 'react-native';
-import Svg, { Circle, Line, Path, Polyline, Rect } from 'react-native-svg';
+import Svg, { Circle, Line, Path, Polyline } from 'react-native-svg';
 
 import { colors } from '@/theme/tokens';
 
@@ -33,30 +33,6 @@ function base({ size = 22, color = colors.textPrimary, strokeWidth = 1.4 }: Icon
   };
 }
 
-export function GridIcon(props: IconProps) {
-  const { size, common } = base(props);
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Rect x={4} y={4} width={6.5} height={6.5} rx={1.5} {...common} />
-      <Rect x={13.5} y={4} width={6.5} height={6.5} rx={1.5} {...common} />
-      <Rect x={4} y={13.5} width={6.5} height={6.5} rx={1.5} {...common} />
-      <Rect x={13.5} y={13.5} width={6.5} height={6.5} rx={1.5} {...common} />
-    </Svg>
-  );
-}
-
-export function CalendarIcon(props: IconProps) {
-  const { size, common } = base(props);
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Rect x={3.5} y={5} width={17} height={15} rx={3} {...common} />
-      <Line x1={3.5} y1={9.5} x2={20.5} y2={9.5} {...common} />
-      <Line x1={8} y1={3} x2={8} y2={6} {...common} />
-      <Line x1={16} y1={3} x2={16} y2={6} {...common} />
-    </Svg>
-  );
-}
-
 export function ChartIcon(props: IconProps) {
   const { size, common } = base(props);
   return (
@@ -64,18 +40,6 @@ export function ChartIcon(props: IconProps) {
       <Line x1={5} y1={20} x2={5} y2={12} {...common} />
       <Line x1={12} y1={20} x2={12} y2={4} {...common} />
       <Line x1={19} y1={20} x2={19} y2={9} {...common} />
-    </Svg>
-  );
-}
-
-export function SlidersIcon(props: IconProps) {
-  const { size, common } = base(props);
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Line x1={4} y1={8} x2={20} y2={8} {...common} />
-      <Line x1={4} y1={16} x2={20} y2={16} {...common} />
-      <Circle cx={9} cy={8} r={2.4} {...common} />
-      <Circle cx={15} cy={16} r={2.4} {...common} />
     </Svg>
   );
 }
@@ -122,16 +86,6 @@ export function ChevronLeftIcon(props: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Polyline points="15,5 8,12 15,19" {...common} />
-    </Svg>
-  );
-}
-
-export function ArrowDownIcon(props: IconProps) {
-  const { size, common } = base(props);
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Line x1={12} y1={4} x2={12} y2={19} {...common} />
-      <Polyline points="6,13 12,19 18,13" {...common} />
     </Svg>
   );
 }
