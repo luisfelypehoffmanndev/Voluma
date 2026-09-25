@@ -1352,6 +1352,88 @@ export async function listExerciseRecords(): Promise<ExerciseRecord[]> {
   }));
 }
 
+export type ProgressCandidate = { exerciseId: string; exerciseName: string; days: number };
+
+/**
+ * Os exercicios que rendem um grafico de progressao desde `fromKey`: forca,
+ * com carga acima de zero em pelo menos dois dias. Um dia so e um ponto, nao
+ * uma tendencia; carga zero (barra fixa, prancha) nao tem o que progredir.
+ *
+ * Do mais treinado para o menos: o primeiro e o que a tela abre por padrao.
+ */
+export async function progressCandidates(fromKey: string): Promise<ProgressCandidate[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ exercise_id: string; exercise_name: string; days: number }>(
+    `SELECT e.id AS exercise_id, e.name AS exercise_name, COUNT(DISTINCT s.date) AS days
+       FROM session_sets ss
+       JOIN sessions s ON s.id = ss.session_id
+       JOIN exercises e ON e.id = ss.exercise_id
+      WHERE ss.done = 1 AND ss.deleted_at IS NULL AND ss.weight_kg > 0
+        AND s.deleted_at IS NULL AND s.date >= ?
+        AND e.deleted_at IS NULL AND e.kind = 'strength'
+      GROUP BY e.id, e.name
+     HAVING days >= 2
+      ORDER BY days DESC, e.name COLLATE NOCASE`,
+    fromKey,
+  );
+  return rows.map((row) => ({
+    exerciseId: row.exercise_id,
+    exerciseName: row.exercise_name,
+    days: row.days,
+  }));
+}
+
+/**
+ * A carga mais pesada de um exercicio em cada dia treinado desde `fromKey`, em
+ * ordem de data. A serie mais pesada, e nao a media, porque e ela que o
+ * usuario le como "quanto eu levanto nisso".
+ */
+export async function exerciseProgress(
+  exerciseId: string,
+  fromKey: string,
+): Promise<{ date: string; weightKg: number }[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ date: string; weight: number }>(
+    `SELECT s.date AS date, MAX(ss.weight_kg) AS weight
+       FROM session_sets ss
+       JOIN sessions s ON s.id = ss.session_id
+      WHERE ss.exercise_id = ? AND ss.done = 1 AND ss.deleted_at IS NULL AND ss.weight_kg > 0
+        AND s.deleted_at IS NULL AND s.date >= ?
+      GROUP BY s.date
+      ORDER BY s.date`,
+    exerciseId,
+    fromKey,
+  );
+  return rows.map((row) => ({ date: row.date, weightKg: row.weight }));
+}
+
+/**
+ * Volume por grupo muscular entre duas datas, do maior para o menor. Exercicio
+ * sem grupo cai em "Outros". Grupo com volume zero (cardio, peso do corpo) fica
+ * fora: uma barra vazia diria "nao treinou", o que nao e verdade.
+ */
+export async function volumeByMuscleGroup(
+  fromKey: string,
+  toKey: string,
+): Promise<{ group: string; volume: number }[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ muscle_group: string; volume: number }>(
+    `SELECT COALESCE(e.muscle_group, 'Outros') AS muscle_group,
+            SUM(ss.reps * ss.weight_kg)       AS volume
+       FROM session_sets ss
+       JOIN sessions s ON s.id = ss.session_id
+       JOIN exercises e ON e.id = ss.exercise_id
+      WHERE ss.done = 1 AND ss.deleted_at IS NULL
+        AND s.deleted_at IS NULL AND s.date BETWEEN ? AND ?
+      GROUP BY 1
+     HAVING volume > 0
+      ORDER BY volume DESC`,
+    fromKey,
+    toKey,
+  );
+  return rows.map((row) => ({ group: row.muscle_group, volume: row.volume }));
+}
+
 // ------------------------------------------------------------------ interno
 
 async function softDelete(table: SyncedTable, id: string): Promise<void> {
