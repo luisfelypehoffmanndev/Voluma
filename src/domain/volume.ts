@@ -1,4 +1,5 @@
 import type { SessionSet } from './types';
+import { addWeeks, fromDateKey, weekStartKey } from './week';
 
 /**
  * Volume nunca e armazenado — e sempre derivado daqui.
@@ -54,6 +55,32 @@ export function heaviestSet(
     if (max === null || set.weightKg > max) max = set.weightKg;
   }
   return max;
+}
+
+/**
+ * O volume de cada uma das ultimas `weeks` semanas, da mais antiga para a
+ * atual (que termina em `now` e pode estar pela metade).
+ *
+ * Recebe o `volumeByDate` ja carregado em vez de consultar de novo: a semana e
+ * so outra forma de agrupar os mesmos dias. Semana sem treino entra com zero,
+ * senao a coluna dela sumiria do grafico e as outras andariam de lugar.
+ */
+export function volumeByWeek(
+  volumes: ReadonlyMap<string, number>,
+  now: Date,
+  weeks: number,
+): { weekStart: string; volume: number }[] {
+  const current = weekStartKey(now);
+  const result = Array.from({ length: weeks }, (_, index) => ({
+    weekStart: addWeeks(current, index - (weeks - 1)),
+    volume: 0,
+  }));
+  const position = new Map(result.map((week, index) => [week.weekStart, index]));
+  for (const [dateKey, volume] of volumes) {
+    const index = position.get(weekStartKey(fromDateKey(dateKey)));
+    if (index !== undefined) result[index].volume += volume;
+  }
+  return result;
 }
 
 /**

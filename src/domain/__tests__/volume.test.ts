@@ -7,6 +7,7 @@ import {
   totalVolume,
   volumeByExercise,
   volumeBySession,
+  volumeByWeek,
 } from '../volume';
 import type { SessionSet } from '../types';
 
@@ -157,5 +158,45 @@ describe('formatWeight', () => {
 
   it('corta o erro de ponto flutuante', () => {
     expect(formatWeight(0.1 + 0.2)).toBe('0,3');
+  });
+});
+
+describe('volumeByWeek', () => {
+  // 24/09/2026 e uma quinta; a semana dela comeca no domingo 20/09.
+  const now = new Date(2026, 8, 24, 15, 0);
+
+  it('devolve as semanas em ordem, da mais antiga para a atual', () => {
+    const weeks = volumeByWeek(new Map(), now, 3);
+    expect(weeks.map((week) => week.weekStart)).toEqual(['2026-09-06', '2026-09-13', '2026-09-20']);
+  });
+
+  it('soma os dias de cada semana e deixa zero na semana sem treino', () => {
+    const volumes = new Map([
+      ['2026-09-07', 1000],
+      ['2026-09-12', 500], // sabado, ainda na semana de 06/09
+      ['2026-09-21', 800],
+    ]);
+    expect(volumeByWeek(volumes, now, 3).map((week) => week.volume)).toEqual([1500, 0, 800]);
+  });
+
+  it('ignora dias fora da janela', () => {
+    const volumes = new Map([
+      ['2026-08-01', 9999],
+      ['2026-09-20', 100],
+    ]);
+    expect(volumeByWeek(volumes, now, 2).map((week) => week.volume)).toEqual([0, 100]);
+  });
+
+  it('atravessa a virada do ano', () => {
+    const newYear = new Date(2027, 0, 2); // sabado; semana comeca em 27/12
+    const volumes = new Map([
+      ['2026-12-26', 300],
+      ['2026-12-31', 200],
+      ['2027-01-02', 100],
+    ]);
+    expect(volumeByWeek(volumes, newYear, 2)).toEqual([
+      { weekStart: '2026-12-20', volume: 300 },
+      { weekStart: '2026-12-27', volume: 300 },
+    ]);
   });
 });

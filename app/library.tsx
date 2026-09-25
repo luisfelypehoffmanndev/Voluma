@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MUSCLE_GROUPS, normalizeName, type MuscleGroup } from '@/db/catalog';
@@ -8,6 +8,7 @@ import { filterMovements, libraryEquipment, type Movement } from '@/movements/li
 import { bumpData, useQuery } from '@/store/data';
 import { colors, fontSize, radius, spacing, surfaces } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
+import { Chip } from '@/ui/Chip';
 import { MovementFigure } from '@/ui/MovementFigure';
 import { PressableSurface } from '@/ui/PressableSurface';
 import { EmptyState } from '@/ui/EmptyState';
@@ -162,13 +163,12 @@ function Chips({
       {options.map((option) => {
         const active = option === selected;
         return (
-          <Pressable
+          <Chip
             key={option}
+            label={option}
+            selected={active}
             onPress={() => onSelect(active ? null : option)}
-            style={[styles.chip, active && styles.chipSelected]}
-          >
-            <Label style={active ? styles.chipLabelSelected : undefined}>{option}</Label>
-          </Pressable>
+          />
         );
       })}
     </View>
@@ -237,20 +237,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.sm,
     marginTop: spacing.lg,
-  },
-  chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  chipSelected: {
-    backgroundColor: surfaces.raised,
-    borderColor: colors.borderStrong,
-  },
-  chipLabelSelected: {
-    color: colors.textPrimary,
   },
   row: {
     flexDirection: 'row',
