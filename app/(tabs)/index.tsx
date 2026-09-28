@@ -190,7 +190,8 @@ export default function HomeScreen() {
         <Card>
           <DotMatrix dots={dots} width={matrixWidth} showRecord={false} />
           <View style={styles.matrixFoot}>
-            <ProgressRing progress={streak > 0 ? 1 : 0} value={String(streak)} size={40} />
+            {/* So o numero: um anel sempre cheio quando ha sequencia nao media nada. */}
+            <StatNumber value={String(streak)} size={fontSize.numberMd} />
             <View style={styles.matrixText}>
               <Body numberOfLines={1}>{streak === 1 ? 'dia seguido' : 'dias seguidos'}</Body>
               <Meta>{`últimos ${MATRIX_MONTHS} meses`}</Meta>

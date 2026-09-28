@@ -6,23 +6,22 @@ conversa e outra.
 
 ## Migração para multiusuário (academia real)
 
-**Data:** 2026-09-16
-**Status:** decidido, não implementado
+**Data:** 2026-09-16 (atualizado em 2026-09-28)
+**Status:** implementado — ver planos 07, 11, 12, 13, 14 e 15
 
-O Voluma vai deixar de ser um app de uso pessoal e passar a ser usado por
-várias pessoas numa academia de verdade.
+O Voluma deixou de ser um app de uso pessoal e passou a suportar
+múltiplas pessoas numa academia de verdade.
 
-- **Login continua opcional.** Não vamos exigir conta no boot — quem não
-  logar continua usando o app 100% local (SQLite), igual hoje. Isso não muda
-  com a migração.
-- **Login vira só Google, sem conta própria.** O login por e-mail/senha atual
-  (`signIn`/`signUp`, `src/sync/auth.ts`, `app/login.tsx`) vai ser
-  substituído por OAuth do Google via Supabase. Mais simples e mais seguro:
-  sem senha própria pra gerenciar ou vazar.
-- **Escopo da primeira etapa é só a troca do método de login.** Identidade
-  básica (nome/foto da conta Google no Perfil), lista de amigos por e-mail e
-  comparação de estatísticas entre amigos ficam para depois — não fazem parte
-  desta etapa.
+- **Login continua opcional.** Não é exigida conta no boot — quem não
+  loga continua usando o app 100% local (SQLite), igual antes.
+- **Login é só Google, sem conta própria.** O login por e-mail/senha foi
+  substituído por OAuth do Google via Supabase (`app/login.tsx`, `src/sync/auth.ts`).
+- **Camada social completa entregue em etapas:**
+  1. Google OAuth (plano 07);
+  2. Perfil público com @handle único, idade e anos de treino (plano 11);
+  3. Amizades com aceite mútuo e toggle de privacidade (plano 12);
+  4. Comparação de frequência semanal, 12 semanas, consistência e corrida (planos 13 e 14);
+  5. Foto de perfil, nome de exibição, cor fixa por amigo e redesign dos gráficos (plano 15).
 
 ## Perfil público (@handle, idade, anos de treino)
 
@@ -121,3 +120,43 @@ Rascunho original:
 
 Zero mudança no sync engine existente (`src/sync/engine.ts`), nenhuma tabela
 de treino ganha exposição a terceiros.
+
+## Foto de perfil, nome de exibição, cores por pessoa e redesign dos gráficos
+
+**Data:** 2026-09-28
+**Status:** implementado — ver [`plans/15-avatar-e-nomes.md`](plans/15-avatar-e-nomes.md)
+
+Completou a identidade visual da camada social e corrigiu problemas de
+legibilidade dos gráficos antigos.
+
+- **Foto de perfil em bucket privado no Supabase Storage (`avatars`)**:
+  Fotos são servidas exclusivamente por URLs assinadas temporárias
+  (`createSignedUrl`, expiração de 1h). Salvas no padrão
+  `{user_id}/{timestamp}.jpg`: a pasta amarra o arquivo ao dono e o timestamp
+  força renovação de cache ao trocar de foto. Limite no bucket de 512 KB e tipo
+  JPEG; o app reencoda para 256×256 JPEG antes do envio.
+- **Regra de visibilidade da foto e do nome no Storage e SQL**:
+  Aparecem para o dono, qualquer lado de uma amizade aceita e o destinatário
+  de um pedido pendente (quem pede escolheu se mostrar para ser reconhecido).
+  Quem não tem relação ou apenas enviou um pedido ainda não aceito não vê a foto.
+  Foto e nome são dados de identidade (como o @handle) e **não** dependem do
+  toggle de compartilhamento de estatísticas.
+- **Nome de exibição (`display_name`)**:
+  Inicializado automaticamente com o nome da conta Google no primeiro login e
+  editável no formulário de Perfil. Validação no banco de 1 a 40 caracteres
+  não-vazios (`btrim(display_name) <> ''`). Na interface, exibe o primeiro nome
+  no ranking e detalhe para manter o layout limpo.
+- **Cores fixas por amigo (`people` em `tokens.ts`)**:
+  Cada amigo recebe uma cor de destaque com glow da paleta `people`, atribuída
+  em ordem cronológica de amizade (`since` da RPC `list_friends`). Isso impede
+  que amigos troquem de cor quando posições do ranking mudam. O usuário sempre
+  usa o `--accent` laranja da marca.
+- **Redesign dos gráficos e tela individual do amigo**:
+  Os gráficos anteriores (blocos empilhados, tracinhos) foram substituídos por
+  componentes semânticos e canônicos: `BarChart` para quantidade por período,
+  `LineChart` para evolução com área em degradê, e `HBarList` para proporções.
+  Todos possuem números redondos, escala à direita e meses no eixo x.
+  No painel Amigos, quatro cards repetitivos deram lugar a um ranking semanal
+  único (`FriendsRanking`). O detalhe individual (12 semanas, meta da rotina e
+  km de corrida) foi movido para uma tela dedicada `app/friend/[id].tsx`,
+  focando na comparação "Você vs Amigo".

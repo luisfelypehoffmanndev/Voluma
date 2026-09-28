@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated from 'react-native-reanimated';
 
@@ -28,11 +28,12 @@ import { addWeeks, fromDateKey, lastNDays, toDateKey, weekStartKey } from '@/dom
 import { bumpData, useQuery } from '@/store/data';
 import { colors, fontSize, spacing } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
-import { DotLine } from '@/ui/charts/DotLine';
+import { monthTicks, weekMonthKey } from '@/ui/charts/axis';
+import { BarChart } from '@/ui/charts/BarChart';
+import { HBarList } from '@/ui/charts/HBarList';
+import { LineChart } from '@/ui/charts/LineChart';
 import { signedDelta } from '@/ui/charts/scale';
-import { StackedBars } from '@/ui/charts/StackedBars';
 import { Chip } from '@/ui/Chip';
-import { DashedBar } from '@/ui/DashedBar';
 import { EmptyState } from '@/ui/EmptyState';
 import { ChevronRightIcon } from '@/ui/icons';
 import { LoadError } from '@/ui/LoadError';
@@ -57,14 +58,14 @@ const GROUP_DAYS = 30;
 /**
  * Numeros do historico — o painel "Números" da aba Histórico.
  *
- * O accent desta tela e o bloco do treino de hoje no volume — o unico elemento
- * colorido, e so em dia de treino. Os graficos de evolucao, os recordes e os
- * grupos ficam em cinza e branco: destaque demais dilui o proprio destaque. O
- * seletor segmentado acima do painel e sem cor por isso.
+ * Todo dado aqui e seu, e por isso veste o seu laranja, com glow — a mesma cor
+ * que voce tem nos graficos da aba Amigos. So a moldura (grade, escala, meses)
+ * fica em cinza. Os recordes sao tabela, nao grafico, e ficam em branco.
  *
- * Todos os graficos tem a mesma anatomia (base, regua, escala, datas nas
- * pontas — ver `StackedBars` e `DotLine`), para a tela ler como um instrumento
- * so e nao como uma colecao de widgets.
+ * Cada grafico tem a forma mais obvia para o seu dado: barra para quantidade
+ * (`BarChart`), linha para evolucao (`LineChart`), barra horizontal para partes
+ * de um todo (`HBarList`). Todos com escala de numeros redondos do lado e o
+ * nome dos meses embaixo — nenhum precisa de legenda explicando a leitura.
  *
  * A distancia dos ultimos 7 dias veio da home, que passou a ter um trabalho so
  * (comecar o treino de hoje).
@@ -99,7 +100,6 @@ export function StatsPanel() {
       // aparece se houve distancia em algum treino da janela.
       const runs = [...distances.values()].some((km) => km > 0);
       return {
-        today: todayKey,
         weeks: volumeByWeek(volumes, now, WEEKS),
         records,
         weights: dailyBodyWeight(logs, since),
@@ -121,34 +121,29 @@ export function StatsPanel() {
 
   const chartWidth = width - spacing.xl * 4;
   const { weights, groups } = data;
-  const latestWeight = weights[weights.length - 1];
   const weightIndex = inRange(weightSelected, weights.length);
   const shownWeight = weights[weightIndex ?? weights.length - 1];
-  const heaviestGroup = groups[0]?.volume ?? 0;
 
   return (
     <ScrollView
       contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
       showsVerticalScrollIndicator={false}
     >
-      <VolumeCard weeks={data.weeks} today={data.today} width={chartWidth} />
+      <VolumeCard weeks={data.weeks} width={chartWidth} />
 
       <ProgressCard candidates={data.candidates} since={data.since} width={chartWidth} />
 
       <Card>
         <Label>{`Volume por grupo · últimos ${GROUP_DAYS} dias`}</Label>
-        {groups.map((group) => (
-          <View key={group.group} style={styles.groupRow}>
-            <Body numberOfLines={1} style={styles.groupName}>
-              {group.group}
-            </Body>
-            <DashedBar
-              progress={heaviestGroup > 0 ? group.volume / heaviestGroup : 0}
-              width={Math.max(0, chartWidth - GROUP_LABELS_WIDTH)}
-            />
-            <Mono style={styles.groupValue}>{formatVolume(group.volume)}</Mono>
-          </View>
-        ))}
+        <HBarList
+          width={chartWidth}
+          rows={groups.map((group) => ({
+            key: group.group,
+            label: group.group,
+            value: group.volume,
+            text: `${formatVolume(group.volume)} kg`,
+          }))}
+        />
         {groups.length === 0 ? (
           <Meta style={styles.empty}>{`Nenhum treino com carga nos últimos ${GROUP_DAYS} dias.`}</Meta>
         ) : null}
@@ -171,14 +166,14 @@ export function StatsPanel() {
           </View>
         ) : null}
         {weights.length > 1 ? (
-          <DotLine
+          <LineChart
             values={weights.map((point) => point.weightKg)}
             width={chartWidth}
             selected={weightIndex}
             onSelect={setWeightSelected}
             formatTick={formatWeight}
-            start={shortDate(fromDateKey(weights[0].date))}
-            end={shortDate(fromDateKey(latestWeight.date))}
+            months={monthTicks(weights.map((point) => point.date))}
+            cursorLabel={(index) => shortDate(fromDateKey(weights[index].date))}
             accessibilityLabel="Peso corporal"
             describe={(index) =>
               `${shortDate(fromDateKey(weights[index].date))}, ${formatWeight(weights[index].weightKg)} kg`
@@ -229,54 +224,48 @@ function weekName(weekStart: string, isCurrent: boolean): string {
   return isCurrent ? 'esta semana' : `semana de ${shortDate(fromDateKey(weekStart))}`;
 }
 
-/** Largura do nome do grupo e do numero, somadas, ao lado da barra de tracinhos. */
-const GROUP_NAME_WIDTH = 72;
-const GROUP_VALUE_WIDTH = 64;
-const GROUP_LABELS_WIDTH = GROUP_NAME_WIDTH + GROUP_VALUE_WIDTH + spacing.sm * 2;
 /** Cabe "167,5" e "2010" em mono com folga. */
 const RECORD_COLUMN_WIDTH = 60;
 /**
  * O grafico do card de abertura e mais alto que os outros: e o numero e o
  * grafico que a tela existe para mostrar (§4, tamanho conforme a importancia).
  */
-const HERO_CHART_HEIGHT = 120;
+const HERO_CHART_HEIGHT = 160;
+
+/** A escala do volume: "10k" cabe na coluna, "10000" encosta nas barras. */
+function volumeTick(kg: number): string {
+  if (kg < 1000) return formatVolume(kg);
+  return `${formatWeight(Math.round(kg / 100) / 10)}k`;
+}
 
 /**
  * O volume das ultimas semanas, com os treinos dentro — o card que abre o
  * painel.
  *
- * Uma coluna por semana, um bloco por treino (ver `StackedBars`). Antes eram
- * dois graficos, por dia e por semana, e depois um so com seletor entre os
- * dois; os blocos dizem as duas coisas de uma vez, sem esconder nenhuma atras
- * de um toque: a coluna e a semana, o bloco e o dia de treino, e quantos blocos
- * ha e a frequencia.
+ * Uma barra por semana, a semana atual com glow forte. Antes cada barra era
+ * uma pilha de blocos, um por treino, que precisava de legenda para ser lida;
+ * agora a altura e o volume e so. Quantos treinos a semana teve aparece no
+ * cabecalho quando o dedo le a barra.
  *
  * O numero grande e a media por semana, a mesma da linha tracejada. Mostrar a
  * semana atual abria o painel num "0 kg" gigante sempre que ela ainda nao tinha
  * treino. A semana atual, e qualquer outra, fica a um toque: tocar numa coluna
  * poe o total dela no lugar da media (ver `useScrub`).
  */
-function VolumeCard({
-  weeks,
-  today,
-  width,
-}: {
-  weeks: readonly WeekVolume[];
-  today: string;
-  width: number;
-}) {
+function VolumeCard({ weeks, width }: { weeks: readonly WeekVolume[]; width: number }) {
   const [selected, setSelected] = useState<number | null>(null);
 
-  const totals = weeks.map((week) => week.volume);
+  const totals = useMemo(() => weeks.map((week) => week.volume), [weeks]);
   const average = closedWeeksAverage(totals);
   const index = inRange(selected, weeks.length);
   const name = (at: number) => weekName(weeks[at].weekStart, at === weeks.length - 1);
   const readout = volumeReadout(weeks, average, index, name);
 
-  // O treino de hoje, se houver, e o unico bloco no accent: ele esta sempre na
-  // ultima coluna, e e sempre o ultimo bloco dela.
-  const current = weeks.length - 1;
-  const todayBlock = weeks[current]?.workouts.findIndex((workout) => workout.date === today) ?? -1;
+  const months = useMemo(() => {
+    const today = toDateKey(new Date());
+    return monthTicks(weeks.map((week) => weekMonthKey(week.weekStart, today)));
+  }, [weeks]);
+  const empty = totals.every((total) => total === 0);
 
   return (
     <Card>
@@ -287,27 +276,27 @@ function VolumeCard({
         <Meta>{readout.meta}</Meta>
       </View>
 
-      <StackedBars
-        columns={weeks.map((week) => week.workouts.map((workout) => workout.volume))}
-        width={width}
-        height={HERO_CHART_HEIGHT}
-        selected={index}
-        onSelect={setSelected}
-        accent={todayBlock >= 0 ? { column: current, block: todayBlock } : null}
-        reference={average ?? undefined}
-        referenceLabel="média"
-        major={(at) => startsMonth(weeks[at].weekStart)}
-        start={weeks[0] && shortDate(fromDateKey(weeks[0].weekStart))}
-        end="esta semana"
-        accessibilityLabel="Volume por semana"
-        describe={(at) =>
-          `${name(at)}, ${formatVolume(totals[at])} kg, ${workoutCount(weeks[at].workouts.length)}`
-        }
-      />
-
-      {/* Uma linha so, porque a leitura nao e obvia na primeira vez: sem ela, os
-          blocos podiam passar por series, ou por exercicios. */}
-      <Meta style={styles.legend}>cada bloco é um treino</Meta>
+      {empty ? (
+        <Meta>{`Nenhum treino com carga nas últimas ${WEEKS} semanas.`}</Meta>
+      ) : (
+        <BarChart
+          values={totals}
+          width={width}
+          height={HERO_CHART_HEIGHT}
+          selected={index}
+          onSelect={setSelected}
+          highlight={weeks.length - 1}
+          reference={average}
+          referenceLabel="média"
+          formatTick={volumeTick}
+          months={months}
+          cursorLabel={name}
+          accessibilityLabel="Volume por semana"
+          describe={(at) =>
+            `${name(at)}, ${formatVolume(totals[at])} kg, ${workoutCount(weeks[at].workouts.length)}`
+          }
+        />
+      )}
     </Card>
   );
 }
@@ -339,13 +328,6 @@ function volumeReadout(
 function workoutCount(count: number): string {
   if (count === 0) return 'nenhum treino';
   return count === 1 ? '1 treino' : `${count} treinos`;
-}
-
-/** A semana que contem o dia 1 de um mes: ganha o tracinho longo da regua. */
-function startsMonth(weekStart: string): boolean {
-  const start = fromDateKey(weekStart);
-  const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
-  return start.getDate() === 1 || end.getMonth() !== start.getMonth();
 }
 
 /** Quantos recordes o card mostra fechado. */
@@ -516,14 +498,14 @@ function ProgressCard({
                     : shortDate(fromDateKey(shown.date))}
                 </Meta>
               </View>
-              <DotLine
+              <LineChart
                 values={points.map((point) => point.weightKg)}
                 width={width}
                 selected={pointIndex}
                 onSelect={setPointSelected}
                 formatTick={formatWeight}
-                start={shortDate(fromDateKey(first.date))}
-                end={shortDate(fromDateKey(last.date))}
+                months={monthTicks(points.map((point) => point.date))}
+                cursorLabel={(index) => shortDate(fromDateKey(points[index].date))}
                 accessibilityLabel="Progressão de carga"
                 describe={(index) =>
                   `${shortDate(fromDateKey(points[index].date))}, ${formatWeight(points[index].weightKg)} kg`
@@ -545,9 +527,6 @@ const styles = StyleSheet.create({
   chartHead: {
     marginTop: spacing.sm,
     marginBottom: spacing.xl,
-  },
-  legend: {
-    marginTop: spacing.md,
   },
   row: {
     flexDirection: 'row',
@@ -599,20 +578,5 @@ const styles = StyleSheet.create({
   chips: {
     gap: spacing.sm,
     paddingHorizontal: spacing.xl,
-  },
-  groupRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-  groupName: {
-    width: GROUP_NAME_WIDTH,
-    fontSize: fontSize.body,
-  },
-  groupValue: {
-    width: GROUP_VALUE_WIDTH,
-    textAlign: 'right',
-    color: colors.textSecondary,
   },
 });

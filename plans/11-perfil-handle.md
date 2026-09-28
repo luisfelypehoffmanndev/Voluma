@@ -3,7 +3,7 @@
 **Arquivos:** `src/domain/handle.ts`, `src/sync/profile.ts`, `src/store/profile.ts`,
 `app/profile-setup.tsx`, `app/(tabs)/profile.tsx`, `app/login.tsx`,
 `supabase/schema.sql` (novos e alterados)
-**Estado:** aberto
+**Estado:** **feito** — v5 rodada, RLS confirmado, testado no aparelho
 
 ## Contexto da decisão
 

@@ -11,6 +11,7 @@ import { bumpData } from '@/store/data';
 import { useFriends } from '@/store/friends';
 import { useProfile } from '@/store/profile';
 
+import { clearAvatarCache } from './avatar';
 import {
   inFlightSync,
   invalidateSync,
@@ -142,6 +143,7 @@ export const useAuth = create<AuthState>((set, get) => ({
     bumpData();
     useProfile.getState().clear();
     useFriends.getState().clear();
+    clearAvatarCache();
     set({
       status: 'signedOut',
       email: null,
@@ -183,9 +185,9 @@ function applySession(
     status: session ? 'signedIn' : 'signedOut',
     email: user?.email ?? null,
     userId: user?.id ?? null,
-    // O nome vem do Google e so serve para sugerir o primeiro handle. Nao vai
-    // para lugar nenhum: o que identifica a pessoa para os amigos e o handle
-    // que ela escolheu, nao o nome que a conta dela carrega.
+    // O nome vem do Google: sugere o primeiro handle e preenche o nome de
+    // exibicao do perfil QUANDO ele esta vazio (ver `useProfile.load`). A
+    // pessoa pode trocar depois — o nome da conta e so o ponto de partida.
     displayName: (user?.user_metadata?.full_name as string | undefined) ?? null,
   });
 
@@ -193,11 +195,14 @@ function applySession(
   // sessao e saem junto com ela, senao o handle e a lista de amigos de uma
   // conta ficam na tela para a proxima pessoa que entrar no aparelho.
   if (user) {
-    void useProfile.getState().load(user.id);
+    void useProfile
+      .getState()
+      .load(user.id, (user.user_metadata?.full_name as string | undefined) ?? null);
     void useFriends.getState().load();
   } else {
     useProfile.getState().clear();
     useFriends.getState().clear();
+    clearAvatarCache();
   }
 }
 

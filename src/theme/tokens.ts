@@ -1,9 +1,10 @@
 /**
  * Tokens de design — transcritos de Design/design.md.
  *
- * Regra dura do brief: preto e branco fazem 95% do trabalho. `accent` aparece
- * em no maximo UM elemento por tela. Se dois elementos da mesma tela usam
- * accent, um deles esta errado.
+ * Regra do brief: preto e branco fazem o trabalho de superficie, texto e
+ * chrome. Cor tem UM significado so: **identidade de pessoa num grafico** — o
+ * `accent` e voce, a paleta `people.friends` sao os seus amigos (ver `people`).
+ * Fora de dado de grafico, o accent continua em no maximo um elemento por tela.
  */
 
 export const colors = {
@@ -62,26 +63,87 @@ export const colors = {
 /**
  * A anatomia dos graficos: a mesma em todos, para lerem como um instrumento so.
  *
- * Tudo e branco translucido, como as superficies — a unica cor que um grafico
- * pode vestir e o `accent`, e so na marca do dia (§2). A escada vai do mais
- * recessivo ao mais presente:
+ * A moldura (grade, base, eixos) e branco translucido, como as superficies, e
+ * so ela e cinza. A escada da moldura vai do mais recessivo ao mais presente:
  *
  * - `grid` e a linha de grade: um degrau acima do card, lida so quando o olho
  *   procura por ela. Continua, nunca tracejada — tracejado e para referencia
  *   (a media), e as duas nao podem se confundir.
- * - `baseline` e o chao das barras, e `tick` a regua de tracinhos embaixo dele
- *   (§6): e a regua que marca o lugar de um dia sem treino, nao um toco de barra.
- * - `line` liga os pontos da progressao: presente o bastante para a forma da
- *   curva ler de longe, abaixo dos pontos, que sao o dado.
+ * - `baseline` e o chao das barras. `tick` e a borda das semanas que nao
+ *   bateram a meta.
+ * - `cursor` e o fio vertical da leitura pelo dedo.
+ *
+ * O DADO veste a cor de quem ele e (`people`), com glow: o seu, nos Numeros, e
+ * o laranja. O resto e so o que a marca precisa em volta:
+ *
+ * - `area` e o degrade embaixo da linha de evolucao, laranja a 24% no topo (a 16% sumia no card escuro),
+ *   desbotando ate `fade` (o mesmo laranja, transparente — desbotar para
+ *   'transparent' puxaria para o cinza no meio).
+ * - `track` e o trilho da barra horizontal: onde seria o 100%.
+ * - `ring` e o anel em volta do ponto da linha, a cor do card sem halo, para o
+ *   ponto descolar da propria linha.
  */
 export const chart = {
   grid: 'rgba(255,255,255,0.07)',
   baseline: colors.divider,
   tick: colors.dotEmpty,
-  bar: colors.dotEmpty,
-  line: 'rgba(255,255,255,0.30)',
-  cursor: colors.divider,
+  cursor: 'rgba(255,255,255,0.28)',
+  area: 'rgba(255,92,0,0.24)',
+  fade: 'rgba(255,92,0,0)',
+  track: 'rgba(255,255,255,0.07)',
+  ring: '#191919',
 } as const;
+
+/**
+ * A cor de cada pessoa nos graficos. Voce e sempre o laranja da marca; cada
+ * amigo recebe uma cor da paleta, fixa para aquela pessoa (`colorSlots`, em
+ * `src/domain/friends.ts`) — a cor segue a pessoa, nunca a posicao no ranking.
+ *
+ * Neon sobre preto, validada com o `validate_palette.js` da skill `dataviz`
+ * (modo escuro, contra o card `#191919`, todos os pares, laranja junto):
+ * daltonismo pior par ΔE 10,2 (alvo 8), visao normal pior par 18,8 (piso 15),
+ * todas acima de 3:1 de contraste. A faixa de luminosidade REPROVA de
+ * proposito — ela existe para graficos sobrios de mesmo peso, e o pedido aqui e
+ * neon chamativo; o proprio laranja da marca ja fica acima dela.
+ *
+ * O amarelo ficou de fora: contra o lima dava ΔE 0,7 para deuteranopia, ou
+ * seja, a mesma cor. Com mais de cinco amigos as cores repetem — a foto e o @
+ * ao lado de toda fileira desambiguam, e a cor nunca e a unica pista.
+ *
+ * Mexer aqui exige rodar o validador de novo: `people.test.ts` trava os hex.
+ */
+export const people = {
+  self: colors.accent,
+  friends: [
+    /** ciano */
+    '#29B6FF',
+    /** magenta */
+    '#FF4FC0',
+    /** lima */
+    '#C6F53D',
+    /** violeta */
+    '#6E6BFF',
+    /** menta */
+    '#3DF2C4',
+  ],
+} as const;
+
+/**
+ * O brilho do dado nos graficos: a luz vazando da marca, como no `accentGlow`.
+ *
+ * `soft` e o de todo dado; `strong` e o do destaque (a semana atual, o treino
+ * de hoje, o recorde). Glow e so para dado de grafico, na cor da pessoa — o
+ * brief continua proibindo glow decorativo em fundo ou chrome.
+ *
+ * `blur` e o sigma do `BlurMask` do Skia, em dp; a copia borrada fica ATRAS da
+ * marca nitida, que continua legivel por cima.
+ */
+export const glow = {
+  soft: { blur: 4, opacity: 0.6 },
+  strong: { blur: 8, opacity: 0.9 },
+} as const;
+
+export type GlowLevel = keyof typeof glow | 'none';
 
 /**
  * A escada de densidade.
@@ -307,7 +369,7 @@ export const radius = {
   inner: 14,
   /**
    * Quadrados pequenos: o dia do calendario. Cerca de um quarto do lado, que e
-   * a mesma proporcao das celulas do dot-matrix (4px de lado, 1px de quina).
+   * a mesma proporcao das celulas do dot-matrix (ate 10dp de lado, 2dp de quina).
    * `inner` aqui nao serve: 14 sobre 34px chega a 82% do caminho ate o circulo
    * e o quadrado vira pilula.
    */

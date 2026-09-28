@@ -2,7 +2,7 @@
 
 **Arquivos:** `src/db/client.ts:135` (`migrate`), `src/db/schema.ts:15` (`MIGRATIONS`)
 **Severidade:** baixa probabilidade, dano alto e irreversível
-**Estado:** aberto
+**Estado:** **feito**
 
 ## Problema
 

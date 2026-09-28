@@ -6,8 +6,7 @@
 `src/ui/history/WeeksCard.tsx`, `src/ui/history/ConsistencyCard.tsx`,
 `src/ui/history/FriendsPanel.tsx` (novos e alterados)
 **Depende de:** [13](13-ranking-amigos.md)
-**Estado:** aberto — v8 rodada no Supabase, cards 1 e 2 conferidos no aparelho;
-falta conferir consistência e corrida e o teste com duas contas reais
+**Estado:** **feito** — v8 rodada no Supabase; apresentação evoluída no [15](15-avatar-e-nomes.md) para ranking unificado (`FriendsRanking`) e tela individual (`app/friend/[id].tsx`) com o novo sistema de gráficos
 
 ## Contexto da decisão
 
@@ -71,6 +70,13 @@ Skills usadas no desenho: `dataviz` (small multiples com escala comum, destaque
 só na sua fileira, 2px entre barras, todo valor também em texto),
 `frontend-design` e `expo:expo-design-system` (seguir o brief e os tokens
 existentes; nenhuma cor nova).
+
+> **Evolução no [Item 15](15-avatar-e-nomes.md):** No desenho inicial deste item,
+> os quatro cards ficavam empilhados dentro do `FriendsPanel`, repetindo os
+> mesmos amigos quatro vezes. O item 15 simplificou o `FriendsPanel` para o
+> ranking semanal direto (`FriendsRanking`), transferindo os cards 2, 3 e 4
+> para a tela individual `app/friend/[id].tsx`, onde os dados são comparados
+> diretamente com os seus através dos novos componentes `BarChart` e `shapes.ts`.
 
 ## 14.4 — Testes
 

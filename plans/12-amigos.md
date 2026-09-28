@@ -4,7 +4,7 @@
 `src/store/friends.ts`, `app/friends.tsx`, `app/(tabs)/profile.tsx`,
 `supabase/schema.sql` (novos e alterados)
 **Depende de:** [11](11-perfil-handle.md) — o @handle é a chave de busca
-**Estado:** aberto
+**Estado:** **feito** — v6 rodada, RLS confirmado; pendente validação em duas contas físicas
 
 ## Contexto da decisão
 

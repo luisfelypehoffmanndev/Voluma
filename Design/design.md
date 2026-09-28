@@ -116,7 +116,8 @@ Duas grandezas do vidro de nível 3, porém, **não** podem ser as mesmas nas du
 
 Este é o ponto onde o app deve ser reconhecível. Baseado nas refs:
 
-- **Barras de progresso finas e pontilhadas** (tracinhos, não barra sólida cheia) para mostrar decorrer de tempo/fase — como o gráfico de sono.
+- **Gráficos de evolução com a forma mais óbvia para o dado:** barra vertical para quantidade por período (volume por semana, dias por semana), linha com área em degradê para evolução (carga, peso) e barra horizontal sobre trilho para partes de um todo (volume por grupo). Todo gráfico tem a escala de números redondos à direita e o nome dos meses embaixo, e nenhum precisa de legenda explicando a leitura.
+- **O dado veste a cor de quem ele é, com glow:** o seu é o laranja da marca, e cada amigo tem a cor dele (`people` em `tokens.ts`). Só a moldura (grade, eixos, textos) fica em cinza. Isso vale para os gráficos; fora deles, o accent continua em no máximo um elemento por tela, e a grade de treinos da home continua cinza porque o laranja dali é do botão de treino.
 - **Grade de pontos (dot-matrix)** para histórico/streak de treino ao longo do mês — pontos pequenos, apagados quando não há treino, cheios/brancos quando há. Não usar heatmap colorido tipo GitHub; manter em escala de cinza + 1 ponto em destaque se for recorde.
 - Números sempre como protagonistas visuais (peso, volume levantado, horas de sono) — a cor de fundo do card pode inverter (fundo laranja sólido, texto preto) *apenas* no card que representa o dado mais importante da tela, como no card de sono, e só numa tela em que a ação principal não seja um botão accent (§2: na home o accent é do botão de treino). Isso é o "uso mínimo mas com contraste" que você pediu: em vez de accent como detalhe pequeno, ocasionalmente ele vira o fundo de UM card inteiro para chamar atenção. Esse é o único card que continua **sólido**: laranja translúcido perde o soco.
 

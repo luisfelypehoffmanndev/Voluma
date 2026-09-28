@@ -2,7 +2,7 @@
 
 **Arquivo:** `src/db/client.ts:18`
 **Severidade:** transforma falha passageira em falha permanente
-**Estado:** aberto
+**Estado:** **feito**
 
 ## Problema
 

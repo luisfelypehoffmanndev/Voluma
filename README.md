@@ -16,14 +16,17 @@ client (`eas build --profile development`) ou `npx expo run:android` /
 `npx expo run:ios`. Sem login, o app roda 100% local, que é o modo padrão.
 
 ```bash
-npm test        # domínio (volume, semana, streak), a conta do vidro e o perfil
+npm test        # domínio, sqlite, sync, store, tema, gráficos e render de perfil/amigos
 npm run typecheck
 ```
 
 Quase todo teste é de função pura, sem banco e sem render — a convenção está em
-[`plans/08-testes-puros.md`](plans/08-testes-puros.md). A exceção é
-`src/ui/profile/`, que usa `@testing-library/react-native` porque é onde a regra
-do @handle, o campo de texto e a recusa do banco se encontram.
+[`plans/08-testes-puros.md`](plans/08-testes-puros.md). As exceções de render que
+usam `@testing-library/react-native` são `src/ui/profile/` (onde a regra do
+@handle, o campo de texto e a recusa do banco se encontram),
+`src/ui/__tests__/Avatar.test.tsx` (iniciais, imagem e cor do avatar) e
+`src/ui/history/__tests__/FriendsRanking.test.tsx` (ordenação, nome e estados do
+ranking de amigos).
 
 ## Como funciona
 
@@ -33,21 +36,22 @@ localmente e enfileira a linha em `outbox`; o serviço de sync drena a fila
 quando há rede. É o que permite registrar séries dentro da academia sem sinal.
 
 **Uma exceção, e só uma:** a camada social — o perfil público
-(`src/sync/profile.ts`) e os amigos (`src/sync/friends.ts`) — lê e grava no
-Supabase direto. Ela não tem par no SQLite porque é dado social — o @handle com
-que amigos acham a pessoa, idade, anos de treino e quem é amigo de quem — e não
-tem o que fazer offline. Quem usa o app sem conta simplesmente não tem perfil
-nem amigos, e não perde nada por isso. Tudo que é treino continua local-first.
+(`src/sync/profile.ts`), os amigos (`src/sync/friends.ts`) e o avatar
+(`src/sync/avatar.ts`) — lê e grava no Supabase direto. Ela não tem par no
+SQLite porque é dado social — o @handle com que amigos acham a pessoa, nome de
+exibição, foto, idade, anos de treino e quem é amigo de quem — e não tem o que
+fazer offline. Quem usa o app sem conta simplesmente não tem perfil nem amigos,
+e não perde nada por isso. Tudo que é treino continua local-first.
 
 ```
 app/            telas (expo-router, file-based)
 src/domain/     lógica pura e testável — volume, calendário, streak
 src/db/         SQLite: schema, migrations, repositórios
-src/sync/       Supabase: cliente, auth, push/pull
-src/ui/         componentes do design system
-src/theme/      tokens do design.md e a conta de composição do vidro
-scripts/        gerador do grão que dithera o campo de luz
-supabase/       schema.sql para colar no SQL Editor
+src/sync/       Supabase: cliente, auth, push/pull, avatar
+src/ui/         componentes do design system e gráficos
+src/theme/      tokens do design.md, paleta de pessoas e conta do vidro
+scripts/        manutenção: vendorização de artes e seed de avatares
+supabase/       schema.sql para colar no SQL Editor (tabelas, RLS, Storage)
 ```
 
 ### Abas
@@ -59,8 +63,8 @@ A barra tem quatro abas sem rótulo visível (cada uma com
 |---|---|
 | **Hoje** | o treino do dia e o botão "Começar / Continuar treino" |
 | **Plano** | os sete dias da semana e o catálogo de movimentos |
-| **Histórico** | calendário e números, num seletor segmentado |
-| **Perfil** | peso corporal, vibração, @handle, nuvem e créditos |
+| **Histórico** | calendário, números e amigos, num seletor segmentado |
+| **Perfil** | peso corporal, vibração, perfil público (foto, nome, @handle), amigos, nuvem e créditos |
 
 Na primeira abertura (banco sem plano e sem exercícios) o app passa por um
 onboarding: duas telas explicando Plano → Hoje → Histórico e a escolha entre um
@@ -83,8 +87,9 @@ sincronização entre aparelhos:
 
 1. Crie um projeto em [supabase.com](https://supabase.com).
 2. **SQL Editor**: rode [`supabase/schema.sql`](supabase/schema.sql) inteiro.
-   Ele cria as tabelas, os índices e o RLS. O arquivo é idempotente: rodar de
-   novo depois de cada versão nova (hoje até a `v5: perfil`) não quebra nada.
+   Ele cria as tabelas, os índices, o bucket `avatars` no Storage e o RLS.
+   O arquivo é idempotente: rodar de novo depois de cada versão nova (hoje até a
+   `v10: nome de exibicao`) não quebra nada.
 3. Configure o login com Google (abaixo).
 4. Copie `.env.example` para `.env` e preencha URL e anon key
    (**Project Settings → Data API**).

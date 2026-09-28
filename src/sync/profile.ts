@@ -18,12 +18,19 @@ const UNIQUE_VIOLATION = '23505';
 export type ProfileExtras = {
   age?: number | null;
   trainingYears?: number | null;
+  displayName?: string | null;
 };
 
 export type ProfilePatch = ProfileExtras & {
   handle?: string;
   sharesStats?: boolean;
+  /** Nulo tira a foto. So `src/sync/avatar.ts` mexe nisto, depois de subir o arquivo. */
+  avatarPath?: string | null;
+  displayName?: string | null;
 };
+
+/** As colunas que viram um `Profile`, iguais nas tres consultas. */
+const COLUMNS = 'id, handle, age, training_years, shares_stats, avatar_path, display_name';
 
 /** O handle pedido pertence a outra conta. */
 export type HandleTaken = 'handle-taken';
@@ -34,6 +41,8 @@ type Row = {
   age: number | null;
   training_years: number | null;
   shares_stats: boolean;
+  avatar_path: string | null;
+  display_name: string | null;
 };
 
 export async function fetchProfile(userId: string): Promise<Profile | null> {
@@ -41,7 +50,7 @@ export async function fetchProfile(userId: string): Promise<Profile | null> {
 
   const { data, error } = await client
     .from('profiles')
-    .select('id, handle, age, training_years, shares_stats')
+    .select(COLUMNS)
     .eq('id', userId)
     .maybeSingle();
 
@@ -71,8 +80,9 @@ export async function claimHandle(
         handle,
         age: extras.age ?? null,
         training_years: extras.trainingYears ?? null,
+        display_name: extras.displayName ?? null,
       })
-      .select('id, handle, age, training_years, shares_stats')
+      .select(COLUMNS)
       .single();
 
     if (!error) return toProfile(data as Row);
@@ -97,12 +107,14 @@ export async function updateProfile(
   if (patch.age !== undefined) changes.age = patch.age;
   if (patch.trainingYears !== undefined) changes.training_years = patch.trainingYears;
   if (patch.sharesStats !== undefined) changes.shares_stats = patch.sharesStats;
+  if (patch.avatarPath !== undefined) changes.avatar_path = patch.avatarPath;
+  if (patch.displayName !== undefined) changes.display_name = patch.displayName;
 
   const { data, error } = await client
     .from('profiles')
     .update(changes)
     .eq('id', userId)
-    .select('id, handle, age, training_years, shares_stats')
+    .select(COLUMNS)
     .single();
 
   if (error) {
@@ -119,5 +131,7 @@ function toProfile(row: Row): Profile {
     age: row.age,
     trainingYears: row.training_years,
     sharesStats: row.shares_stats,
+    avatarPath: row.avatar_path,
+    displayName: row.display_name,
   };
 }

@@ -3,11 +3,12 @@ import { ActivityIndicator, ScrollView, StyleSheet, TextInput, View } from 'reac
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HANDLE_MAX, isValidHandle, normalizeHandle } from '@/domain/handle';
-import type { FriendRow } from '@/domain/friends';
+import { colorSlots, type FriendRow } from '@/domain/friends';
 import { useFriends, type PendingRemoval } from '@/store/friends';
 import { useAuth } from '@/sync/auth';
 import type { RequestResult } from '@/sync/friends';
-import { colors, fontSize, radius, spacing } from '@/theme/tokens';
+import { colors, fontSize, people, radius, spacing } from '@/theme/tokens';
+import { Avatar } from '@/ui/Avatar';
 import { Card } from '@/ui/Card';
 import { EmptyState } from '@/ui/EmptyState';
 import { LoadError } from '@/ui/LoadError';
@@ -16,6 +17,7 @@ import { Header, Screen } from '@/ui/Screen';
 import { Body, Label, Meta } from '@/ui/Text';
 import { UndoToast, type UndoOffer } from '@/ui/UndoToast';
 import { CheckIcon, CloseIcon, PlusIcon } from '@/ui/icons';
+import { useAvatarUrls } from '@/ui/useAvatarUrls';
 
 /**
  * Amigos: achar pelo @, pedir, aceitar, recusar.
@@ -71,6 +73,13 @@ export default function FriendsScreen() {
     setResult(outcome);
     if (outcome === 'ok') setHandle('');
   }, [handle, request]);
+
+  // A mesma cor de cada amigo nos graficos. Pedido pendente ainda nao tem cor:
+  // a cor e de quem ja e amigo.
+  const slots = useMemo(() => colorSlots(lists.accepted, people.friends.length), [lists.accepted]);
+  const urls = useAvatarUrls(
+    [...lists.accepted, ...lists.incoming, ...lists.outgoing].map((row) => row.avatarPath),
+  );
 
   const empty =
     lists.accepted.length === 0 && lists.incoming.length === 0 && lists.outgoing.length === 0;
@@ -133,6 +142,7 @@ export default function FriendsScreen() {
               <Label>Pedidos</Label>
               {lists.incoming.map((row) => (
                 <View key={row.id} style={styles.row}>
+                  <FriendAvatar row={row} urls={urls} color={colors.textSecondary} />
                   <View style={styles.rowText}>
                     <Body>@{row.handle}</Body>
                     <Meta>quer ser seu amigo</Meta>
@@ -161,6 +171,7 @@ export default function FriendsScreen() {
               <Label>Enviados</Label>
               {lists.outgoing.map((row) => (
                 <View key={row.id} style={styles.row}>
+                  <FriendAvatar row={row} urls={urls} color={colors.textSecondary} />
                   <View style={styles.rowText}>
                     <Body>@{row.handle}</Body>
                     <Meta>aguardando resposta</Meta>
@@ -181,6 +192,11 @@ export default function FriendsScreen() {
               <Label>Amigos</Label>
               {lists.accepted.map((row) => (
                 <View key={row.id} style={styles.row}>
+                  <FriendAvatar
+                    row={row}
+                    urls={urls}
+                    color={people.friends[slots.get(row.id) ?? 0]}
+                  />
                   <View style={styles.rowText}>
                     <Body>@{row.handle}</Body>
                     <Meta>{friendMeta(row)}</Meta>
@@ -212,6 +228,27 @@ export default function FriendsScreen() {
 }
 
 /** Botao redondo de 32px, a mesma caixa do "adicionar" do catalogo de movimentos. */
+/** A foto de uma linha: a inicial enquanto a URL nao chega, ou sem foto. */
+function FriendAvatar({
+  row,
+  urls,
+  color,
+}: {
+  row: FriendRow;
+  urls: ReadonlyMap<string, string>;
+  color: string;
+}) {
+  return (
+    <Avatar
+      handle={row.handle}
+      uri={row.avatarPath ? (urls.get(row.avatarPath) ?? null) : null}
+      path={row.avatarPath}
+      color={color}
+      size={36}
+    />
+  );
+}
+
 function RoundAction({
   label,
   onPress,
@@ -308,6 +345,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: spacing.md,
     paddingVertical: spacing.lg,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.divider,

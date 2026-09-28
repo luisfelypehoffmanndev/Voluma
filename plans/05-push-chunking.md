@@ -2,7 +2,7 @@
 
 **Arquivo:** `src/sync/engine.ts:90`
 **Severidade:** baixa
-**Estado:** aberto
+**Estado:** **feito**
 
 ## Problema
 

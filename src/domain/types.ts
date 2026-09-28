@@ -143,4 +143,15 @@ export type Profile = {
    * nao um dado de treino.
    */
   sharesStats: boolean;
+  /**
+   * Caminho da foto no bucket `avatars` (`{id}/{timestamp}.jpg`), ou nulo sem
+   * foto. Identidade, como o @: fica fora do toggle de `sharesStats`.
+   */
+  avatarPath: string | null;
+  /**
+   * O nome que aparece para os amigos (o ranking mostra so o primeiro). Vem do
+   * Google no login quando esta vazio, e a pessoa pode trocar. Identidade,
+   * como o @ e a foto.
+   */
+  displayName: string | null;
 };

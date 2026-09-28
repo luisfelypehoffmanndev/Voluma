@@ -18,6 +18,7 @@ async function setup(overrides: Partial<React.ComponentProps<typeof ProfileForm>
 
   await render(
     <ProfileForm
+      initialName="Luis Felype"
       initialHandle="luisfelype"
       initialAge={null}
       initialTrainingYears={null}
@@ -40,10 +41,31 @@ describe('ProfileForm', () => {
     await user.press(salvar());
 
     expect(onSubmit).toHaveBeenCalledWith({
+      displayName: 'Luis Felype',
       handle: 'luisfelype',
       age: null,
       trainingYears: null,
     });
+  });
+
+  it('envia o nome sem espacos sobrando', async () => {
+    const { onSubmit, user } = await setup();
+
+    await user.clear(screen.getByLabelText('Nome'));
+    await user.type(screen.getByLabelText('Nome'), '  Ana   Souza  ');
+    await user.press(salvar());
+
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ displayName: 'Ana Souza' }));
+  });
+
+  // Nome em branco e "sem nome": a pessoa aparece pelo @ no ranking.
+  it('nome em branco vai como nulo', async () => {
+    const { onSubmit, user } = await setup();
+
+    await user.clear(screen.getByLabelText('Nome'));
+    await user.press(salvar());
+
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ displayName: null }));
   });
 
   it('normaliza o que foi digitado antes de enviar', async () => {

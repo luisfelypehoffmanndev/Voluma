@@ -3,8 +3,7 @@
 **Arquivos:** `src/sync/auth.ts`, `app/login.tsx`, `src/ui/icons.tsx`,
 `README.md`, `package.json`, `app.json`
 **Severidade:** decisão de produto (ver [`../DECISIONS.md`](../DECISIONS.md))
-**Estado:** aberto — **deixar por último**: depende de setup externo e de um
-build de dev client para poder ser testado.
+**Estado:** **feito** — testado no aparelho físico, login funcionando
 
 ## O que muda
 

@@ -82,6 +82,9 @@ describe('listFriends', () => {
           shares_stats: true,
           age: 28,
           training_years: 4,
+          avatar_path: 'u2/1727000000.jpg',
+          since: '2026-09-01T10:00:00+00:00',
+          display_name: 'Bia Souza',
         },
       ],
       error: null,
@@ -96,6 +99,9 @@ describe('listFriends', () => {
         sharesStats: true,
         age: 28,
         trainingYears: 4,
+        avatarPath: 'u2/1727000000.jpg',
+        since: '2026-09-01T10:00:00+00:00',
+        displayName: 'Bia Souza',
       },
     ]);
   });
@@ -125,15 +131,43 @@ describe('weeklyDays', () => {
   it('traduz as linhas e preserva os nulos de quem nao compartilha', async () => {
     mockRpcResponse = {
       data: [
-        { handle: 'ana', shares: true, planned_days: 4, week_start: '2026-09-27', days: 3 },
-        { handle: 'bia', shares: false, planned_days: null, week_start: null, days: null },
+        {
+          id: 'u-ana',
+          handle: 'ana',
+          shares: true,
+          planned_days: 4,
+          week_start: '2026-09-27',
+          days: 3,
+        },
+        {
+          id: 'u-bia',
+          handle: 'bia',
+          shares: false,
+          planned_days: null,
+          week_start: null,
+          days: null,
+        },
       ],
       error: null,
     };
 
     expect(await weeklyDays('2026-07-12', '2026-09-27')).toEqual([
-      { handle: 'ana', shares: true, plannedDays: 4, weekStart: '2026-09-27', days: 3 },
-      { handle: 'bia', shares: false, plannedDays: null, weekStart: null, days: null },
+      {
+        id: 'u-ana',
+        handle: 'ana',
+        shares: true,
+        plannedDays: 4,
+        weekStart: '2026-09-27',
+        days: 3,
+      },
+      {
+        id: 'u-bia',
+        handle: 'bia',
+        shares: false,
+        plannedDays: null,
+        weekStart: null,
+        days: null,
+      },
     ]);
   });
 
@@ -166,17 +200,17 @@ describe('monthlyDistance', () => {
   it('preserva km nulo e zero como vieram', async () => {
     mockRpcResponse = {
       data: [
-        { handle: 'ana', km: 12.4 },
-        { handle: 'bia', km: null },
-        { handle: 'carla', km: 0 },
+        { id: 'u-ana', handle: 'ana', km: 12.4 },
+        { id: 'u-bia', handle: 'bia', km: null },
+        { id: 'u-carla', handle: 'carla', km: 0 },
       ],
       error: null,
     };
 
     expect(await monthlyDistance('2026-09-01', '2026-09-30')).toEqual([
-      { handle: 'ana', value: 12.4 },
-      { handle: 'bia', value: null },
-      { handle: 'carla', value: 0 },
+      { id: 'u-ana', handle: 'ana', value: 12.4 },
+      { id: 'u-bia', handle: 'bia', value: null },
+      { id: 'u-carla', handle: 'carla', value: 0 },
     ]);
   });
 

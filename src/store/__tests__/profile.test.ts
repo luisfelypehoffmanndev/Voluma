@@ -14,6 +14,16 @@ const sync = jest.requireMock('@/sync/profile') as {
   updateProfile: jest.Mock;
 };
 
+jest.mock('@/sync/avatar', () => ({
+  uploadAvatar: jest.fn(),
+  removeAvatar: jest.fn(),
+}));
+
+const avatar = jest.requireMock('@/sync/avatar') as {
+  uploadAvatar: jest.Mock;
+  removeAvatar: jest.Mock;
+};
+
 function makeProfile(overrides: Partial<Profile> = {}): Profile {
   return {
     id: 'u1',
@@ -21,6 +31,8 @@ function makeProfile(overrides: Partial<Profile> = {}): Profile {
     age: null,
     trainingYears: null,
     sharesStats: false,
+    avatarPath: null,
+    displayName: null,
     ...overrides,
   };
 }
@@ -113,6 +125,97 @@ describe('save', () => {
   it('nao chama a rede quando nao ha perfil para atualizar', async () => {
     expect(await useProfile.getState().save({ handle: 'novo' })).toBe('error');
     expect(sync.updateProfile).not.toHaveBeenCalled();
+  });
+});
+
+describe('load com o nome do Google', () => {
+  it('preenche o nome quando o perfil ainda nao tem', async () => {
+    sync.fetchProfile.mockResolvedValue(makeProfile({ displayName: null }));
+    sync.updateProfile.mockResolvedValue(makeProfile({ displayName: 'Luis Felype' }));
+
+    await useProfile.getState().load('u1', '  Luis Felype ');
+
+    expect(sync.updateProfile).toHaveBeenCalledWith('u1', { displayName: 'Luis Felype' });
+    expect(useProfile.getState().profile?.displayName).toBe('Luis Felype');
+  });
+
+  // O nome que a pessoa escolheu vale mais que o da conta Google.
+  it('nao sobrescreve um nome ja escolhido', async () => {
+    sync.fetchProfile.mockResolvedValue(makeProfile({ displayName: 'Lu' }));
+
+    await useProfile.getState().load('u1', 'Luis Felype');
+
+    expect(sync.updateProfile).not.toHaveBeenCalled();
+    expect(useProfile.getState().profile?.displayName).toBe('Lu');
+  });
+
+  it('sem perfil (sem @ ainda) nao grava nada', async () => {
+    sync.fetchProfile.mockResolvedValue(null);
+
+    await useProfile.getState().load('u1', 'Luis Felype');
+
+    expect(sync.updateProfile).not.toHaveBeenCalled();
+  });
+
+  // Nome e enfeite do ranking: falhar ao grava-lo nao pode derrubar o perfil.
+  it('falha ao gravar o nome mantem o perfil carregado, sem erro na tela', async () => {
+    sync.fetchProfile.mockResolvedValue(makeProfile({ displayName: null }));
+    sync.updateProfile.mockRejectedValue(new Error('Sem conexão'));
+
+    await useProfile.getState().load('u1', 'Luis Felype');
+
+    expect(useProfile.getState().profile?.handle).toBe('luis');
+    expect(useProfile.getState().error).toBeNull();
+  });
+});
+
+describe('setAvatar', () => {
+  const jpeg = new Uint8Array([0xff, 0xd8]);
+
+  it('sobe a foto passando a anterior, para ela ser apagada depois', async () => {
+    sync.fetchProfile.mockResolvedValue(makeProfile({ avatarPath: 'u1/1.jpg' }));
+    await useProfile.getState().load('u1');
+    avatar.uploadAvatar.mockResolvedValue(makeProfile({ avatarPath: 'u1/2.jpg' }));
+
+    expect(await useProfile.getState().setAvatar(jpeg)).toBe('ok');
+    expect(avatar.uploadAvatar).toHaveBeenCalledWith('u1', jpeg, 'u1/1.jpg');
+    expect(useProfile.getState().profile?.avatarPath).toBe('u1/2.jpg');
+  });
+
+  it('falha mantem a foto antiga na tela e mostra o erro', async () => {
+    sync.fetchProfile.mockResolvedValue(makeProfile({ avatarPath: 'u1/1.jpg' }));
+    await useProfile.getState().load('u1');
+    avatar.uploadAvatar.mockRejectedValue(new Error('Sem conexão'));
+
+    expect(await useProfile.getState().setAvatar(jpeg)).toBe('error');
+    expect(useProfile.getState().profile?.avatarPath).toBe('u1/1.jpg');
+    expect(useProfile.getState().error).toBe('Sem conexão');
+    expect(useProfile.getState().loading).toBe(false);
+  });
+
+  it('sem perfil carregado nao vai a rede', async () => {
+    expect(await useProfile.getState().setAvatar(jpeg)).toBe('error');
+    expect(avatar.uploadAvatar).not.toHaveBeenCalled();
+  });
+});
+
+describe('removeAvatar', () => {
+  it('remove a foto atual', async () => {
+    sync.fetchProfile.mockResolvedValue(makeProfile({ avatarPath: 'u1/1.jpg' }));
+    await useProfile.getState().load('u1');
+    avatar.removeAvatar.mockResolvedValue(makeProfile({ avatarPath: null }));
+
+    expect(await useProfile.getState().removeAvatar()).toBe('ok');
+    expect(avatar.removeAvatar).toHaveBeenCalledWith('u1', 'u1/1.jpg');
+    expect(useProfile.getState().profile?.avatarPath).toBeNull();
+  });
+
+  it('sem foto nao ha o que remover', async () => {
+    sync.fetchProfile.mockResolvedValue(makeProfile({ avatarPath: null }));
+    await useProfile.getState().load('u1');
+
+    expect(await useProfile.getState().removeAvatar()).toBe('error');
+    expect(avatar.removeAvatar).not.toHaveBeenCalled();
   });
 });
 

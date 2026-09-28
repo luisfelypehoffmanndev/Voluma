@@ -2,7 +2,7 @@
 
 **Arquivo:** `src/sync/auth.ts:53` (`bootstrap`)
 **Severidade:** baixa, quase só em desenvolvimento
-**Estado:** aberto
+**Estado:** **feito**
 
 ## Problema
 

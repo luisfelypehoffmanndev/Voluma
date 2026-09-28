@@ -2,7 +2,7 @@
 
 **Arquivos:** `src/sync/auth.ts:96` (`signOut`), `src/sync/engine.ts`
 **Severidade:** vazamento de dados entre contas — crítico no cenário academia
-**Estado:** aberto
+**Estado:** **feito**
 
 ## Problema
 

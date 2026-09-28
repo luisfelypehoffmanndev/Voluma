@@ -28,6 +28,9 @@ function makeRow(overrides: Partial<FriendRow> = {}): FriendRow {
     sharesStats: false,
     age: null,
     trainingYears: null,
+    avatarPath: null,
+    since: '2026-09-01T10:00:00+00:00',
+    displayName: null,
     ...overrides,
   };
 }

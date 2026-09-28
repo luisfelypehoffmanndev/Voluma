@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { listBodyWeightLogs } from '@/db/repo';
@@ -9,10 +9,14 @@ import { useQuery } from '@/store/data';
 import { useFriends } from '@/store/friends';
 import { useProfile } from '@/store/profile';
 import { useAuth } from '@/sync/auth';
+import { signedAvatarUrls } from '@/sync/avatar';
 import { isCloudConfigured } from '@/sync/supabase';
-import { colors, spacing } from '@/theme/tokens';
+import { colors, people, spacing } from '@/theme/tokens';
 import { usePrefs } from '@/store/prefs';
+import { Avatar } from '@/ui/Avatar';
+import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
+import { pickAvatar } from '@/ui/profile/pickAvatar';
 import { CheckCell } from '@/ui/CheckCell';
 import { preview } from '@/ui/haptics';
 import { relativeTime } from '@/ui/relative';
@@ -73,6 +77,8 @@ export default function ProfileScreen() {
         <MotionCard />
 
         <PublicProfileCard />
+
+        <AvatarCard />
 
         <FriendsCard />
 
@@ -149,6 +155,97 @@ function PublicProfileCard() {
           <Meta>{profileMeta({ profile, loading, error })}</Meta>
         </View>
         <ChevronRightIcon size={16} color={colors.textSecondary} />
+      </View>
+    </Card>
+  );
+}
+
+/**
+ * A foto de perfil: escolher da galeria ou remover.
+ *
+ * Separada do card do @ porque o @ abre outra tela e a foto nao — tocar numa
+ * abre o seletor do sistema na hora. So com perfil: a foto mora no perfil.
+ *
+ * Quem ve: amigos aceitos e quem recebeu um pedido seu. O texto diz isso,
+ * porque e a unica pergunta que alguem faz antes de subir o proprio rosto.
+ */
+function AvatarCard() {
+  const status = useAuth((state) => state.status);
+  const profile = useProfile((state) => state.profile);
+  const loading = useProfile((state) => state.loading);
+  const setAvatar = useProfile((state) => state.setAvatar);
+  const removeAvatar = useProfile((state) => state.removeAvatar);
+  // A URL guarda de qual caminho ela e: trocou a foto, a URL antiga deixa de
+  // valer sozinha, sem precisar ser zerada.
+  const [signed, setSigned] = useState<{ path: string; uri: string | null } | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  const path = profile?.avatarPath ?? null;
+  const uri = signed && signed.path === path ? signed.uri : null;
+  useEffect(() => {
+    let cancelled = false;
+    if (!path) return;
+    signedAvatarUrls([path])
+      .then((urls) => {
+        if (!cancelled) setSigned({ path, uri: urls.get(path) ?? null });
+      })
+      // Sem URL fica a inicial: a foto e um enfeite desta tela, nao o conteudo.
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [path]);
+
+  if (status !== 'signedIn' || !profile) return null;
+
+  async function choose() {
+    setFailure(null);
+    try {
+      const jpeg = await pickAvatar();
+      if (!jpeg) return;
+      if ((await setAvatar(jpeg)) === 'error') setFailure('Não foi possível salvar a foto');
+    } catch {
+      setFailure('Não foi possível abrir a foto');
+    }
+  }
+
+  async function remove() {
+    setFailure(null);
+    if ((await removeAvatar()) === 'error') setFailure('Não foi possível remover a foto');
+  }
+
+  return (
+    <Card>
+      <Label>Foto</Label>
+      <View style={styles.avatarRow}>
+        <Avatar
+          handle={profile.handle}
+          uri={uri}
+          path={path}
+          color={people.self}
+          size={72}
+        />
+        <View style={styles.rowText}>
+          <Meta>
+            {failure ?? 'Aparece ao lado do seu @ para amigos e para quem recebe um pedido seu.'}
+          </Meta>
+          <View style={styles.avatarActions}>
+            <Button
+              variant="inline"
+              label={path ? 'Trocar foto' : 'Escolher foto'}
+              onPress={() => void choose()}
+              disabled={loading}
+            />
+            {path ? (
+              <Button
+                variant="inline"
+                label="Remover"
+                onPress={() => void remove()}
+                disabled={loading}
+              />
+            ) : null}
+          </View>
+        </View>
       </View>
     </Card>
   );
@@ -358,6 +455,20 @@ const styles = StyleSheet.create({
   rowText: {
     flex: 1,
     gap: 2,
+    marginTop: spacing.sm,
+  },
+  avatarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg,
+    paddingTop: spacing.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.divider,
+    marginTop: spacing.sm,
+  },
+  avatarActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
     marginTop: spacing.sm,
   },
 });
