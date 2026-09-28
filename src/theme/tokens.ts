@@ -60,6 +60,30 @@ export const colors = {
 } as const;
 
 /**
+ * A anatomia dos graficos: a mesma em todos, para lerem como um instrumento so.
+ *
+ * Tudo e branco translucido, como as superficies — a unica cor que um grafico
+ * pode vestir e o `accent`, e so na marca do dia (§2). A escada vai do mais
+ * recessivo ao mais presente:
+ *
+ * - `grid` e a linha de grade: um degrau acima do card, lida so quando o olho
+ *   procura por ela. Continua, nunca tracejada — tracejado e para referencia
+ *   (a media), e as duas nao podem se confundir.
+ * - `baseline` e o chao das barras, e `tick` a regua de tracinhos embaixo dele
+ *   (§6): e a regua que marca o lugar de um dia sem treino, nao um toco de barra.
+ * - `line` liga os pontos da progressao: presente o bastante para a forma da
+ *   curva ler de longe, abaixo dos pontos, que sao o dado.
+ */
+export const chart = {
+  grid: 'rgba(255,255,255,0.07)',
+  baseline: colors.divider,
+  tick: colors.dotEmpty,
+  bar: colors.dotEmpty,
+  line: 'rgba(255,255,255,0.30)',
+  cursor: colors.divider,
+} as const;
+
+/**
  * A escada de densidade.
  *
  * Nenhuma superficie do app tem cor propria: todas sao branco translucido sobre

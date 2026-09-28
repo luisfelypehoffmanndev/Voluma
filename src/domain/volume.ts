@@ -57,30 +57,59 @@ export function heaviestSet(
   return max;
 }
 
+/** Um treino dentro da semana: o dia e o volume levantado nele. */
+export type WeekWorkout = { date: string; volume: number };
+
+/** Uma semana do grafico de volume: o total e os treinos que o compoem. */
+export type WeekVolume = { weekStart: string; volume: number; workouts: WeekWorkout[] };
+
 /**
  * O volume de cada uma das ultimas `weeks` semanas, da mais antiga para a
- * atual (que termina em `now` e pode estar pela metade).
+ * atual (que termina em `now` e pode estar pela metade), com os treinos de
+ * cada uma em ordem de data — sao os blocos da coluna no grafico.
  *
  * Recebe o `volumeByDate` ja carregado em vez de consultar de novo: a semana e
  * so outra forma de agrupar os mesmos dias. Semana sem treino entra com zero,
- * senao a coluna dela sumiria do grafico e as outras andariam de lugar.
+ * senao a coluna dela sumiria do grafico e as outras andariam de lugar. Dia com
+ * volume zero (so corrida, ou tudo por concluir) nao vira treino: um bloco de
+ * altura zero seria um treino que nao aparece.
  */
 export function volumeByWeek(
   volumes: ReadonlyMap<string, number>,
   now: Date,
   weeks: number,
-): { weekStart: string; volume: number }[] {
+): WeekVolume[] {
   const current = weekStartKey(now);
-  const result = Array.from({ length: weeks }, (_, index) => ({
+  const result: WeekVolume[] = Array.from({ length: weeks }, (_, index) => ({
     weekStart: addWeeks(current, index - (weeks - 1)),
     volume: 0,
+    workouts: [],
   }));
   const position = new Map(result.map((week, index) => [week.weekStart, index]));
-  for (const [dateKey, volume] of volumes) {
-    const index = position.get(weekStartKey(fromDateKey(dateKey)));
-    if (index !== undefined) result[index].volume += volume;
+  for (const [date, volume] of volumes) {
+    const index = position.get(weekStartKey(fromDateKey(date)));
+    if (index === undefined || volume <= 0) continue;
+    result[index].volume += volume;
+    result[index].workouts.push({ date, volume });
   }
+  // A ordem do `Map` e a da consulta, nao a do calendario: o bloco de baixo tem
+  // de ser o primeiro treino da semana, sempre.
+  for (const week of result) week.workouts.sort((a, b) => a.date.localeCompare(b.date));
   return result;
+}
+
+/**
+ * A media semanal de referencia: a das semanas fechadas, todas menos a ultima
+ * (a atual, que quase sempre esta pela metade — com ela, toda segunda-feira
+ * derrubaria a media).
+ *
+ * Semana sem treino entra com zero: ela aconteceu, e uma media que a ignora
+ * promete um ritmo que nao houve. `null` enquanto nao ha semana fechada.
+ */
+export function closedWeeksAverage(weeks: readonly number[]): number | null {
+  const closed = weeks.slice(0, -1);
+  if (closed.length === 0) return null;
+  return closed.reduce((sum, volume) => sum + volume, 0) / closed.length;
 }
 
 /**
