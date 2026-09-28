@@ -22,6 +22,8 @@ como verificar. A ideia é resolver um de cada vez.
 | [07](07-login-google.md) | Migração do login para conta Google | decisão de produto | **feito** — testado no aparelho, login funcionando |
 | [11](11-perfil-handle.md) | Perfil público: @handle, idade e anos de treino | feature | **feito** — v5 rodada, RLS confirmado, testado no aparelho |
 | [12](12-amigos.md) | Amigos e o toggle de compartilhamento | feature | aberto — v6 rodada, RLS confirmado; falta testar com duas contas |
+| [13](13-ranking-amigos.md) | Aba Amigos: ranking de dias treinados na semana | feature | **feito** — v7 rodada e testada no aparelho; parte substituída pelo 14 |
+| [14](14-amigos-graficos.md) | Aba Amigos: 12 semanas, consistência e corrida | feature | aberto — v8 rodada; falta conferir 2 cards e testar com duas contas |
 
 ## Pendências fora do código
 

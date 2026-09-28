@@ -361,3 +361,135 @@ $$;
 
 revoke all on function public.list_friends() from public, anon;
 grant execute on function public.list_friends() to authenticated;
+
+-- ------------------------------------------------ v7: indices de frequencia
+-- A v7 criava `friend_weekly_frequency`, substituida na v8 por
+-- `friend_weekly_days`. Ficam os indices, que as RPCs da v8 usam.
+
+-- Os indices do sync sao por (dono, updated_at) e nao servem a esta consulta:
+-- sem estes, cada amigo varreria `session_sets` inteira.
+create index if not exists idx_sessions_user_date   on public.sessions (user_id, date);
+create index if not exists idx_session_sets_session on public.session_sets (session_id);
+
+-- ------------------------------------------ v8: graficos da aba Amigos
+-- Duas RPCs alimentam os quatro cards da aba Amigos: dias treinados por semana
+-- (ranking, 12 semanas e consistencia) e km corridos no mes.
+--
+-- As mesmas regras da v7: so amizade ACEITA, e com o toggle desligado nada
+-- alem do @ sai do servidor — nulo, nao zero. So agregado, nunca a linha de
+-- treino. "Dia treinado" = dia com serie concluida de `reps * kg > 0`, a regra
+-- do cliente (`volumeByWeek`). O filtro `st.user_id` explicito continua: sem
+-- FK entre as tabelas, nada garante que a serie seja do dono da sessao.
+
+drop function if exists public.friend_weekly_frequency(date, date);
+
+-- Uma linha por amigo e semana COM treino. A semana e o domingo da data
+-- (`dow` 0 = domingo), igual ao `weekStartKey` do cliente; `sessions.date` ja
+-- e a data local de quem treinou, entao nao depende do fuso do servidor.
+--
+-- Quem nao compartilha, ou compartilha e nao treinou no intervalo, vem numa
+-- linha so com `week_start` nulo: o cliente precisa saber que a pessoa existe.
+-- `planned_days` sao os dias da semana com rotina no Plano — a meta da
+-- consistencia —, e tambem so saem com o toggle.
+create or replace function public.friend_weekly_days(first_week date, last_week date)
+returns table (
+  handle       text,
+  shares       boolean,
+  planned_days int,
+  week_start   date,
+  days         int
+)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  with amigos as (
+    select p.id, p.handle, p.shares_stats
+    from public.friendships f
+    join public.profiles p
+      on p.id = case
+        when f.requester_id = (select auth.uid()) then f.addressee_id
+        else f.requester_id
+      end
+    where (select auth.uid()) in (f.requester_id, f.addressee_id)
+      and f.status = 'accepted'
+  ),
+  dias as (
+    select distinct a.id, s.date
+    from amigos a
+    join public.sessions s
+      on s.user_id = a.id
+    join public.session_sets st
+      on st.session_id = s.id
+     and st.user_id = a.id
+    where a.shares_stats
+      and s.deleted_at is null
+      and st.deleted_at is null
+      and st.done
+      and st.reps * st.weight_kg > 0
+      and s.date between first_week and last_week + 6
+  ),
+  semanas as (
+    select id, date - extract(dow from date)::int as week_start, count(*)::int as days
+    from dias
+    group by 1, 2
+  ),
+  planos as (
+    select r.user_id as id, count(distinct r.weekday)::int as planned
+    from public.routines r
+    join amigos a on a.id = r.user_id
+    where a.shares_stats
+      and r.deleted_at is null
+    group by r.user_id
+  )
+  select
+    a.handle,
+    a.shares_stats,
+    case when a.shares_stats then coalesce(pl.planned, 0) end,
+    w.week_start,
+    w.days
+  from amigos a
+  left join planos pl on pl.id = a.id
+  left join semanas w on w.id = a.id;
+$$;
+
+revoke all on function public.friend_weekly_days(date, date) from public, anon;
+grant execute on function public.friend_weekly_days(date, date) to authenticated;
+
+-- Km corridos no intervalo, a regra do `distanceByDate` do cliente: soma de
+-- `distance_km` das series concluidas e nao apagadas. Arredonda a uma casa no
+-- servidor: somar 0,1 dez vezes em `real` nao da 1.
+create or replace function public.friend_monthly_distance(month_start date, month_end date)
+returns table (handle text, km real)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select
+    p.handle,
+    case when p.shares_stats then (
+      select round(coalesce(sum(st.distance_km), 0)::numeric, 1)::real
+      from public.sessions s
+      join public.session_sets st
+        on st.session_id = s.id
+       and st.user_id = p.id
+      where s.user_id = p.id
+        and s.deleted_at is null
+        and st.deleted_at is null
+        and st.done
+        and s.date between month_start and month_end
+    ) end
+  from public.friendships f
+  join public.profiles p
+    on p.id = case
+      when f.requester_id = (select auth.uid()) then f.addressee_id
+      else f.requester_id
+    end
+  where (select auth.uid()) in (f.requester_id, f.addressee_id)
+    and f.status = 'accepted';
+$$;
+
+revoke all on function public.friend_monthly_distance(date, date) from public, anon;
+grant execute on function public.friend_monthly_distance(date, date) to authenticated;

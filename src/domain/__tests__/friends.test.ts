@@ -1,4 +1,13 @@
-import { rankByFrequency, splitFriends, type FriendRow } from '../friends';
+import {
+  closedWeeks,
+  friendSeries,
+  rankByFrequency,
+  rankByValue,
+  rankWithSelf,
+  splitFriends,
+  type FriendRow,
+  type WeeklyDaysRow,
+} from '../friends';
 
 function makeRow(overrides: Partial<FriendRow> = {}): FriendRow {
   return {
@@ -129,5 +138,194 @@ describe('rankByFrequency', () => {
     ]);
 
     expect(ranked.map((row) => row.handle)).toEqual(['ana', 'carla']);
+  });
+});
+
+describe('rankByValue', () => {
+  const km = (row: { value: number | null }) => row.value;
+
+  it('ordena valores decimais, maior primeiro', () => {
+    const ranked = rankByValue(
+      [
+        { handle: 'ana', value: 12.4 },
+        { handle: 'bia', value: 12.5 },
+        { handle: 'carla', value: 3 },
+      ],
+      km,
+    );
+
+    expect(ranked.map((row) => row.handle)).toEqual(['bia', 'ana', 'carla']);
+  });
+
+  it('nulo vai para o fim sem virar zero, empate desempata por handle', () => {
+    const ranked = rankByValue(
+      [
+        { handle: 'carla', value: null },
+        { handle: 'bia', value: 0 },
+        { handle: 'ana', value: 0 },
+      ],
+      km,
+    );
+
+    expect(ranked.map((row) => row.handle)).toEqual(['ana', 'bia', 'carla']);
+  });
+
+  it('nao altera a lista recebida', () => {
+    const rows = [
+      { handle: 'bia', value: 1 },
+      { handle: 'ana', value: 5 },
+    ];
+    rankByValue(rows, km);
+    expect(rows.map((row) => row.handle)).toEqual(['bia', 'ana']);
+  });
+});
+
+describe('rankWithSelf', () => {
+  const eu = { handle: 'luis', value: 3 };
+
+  // Ranking de uma pessoa so nao compara nada: e o estado "adicione amigos".
+  it('sem amigos devolve vazio, nem a sua linha', () => {
+    expect(rankWithSelf([], eu)).toEqual([]);
+  });
+
+  it('te poe no lugar certo entre os amigos', () => {
+    const ranked = rankWithSelf(
+      [
+        { handle: 'bia', value: 1 },
+        { handle: 'ana', value: 5 },
+      ],
+      eu,
+    );
+
+    expect(ranked.map((row) => row.handle)).toEqual(['ana', 'luis', 'bia']);
+  });
+
+  it('no empate com um amigo, desempata por handle como entre amigos', () => {
+    const ranked = rankWithSelf([{ handle: 'ana', value: 3 }], eu);
+    expect(ranked.map((row) => row.handle)).toEqual(['ana', 'luis']);
+  });
+
+  // Zero e um dado ("nao treinei"); null e falta de dado ("nao compartilha").
+  it('com zero fica acima de quem nao compartilha', () => {
+    const ranked = rankWithSelf([{ handle: 'ana', value: null }], { handle: 'luis', value: 0 });
+    expect(ranked.map((row) => row.handle)).toEqual(['luis', 'ana']);
+  });
+
+  it('marca exatamente uma linha como sua', () => {
+    const ranked = rankWithSelf(
+      [
+        { handle: 'ana', value: 2 },
+        { handle: 'bia', value: null },
+      ],
+      eu,
+    );
+
+    expect(ranked.filter((row) => row.isSelf).map((row) => row.handle)).toEqual(['luis']);
+  });
+});
+
+function makeWeekRow(overrides: Partial<WeeklyDaysRow> = {}): WeeklyDaysRow {
+  return {
+    handle: 'ana',
+    shares: true,
+    plannedDays: 3,
+    weekStart: '2026-09-27',
+    days: 2,
+    ...overrides,
+  };
+}
+
+describe('friendSeries', () => {
+  const semanas = ['2026-09-13', '2026-09-20', '2026-09-27'];
+
+  it('preenche com zero as semanas sem treino, na ordem das semanas', () => {
+    const [ana] = friendSeries(
+      [
+        makeWeekRow({ weekStart: '2026-09-27', days: 4 }),
+        makeWeekRow({ weekStart: '2026-09-13', days: 2 }),
+      ],
+      semanas,
+    );
+
+    expect(ana).toEqual({ handle: 'ana', plannedDays: 3, weeks: [2, 0, 4] });
+  });
+
+  it('agrupa varias pessoas, uma serie por handle', () => {
+    const series = friendSeries(
+      [
+        makeWeekRow({ handle: 'ana', weekStart: '2026-09-13', days: 1 }),
+        makeWeekRow({ handle: 'bia', weekStart: '2026-09-20', days: 3, plannedDays: 2 }),
+        makeWeekRow({ handle: 'ana', weekStart: '2026-09-20', days: 5 }),
+      ],
+      semanas,
+    );
+
+    expect(series).toEqual([
+      { handle: 'ana', plannedDays: 3, weeks: [1, 5, 0] },
+      { handle: 'bia', plannedDays: 2, weeks: [0, 3, 0] },
+    ]);
+  });
+
+  // O servidor manda uma linha sem semana para quem compartilha e nao treinou,
+  // justamente para a pessoa nao sumir.
+  it('quem compartilha e nao treinou vira tudo zero, nao some', () => {
+    const series = friendSeries([makeWeekRow({ weekStart: null, days: null })], semanas);
+    expect(series).toEqual([{ handle: 'ana', plannedDays: 3, weeks: [0, 0, 0] }]);
+  });
+
+  it('quem nao compartilha fica com semanas e meta nulas', () => {
+    const series = friendSeries(
+      [makeWeekRow({ shares: false, plannedDays: null, weekStart: null, days: null })],
+      semanas,
+    );
+
+    expect(series).toEqual([{ handle: 'ana', plannedDays: null, weeks: null }]);
+  });
+
+  it('ignora semana fora da lista pedida', () => {
+    const [ana] = friendSeries(
+      [
+        makeWeekRow({ weekStart: '2026-09-06', days: 7 }),
+        makeWeekRow({ weekStart: '2026-09-20', days: 1 }),
+      ],
+      semanas,
+    );
+
+    expect(ana.weeks).toEqual([0, 1, 0]);
+  });
+});
+
+describe('closedWeeks', () => {
+  it('fecha a semana que bateu ou passou da meta', () => {
+    expect(closedWeeks([3, 2, 4, 3], 3)).toEqual({
+      weeks: ['closed', 'missed', 'closed', 'closed'],
+      count: 3,
+      of: 4,
+    });
+  });
+
+  // Segunda-feira ninguem "falhou" a semana ainda: ela so conta quando fecha.
+  it('semana atual abaixo da meta fica em andamento e nao entra no total', () => {
+    expect(closedWeeks([3, 1], 3)).toEqual({
+      weeks: ['closed', 'open'],
+      count: 1,
+      of: 1,
+    });
+  });
+
+  it('semana atual que ja bateu a meta conta', () => {
+    expect(closedWeeks([2, 3], 3)).toEqual({
+      weeks: ['missed', 'closed'],
+      count: 1,
+      of: 2,
+    });
+  });
+
+  it.each([0, null])('sem plano (meta %p) nao tem consistencia', (meta) => {
+    expect(closedWeeks([3, 3], meta)).toBeNull();
+  });
+
+  it('sem semanas nao quebra', () => {
+    expect(closedWeeks([], 3)).toEqual({ weeks: [], count: 0, of: 0 });
   });
 });

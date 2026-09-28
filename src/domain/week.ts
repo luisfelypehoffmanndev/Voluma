@@ -64,6 +64,41 @@ export function addWeeks(weekStart: string, count: number): string {
 }
 
 /**
+ * Domingo e sabado da semana de `now`, os dois inclusive.
+ *
+ * E o intervalo que o ranking de amigos manda ao servidor. Sai do cliente, e
+ * nao do `current_date` do Postgres, porque o servidor esta em UTC: perto da
+ * meia-noite ele ja estaria no dia seguinte e contaria a semana errada.
+ */
+export function weekRange(now: Date): { start: string; end: string } {
+  const start = weekStartKey(now);
+  const end = fromDateKey(addWeeks(start, 1));
+  end.setDate(end.getDate() - 1);
+  return { start, end: toDateKey(end) };
+}
+
+/**
+ * As chaves das ultimas `count` semanas, da mais antiga ate a de `now`.
+ *
+ * E a lista que os cards de amigos compartilham com o grafico de volume
+ * (`volumeByWeek`): se cada um contasse as proprias semanas, "12 semanas"
+ * poderia comecar em domingos diferentes em duas abas.
+ */
+export function lastWeekKeys(now: Date, count: number): string[] {
+  const current = weekStartKey(now);
+  return Array.from({ length: count }, (_, index) => addWeeks(current, index - (count - 1)));
+}
+
+/** Dia 1 e ultimo dia do mes de `now`, os dois inclusive. */
+export function monthRange(now: Date): { start: string; end: string } {
+  // Dia 0 do mes seguinte e o ultimo deste — o Date resolve 28, 29, 30 ou 31.
+  return {
+    start: toDateKey(new Date(now.getFullYear(), now.getMonth(), 1)),
+    end: toDateKey(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+  };
+}
+
+/**
  * "23 – 29 ago" para o cabecalho do seletor de semana. Quando a semana cruza
  * dois meses, os dois aparecem: "30 ago – 5 set".
  */
