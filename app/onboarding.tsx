@@ -1,5 +1,5 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BackHandler, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -58,7 +58,7 @@ export default function OnboardingScreen() {
   // Decidido na montagem, nao a cada render: `complete()` vira o status para
   // `done` enquanto esta tela ainda esta aberta, e o redirect abaixo nao pode
   // disparar no meio do proprio fim do onboarding.
-  const firstRun = useRef(useOnboarding.getState().status === 'needed').current;
+  const [firstRun] = useState(() => useOnboarding.getState().status === 'needed');
 
   // Quantas telas o usuario vai ver, para os pontos de progresso nao mentirem:
   // "do zero" pula a escolha de dias, e a revisao so tem as duas primeiras.

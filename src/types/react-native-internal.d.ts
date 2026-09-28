@@ -9,6 +9,6 @@
  */
 declare module 'react-native/Libraries/StyleSheet/processBackgroundImage' {
   /** Devolve as camadas processadas, ou `[]` se qualquer uma for invalida. */
-  const processBackgroundImage: (value: unknown) => ReadonlyArray<{ type: string }>;
+  const processBackgroundImage: (value: unknown) => readonly { type: string }[];
   export default processBackgroundImage;
 }

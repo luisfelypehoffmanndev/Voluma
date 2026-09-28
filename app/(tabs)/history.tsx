@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { spacing } from '@/theme/tokens';
@@ -41,9 +41,13 @@ export default function HistoryScreen() {
     isHistoryView(params.view) ? params.view : 'calendar',
   );
 
-  useEffect(() => {
-    if (isHistoryView(params.view)) setView(params.view);
-  }, [params.view]);
+  const [prevParamView, setPrevParamView] = useState(params.view);
+  if (params.view !== prevParamView) {
+    setPrevParamView(params.view);
+    if (isHistoryView(params.view)) {
+      setView(params.view);
+    }
+  }
 
   return (
     <Screen>

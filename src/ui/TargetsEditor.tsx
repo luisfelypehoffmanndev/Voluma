@@ -120,28 +120,34 @@ export function TargetsEditor({
   const dirty = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef(targets);
-  latest.current = targets;
+  useEffect(() => {
+    latest.current = targets;
+  });
 
   const commitRef = useRef(onCommit);
-  commitRef.current = onCommit;
+  useEffect(() => {
+    commitRef.current = onCommit;
+  });
 
-  // Enquanto ha edicao pendente o banco esta atrasado em relacao a tela; aceitar
-  // o valor dele aqui faria o numero voltar sozinho no meio do ajuste.
+  const valueRef = useRef(value);
+  useEffect(() => {
+    valueRef.current = value;
+  });
+
+  const { sets, reps, weightKg, distanceKm, durationMin } = value;
+
   useEffect(() => {
     if (dirty.current) return;
-    setTargets(value);
-  }, [value.sets, value.reps, value.weightKg, value.distanceKm, value.durationMin]);
+    setTargets({ sets, reps, weightKg, distanceKm, durationMin });
+  }, [sets, reps, weightKg, distanceKm, durationMin]);
 
-  // Trocar de semana descarta a edicao pendente em vez de grava-la: o commit
-  // atrasado cairia na semana nova, com os numeros da antiga.
   useEffect(() => {
     if (timer.current) {
       clearTimeout(timer.current);
       timer.current = null;
     }
     dirty.current = false;
-    setTargets(value);
-    // `value` de proposito fora das dependencias: so a troca de destino reseta.
+    setTargets(valueRef.current);
   }, [resetKey]);
 
   const commit = useCallback(() => {

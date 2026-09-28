@@ -534,7 +534,11 @@ function useWriteBehind<T>(perform: (value: T) => Promise<void>) {
   const inFlight = useRef(false);
   const current = useRef<Promise<void> | null>(null);
   const performRef = useRef(perform);
-  performRef.current = perform;
+  useEffect(() => {
+    performRef.current = perform;
+  });
+
+  const flushRef = useRef<() => void>(() => {});
 
   const flush = useCallback(() => {
     if (timer.current) {
@@ -549,9 +553,13 @@ function useWriteBehind<T>(perform: (value: T) => Promise<void>) {
     inFlight.current = true;
     current.current = performRef.current(next.value).finally(() => {
       inFlight.current = false;
-      if (pending.current) flush();
+      if (pending.current) flushRef.current();
     });
   }, []);
+
+  useEffect(() => {
+    flushRef.current = flush;
+  }, [flush]);
 
   /**
    * Grava agora o que estiver pendente e so resolve quando nao sobrar nada —
@@ -948,6 +956,11 @@ function StrengthExerciseCard(props: CardProps) {
       .then(bumpData)
       .catch((error) => console.warn('[Voluma] falha ao gravar série', item.exerciseName, error));
 
+  const commitRowRef = useRef(commitRowNow);
+  useEffect(() => {
+    commitRowRef.current = commitRowNow;
+  });
+
   // Debounce por serie, mesmo numero (`COMMIT_DELAY`) e mesma razao do
   // `TargetsEditor`: curto o bastante para nao se perder ao sair da tela,
   // longo o bastante para tres toques seguidos virarem uma escrita so.
@@ -979,7 +992,7 @@ function StrengthExerciseCard(props: CardProps) {
       for (const [id, timer] of rowTimers.current) {
         clearTimeout(timer);
         const pending = pendingPatches.current.get(id);
-        if (pending) commitRowNow(id, pending);
+        if (pending) commitRowRef.current(id, pending);
       }
     },
     [],
@@ -1026,9 +1039,10 @@ function StrengthExerciseCard(props: CardProps) {
   // `useWriteBehind` (`scheduleRowCommit`), entao o Finalizar espera as duas
   // filas. Os refs deixam o cadastro estavel entre renders.
   const settleRef = useRef(settle);
-  settleRef.current = settle;
-  const commitRowRef = useRef(commitRowNow);
-  commitRowRef.current = commitRowNow;
+  useEffect(() => {
+    settleRef.current = settle;
+  });
+  
   const { registerSettle } = props;
   useEffect(() => {
     const settleAll = async () => {
@@ -1042,7 +1056,9 @@ function StrengthExerciseCard(props: CardProps) {
       await Promise.all([...rowWrites, settleRef.current()]);
     };
     registerSettle(item.exerciseId, settleAll);
-    return () => registerSettle(item.exerciseId, null);
+    return () => {
+      registerSettle(item.exerciseId, null);
+    };
   }, [registerSettle, item.exerciseId]);
 
   const toggle = () => {

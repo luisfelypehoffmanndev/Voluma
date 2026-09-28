@@ -1,5 +1,5 @@
 import { useFocusEffect, useIsFocused } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
 
 /**
@@ -85,7 +85,9 @@ export function useQuery<T>(query: () => Promise<T>, options?: QueryOptions): Qu
   // entao nao e preciso lembrar que ficou desatualizada, so nao correr atras
   // enquanto ninguem olha.
   const isFocusedRef = useRef(isFocused);
-  isFocusedRef.current = isFocused;
+  useLayoutEffect(() => {
+    isFocusedRef.current = isFocused;
+  });
 
   useEffect(() => {
     if (!isFocusedRef.current) return;

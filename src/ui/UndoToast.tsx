@@ -39,13 +39,24 @@ export function UndoToast({ offer, onExpire, bottom }: Props) {
   // O conteudo fica montado durante a saida: sem isso o texto sumiria no
   // primeiro frame do fade e a pilula esvaziaria antes de apagar.
   const [shown, setShown] = useState(offer);
+
+  const [prevOffer, setPrevOffer] = useState(offer);
+  if (offer !== prevOffer) {
+    setPrevOffer(offer);
+    if (offer != null) {
+      setShown(offer);
+    }
+  }
+
   const visible = useFlag(offer != null);
+  
   const expireRef = useRef(onExpire);
-  expireRef.current = onExpire;
+  useEffect(() => {
+    expireRef.current = onExpire;
+  });
 
   useEffect(() => {
     if (!offer) return;
-    setShown(offer);
     const timer = setTimeout(() => expireRef.current(), UNDO_WINDOW);
     return () => clearTimeout(timer);
   }, [offer]);
