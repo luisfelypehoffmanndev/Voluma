@@ -5,6 +5,7 @@ import { colorSlots, friendSeries } from '@/domain/friends';
 import { volumeByWeek } from '@/domain/volume';
 import { lastWeekKeys, monthRange, toDateKey, weekPlan } from '@/domain/week';
 import { useQuery } from '@/store/data';
+import { useFriends } from '@/store/friends';
 import { useProfile } from '@/store/profile';
 import { signedAvatarUrls } from '@/sync/avatar';
 import { listFriends, monthlyDistance, weeklyDays } from '@/sync/friends';
@@ -58,14 +59,23 @@ export function useFriendsData() {
       const today = toDateKey(now);
       const weekKeys = lastWeekKeys(now, WEEKS);
       const month = monthRange(now);
-      const [rows, distances, volumes, ownDistances, routines, relations] = await Promise.all([
-        weeklyDays(weekKeys[0], weekKeys[WEEKS - 1]),
-        monthlyDistance(month.start, month.end),
-        volumeByDate(weekKeys[0], today),
-        distanceByDate(month.start, today),
-        listRoutines(),
-        listFriends(),
-      ]);
+      const ownPath = useProfile.getState().profile?.avatarPath ?? null;
+      const cachedAccepted = useFriends.getState().lists.accepted;
+      const cachedPaths = cachedAccepted.flatMap((friend) =>
+        friend.avatarPath ? [friend.avatarPath] : [],
+      );
+      const urlsPromise = signedAvatarUrls(ownPath ? [...cachedPaths, ownPath] : cachedPaths);
+
+      const [rows, distances, volumes, ownDistances, routines, relations, initialUrls] =
+        await Promise.all([
+          weeklyDays(weekKeys[0], weekKeys[WEEKS - 1]),
+          monthlyDistance(month.start, month.end),
+          volumeByDate(weekKeys[0], today),
+          distanceByDate(month.start, today),
+          listRoutines(),
+          listFriends(),
+          urlsPromise,
+        ]);
 
       let ownKm = 0;
       for (const km of ownDistances.values()) ownKm += km;
@@ -77,11 +87,15 @@ export function useFriendsData() {
       const byId = new Map(accepted.map((friend) => [friend.id, friend]));
       const kmById = new Map(distances.map((row) => [row.id, row.value]));
 
-      // Todas as fotos numa chamada so, a sua junto. A sua vem do store no
-      // momento da consulta; se mudar depois, o foco na tela recarrega.
-      const ownPath = useProfile.getState().profile?.avatarPath ?? null;
-      const paths = accepted.flatMap((friend) => (friend.avatarPath ? [friend.avatarPath] : []));
-      const urls = await signedAvatarUrls(ownPath ? [...paths, ownPath] : paths);
+      const missingPaths = accepted
+        .flatMap((friend) => (friend.avatarPath ? [friend.avatarPath] : []))
+        .filter((path) => !initialUrls.has(path));
+
+      let urls = initialUrls;
+      if (missingPaths.length > 0) {
+        const extraUrls = await signedAvatarUrls(missingPaths);
+        urls = new Map([...initialUrls, ...extraUrls]);
+      }
 
       const friends: FriendPerson[] = friendSeries(rows, weekKeys).map((series) => {
         const relation = byId.get(series.id);
