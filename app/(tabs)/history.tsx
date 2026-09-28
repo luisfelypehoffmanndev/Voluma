@@ -37,27 +37,48 @@ function isHistoryView(value: string | undefined): value is HistoryView {
  */
 export default function HistoryScreen() {
   const params = useLocalSearchParams<{ view?: string }>();
-  const [view, setView] = useState<HistoryView>(
-    isHistoryView(params.view) ? params.view : 'calendar',
-  );
+  const initialView = isHistoryView(params.view) ? params.view : 'calendar';
+  const [view, setView] = useState<HistoryView>(initialView);
+  const [visited, setVisited] = useState<Record<HistoryView, boolean>>(() => ({
+    calendar: initialView === 'calendar',
+    numbers: initialView === 'numbers',
+    friends: initialView === 'friends',
+  }));
 
   const [prevParamView, setPrevParamView] = useState(params.view);
   if (params.view !== prevParamView) {
     setPrevParamView(params.view);
     if (isHistoryView(params.view)) {
-      setView(params.view);
+      const nextView = params.view;
+      setView(nextView);
+      if (!visited[nextView]) {
+        setVisited((prev) => ({ ...prev, [nextView]: true }));
+      }
     }
   }
+
+  const onChangeView = (next: HistoryView) => {
+    setView(next);
+    if (!visited[next]) {
+      setVisited((prev) => ({ ...prev, [next]: true }));
+    }
+  };
 
   return (
     <Screen>
       <Header title="Histórico" />
       <View style={styles.segmented}>
-        <Segmented options={OPTIONS} value={view} onChange={setView} />
+        <Segmented options={OPTIONS} value={view} onChange={onChangeView} />
       </View>
-      {view === 'calendar' ? <CalendarPanel /> : null}
-      {view === 'numbers' ? <StatsPanel /> : null}
-      {view === 'friends' ? <FriendsPanel /> : null}
+      <View style={[styles.panel, view !== 'calendar' && styles.hidden]}>
+        {visited.calendar ? <CalendarPanel /> : null}
+      </View>
+      <View style={[styles.panel, view !== 'numbers' && styles.hidden]}>
+        {visited.numbers ? <StatsPanel /> : null}
+      </View>
+      <View style={[styles.panel, view !== 'friends' && styles.hidden]}>
+        {visited.friends ? <FriendsPanel /> : null}
+      </View>
     </Screen>
   );
 }
@@ -66,5 +87,11 @@ const styles = StyleSheet.create({
   segmented: {
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.md,
+  },
+  panel: {
+    flex: 1,
+  },
+  hidden: {
+    display: 'none',
   },
 });
