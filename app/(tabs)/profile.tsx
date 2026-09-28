@@ -18,7 +18,7 @@ import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { pickAvatar } from '@/ui/profile/pickAvatar';
 import { CheckCell } from '@/ui/CheckCell';
-import { preview } from '@/ui/haptics';
+import { confirm, preview } from '@/ui/haptics';
 import { relativeTime } from '@/ui/relative';
 import { LoadError } from '@/ui/LoadError';
 import { Header, Screen } from '@/ui/Screen';
@@ -344,7 +344,10 @@ function SharingCard() {
         </View>
         <CheckCell
           checked={profile.sharesStats}
-          onPress={() => void save({ sharesStats: !profile.sharesStats }, true)}
+          onPress={() => {
+            confirm();
+            void save({ sharesStats: !profile.sharesStats }, true);
+          }}
         />
       </View>
     </Card>
