@@ -344,7 +344,7 @@ function SharingCard() {
         </View>
         <CheckCell
           checked={profile.sharesStats}
-          onPress={() => void save({ sharesStats: !profile.sharesStats })}
+          onPress={() => void save({ sharesStats: !profile.sharesStats }, true)}
         />
       </View>
     </Card>

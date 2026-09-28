@@ -33,7 +33,7 @@ type ProfileState = {
   /** `suggestedName` e o nome da conta Google, gravado so se o perfil nao tiver. */
   load: (userId: string, suggestedName?: string | null) => Promise<void>;
   claim: (userId: string, candidates: string[], extras: ProfileExtras) => Promise<SaveResult>;
-  save: (patch: ProfilePatch) => Promise<SaveResult>;
+  save: (patch: ProfilePatch, silent?: boolean) => Promise<SaveResult>;
   /** Troca a foto por um JPEG ja reencodado (`pickAvatar`). */
   setAvatar: (jpeg: Uint8Array) => Promise<'ok' | 'error'>;
   removeAvatar: () => Promise<'ok' | 'error'>;
@@ -84,24 +84,36 @@ export const useProfile = create<ProfileState>((set, get) => ({
     }
   },
 
-  save: async (patch) => {
+  save: async (patch, silent = false) => {
     const current = get().profile;
     // Sem perfil carregado nao ha o que atualizar — chamar a rede so produziria
     // um update que nao acerta linha nenhuma.
     if (!current) return 'error';
 
-    set({ loading: true, error: null });
+    if (silent) {
+      set({ profile: { ...current, ...patch }, error: null });
+    } else {
+      set({ loading: true, error: null });
+    }
+
     try {
       const result = await updateProfile(current.id, patch);
-      if (result === 'handle-taken') return 'handle-taken';
+      if (result === 'handle-taken') {
+        if (silent) set({ profile: current }); // Rollback
+        return 'handle-taken';
+      }
 
       set({ profile: result });
       return 'ok';
     } catch (error) {
-      set({ error: message(error) });
+      if (silent) {
+        set({ profile: current, error: message(error) }); // Rollback
+      } else {
+        set({ error: message(error) });
+      }
       return 'error';
     } finally {
-      set({ loading: false });
+      if (!silent) set({ loading: false });
     }
   },
 
