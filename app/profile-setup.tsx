@@ -49,6 +49,7 @@ export default function ProfileSetupScreen() {
       : await claim(userId, queue, {
           age: values.age,
           trainingYears: values.trainingYears,
+          displayName: values.displayName,
         });
 
     if (result === 'handle-taken') {
@@ -71,6 +72,7 @@ export default function ProfileSetupScreen() {
 
         <ProfileForm
           key={profile?.handle ?? candidates[0]}
+          initialName={profile?.displayName ?? displayName ?? ''}
           initialHandle={profile?.handle ?? candidates[0]}
           initialAge={profile?.age ?? null}
           initialTrainingYears={profile?.trainingYears ?? null}

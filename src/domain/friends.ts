@@ -21,6 +21,15 @@ export type FriendRow = {
   /** Nulo quando a pessoa nao compartilha — nao e "nao respondeu". */
   age: number | null;
   trainingYears: number | null;
+  /**
+   * Caminho da foto no bucket `avatars`. Nulo sem foto — ou num pedido que
+   * voce enviou e ainda nao foi aceito: a pessoa nao escolheu se mostrar.
+   */
+  avatarPath: string | null;
+  /** Quando a relacao comecou (ISO). E a ordem das cores (`colorSlots`). */
+  since: string;
+  /** O nome da pessoa — mesma regra da foto: nulo num pedido que voce enviou. */
+  displayName: string | null;
 };
 
 export type FriendLists = {
@@ -115,6 +124,7 @@ export function rankWithSelf(
 
 /** Uma linha de `friend_weekly_days`, ja com nomes do app. */
 export type WeeklyDaysRow = {
+  id: string;
   handle: string;
   shares: boolean;
   /** Dias da semana com rotina no Plano; null sem o toggle. */
@@ -125,6 +135,7 @@ export type WeeklyDaysRow = {
 };
 
 export type FriendSeries = {
+  id: string;
   handle: string;
   plannedDays: number | null;
   /** Dias treinados por semana, na ordem pedida; null sem o toggle. */
@@ -143,24 +154,26 @@ export function friendSeries(
   weekKeys: readonly string[],
 ): FriendSeries[] {
   const position = new Map(weekKeys.map((key, index) => [key, index]));
-  const byHandle = new Map<string, FriendSeries>();
+  // Pelo id, e nao pelo @: o @ e o que a pessoa escolheu mostrar, e pode mudar.
+  const byId = new Map<string, FriendSeries>();
 
   for (const row of rows) {
-    let series = byHandle.get(row.handle);
+    let series = byId.get(row.id);
     if (!series) {
       series = {
+        id: row.id,
         handle: row.handle,
         plannedDays: row.shares ? row.plannedDays : null,
         weeks: row.shares ? weekKeys.map(() => 0) : null,
       };
-      byHandle.set(row.handle, series);
+      byId.set(row.id, series);
     }
 
     const index = row.weekStart === null ? undefined : position.get(row.weekStart);
     if (series.weeks && index !== undefined) series.weeks[index] = row.days ?? 0;
   }
 
-  return [...byHandle.values()];
+  return [...byId.values()];
 }
 
 /** Semana fechada (bateu a meta), perdida, ou a atual ainda em andamento. */
@@ -201,6 +214,59 @@ export function closedWeeks(
     count: goals.filter((goal) => goal === 'closed').length,
     of: goals.filter((goal) => goal !== 'open').length,
   };
+}
+
+/** Tamanho maximo do nome de exibicao — o mesmo `check` do banco (v10). */
+export const NAME_MAX = 40;
+
+/** "Ana Souza" → "Ana". Nulo quando nao ha nome — quem chama cai no @. */
+export function firstName(displayName: string | null): string | null {
+  const first = displayName?.trim().split(/\s+/)[0];
+  return first ? first : null;
+}
+
+/**
+ * Como cada pessoa aparece no ranking: o primeiro nome, e o @ embaixo so
+ * quando dois amigos tem o mesmo primeiro nome — duas "Ana" sem mais nada
+ * seriam a mesma pessoa aos olhos de quem le. Sem nome, o @ e o titulo.
+ */
+export function rankingLabels(
+  people: readonly { id: string; handle: string; displayName: string | null }[],
+): Map<string, { title: string; subtitle: string | null }> {
+  const titles = people.map((person) => ({
+    person,
+    title: firstName(person.displayName) ?? `@${person.handle}`,
+  }));
+
+  const repeated = (title: string) =>
+    titles.filter(
+      (other) => other.title.localeCompare(title, 'pt-BR', { sensitivity: 'base' }) === 0,
+    ).length > 1;
+
+  return new Map(
+    titles.map(({ person, title }) => [
+      person.id,
+      { title, subtitle: repeated(title) ? `@${person.handle}` : null },
+    ]),
+  );
+}
+
+/**
+ * O indice da cor de cada amigo na paleta `people.friends`.
+ *
+ * A cor segue a PESSOA, nunca a posicao no ranking: a ana e ciano em todo card
+ * e em toda semana, mesmo quando passa do 1o para o 3o lugar. A ordem e a de
+ * quando a amizade comecou — amigo novo entra no fim e nao repinta ninguem.
+ * Passou do tamanho da paleta, volta ao comeco; a foto e o @ desambiguam.
+ */
+export function colorSlots(
+  friends: readonly { id: string; since: string }[],
+  paletteSize: number,
+): Map<string, number> {
+  const ordered = [...friends].sort(
+    (a, b) => a.since.localeCompare(b.since) || a.id.localeCompare(b.id),
+  );
+  return new Map(ordered.map((friend, index) => [friend.id, index % paletteSize]));
 }
 
 /**

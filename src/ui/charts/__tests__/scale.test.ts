@@ -5,7 +5,6 @@ import {
   plotPoints,
   pointIndexAt,
   signedDelta,
-  stackBlocks,
   valueY,
 } from '../scale';
 
@@ -129,40 +128,5 @@ describe('niceTicks', () => {
   it('nao devolve nada para intervalo vazio ou invertido', () => {
     expect(niceTicks(5, 5, 3)).toEqual([]);
     expect(niceTicks(10, 5, 3)).toEqual([]);
-  });
-});
-
-describe('stackBlocks', () => {
-  it('um treino so ocupa a coluna inteira', () => {
-    expect(stackBlocks([5000], 100, 2, 2)).toEqual([{ bottom: 0, height: 100 }]);
-  });
-
-  it('as frestas saem de dentro da coluna: o topo fica na altura do total', () => {
-    const blocks = stackBlocks([3000, 1000], 102, 2, 2);
-    // 100 de sobra para 3000 + 1000: 75 e 25.
-    expect(blocks).toEqual([
-      { bottom: 0, height: 75 },
-      { bottom: 77, height: 25 },
-    ]);
-    const top = blocks[1].bottom + blocks[1].height;
-    expect(top).toBe(102);
-  });
-
-  it('empilha na ordem recebida, o primeiro embaixo', () => {
-    const [first, second] = stackBlocks([1000, 3000], 102, 2, 2);
-    expect(first.bottom).toBe(0);
-    expect(second.bottom).toBeGreaterThan(first.bottom);
-    expect(second.height).toBeGreaterThan(first.height);
-  });
-
-  it('um treino leve nunca some', () => {
-    const [heavy, light] = stackBlocks([99900, 100], 50, 2, 2);
-    expect(light.height).toBe(2);
-    expect(heavy.height).toBeCloseTo(47.95, 2);
-  });
-
-  it('coluna sem volume nao tem bloco', () => {
-    expect(stackBlocks([], 100, 2, 2)).toEqual([]);
-    expect(stackBlocks([0, 0], 100, 2, 2)).toEqual([]);
   });
 });

@@ -15,17 +15,25 @@ como verificar. A ideia é resolver um de cada vez.
 | [01](01-corrida-errada.md) | "Adicionar corrida" põe o exercício errado | bug visível | **feito** |
 | [02](02-migrations-atomicas.md) | Migrations não são atômicas nem retomáveis | dano irreversível | **feito** |
 | [03](03-signout-race.md) | `signOut()` corre com um sync em voo | vazamento entre contas | **feito** |
-| [04](04-rls-policies.md) | RLS: `auth.uid()` por linha, falta `TO authenticated` | performance na escala | **feito** — falta rodar no Supabase |
+| [04](04-rls-policies.md) | RLS: `auth.uid()` por linha, falta `TO authenticated` | performance na escala | **feito** — v4 rodada no Supabase e RLS confirmado |
 | [05](05-push-chunking.md) | `push()` sem chunking no `IN (...)` | baixa | **feito** |
 | [06](06-auth-listener.md) | `onAuthStateChange` nunca desinscrito | baixa | **feito** |
 | [08](08-testes-puros.md) | Testes puros das correções 01 e 02 | — | **feito** |
 | [07](07-login-google.md) | Migração do login para conta Google | decisão de produto | **feito** — testado no aparelho, login funcionando |
 | [11](11-perfil-handle.md) | Perfil público: @handle, idade e anos de treino | feature | **feito** — v5 rodada, RLS confirmado, testado no aparelho |
-| [12](12-amigos.md) | Amigos e o toggle de compartilhamento | feature | aberto — v6 rodada, RLS confirmado; falta testar com duas contas |
-| [13](13-ranking-amigos.md) | Aba Amigos: ranking de dias treinados na semana | feature | **feito** — v7 rodada e testada no aparelho; parte substituída pelo 14 |
-| [14](14-amigos-graficos.md) | Aba Amigos: 12 semanas, consistência e corrida | feature | aberto — v8 rodada; falta conferir 2 cards e testar com duas contas |
+| [12](12-amigos.md) | Amigos e o toggle de compartilhamento | feature | **feito** — v6 rodada, RLS confirmado; pendente teste com duas contas |
+| [13](13-ranking-amigos.md) | Aba Amigos: ranking de dias treinados na semana | feature | **feito** — v7 rodada; substituído por 14 e 15 |
+| [14](14-amigos-graficos.md) | Aba Amigos: 12 semanas, consistência e corrida | feature | **feito** — v8 rodada; evoluído na tela de amigo no item 15 |
+| [15](15-avatar-e-nomes.md) | Foto de perfil, nome de exibição, cor por amigo e refatoração dos gráficos | feature | **feito** — v9 e v10 rodadas, bucket avatars criado, teste 15-avatar.sql passando |
 
 ## Pendências fora do código
+
+Concluída em 2026-09-28:
+
+5. **Item 15** — as seções `-- v9: foto de perfil e cor por pessoa` e
+   `-- v10: nome de exibicao` foram rodadas no SQL Editor. O bucket privado
+   `avatars` foi criado no Supabase Storage. O teste
+   `supabase/tests/15-avatar.sql` foi validado com sucesso.
 
 Concluída em 2026-09-22:
 
@@ -100,7 +108,7 @@ para digitar.
 Ao fim de cada item, e obrigatoriamente ao fim de todos:
 
 - `npm run typecheck` limpo.
-- `npm test` — os 187 testes atuais passando, mais os novos do item 08.
+- `npm test` — os 476 testes atuais passando em 31 suítes.
 - No dev client, rodar um treino inteiro (começar → marcar série → finalizar →
   tela de resultado) e navegar as quatro abas, confirmando que nada mudou de
   aparência ou de comportamento fora da tela de login.

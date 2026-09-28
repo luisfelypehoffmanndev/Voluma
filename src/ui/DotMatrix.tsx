@@ -3,12 +3,13 @@ import { StyleSheet, View } from 'react-native';
 import Svg, { Rect } from 'react-native-svg';
 
 import { monthBlocks, type DayDot, type DotCell } from '@/domain/streak';
-import { monthLabelShort } from '@/domain/week';
-import { colors } from '@/theme/tokens';
+import { monthLabelShort, weekdayInitials } from '@/domain/week';
+import { colors, fontSize } from '@/theme/tokens';
 
-import { Label } from './Text';
+import { Label, Meta } from './Text';
 
 const ROWS = 7;
+const MONTH_HEIGHT = 18;
 
 /**
  * Teto da largura da celula. Quadrada — o espacamento entre quadrados e o
@@ -23,22 +24,25 @@ const ROWS = 7;
 const MAX_CELL = 14;
 
 /**
- * Lado do quadrado: pequeno e praticamente fixo. A proporcao entra so como
- * teto de seguranca — em tela estreita a celula encolhe e um valor fixo faria
- * os quadrados se encostarem.
+ * Lado do quadrado: ~70% da celula, ate 10dp. Com 4px os quadrados eram
+ * poeira — lidos como textura, e nao como dias. O resto da celula e o vao
+ * entre eles, que continua separando um dia do outro.
  */
-const SQUARE_MAX = 4;
-const SQUARE_RATIO = 0.55;
+const SQUARE_MAX = 10;
+const SQUARE_RATIO = 0.72;
 
-/** Quinas do quadrado: arredondadas o suficiente para nao parecer pixel cru. */
-const SQUARE_RADIUS = 1;
+/** Quinas do quadrado: um quarto do lado, como a celula do calendario. */
+const SQUARE_RADIUS = 2;
+
+/** A coluna das iniciais dos dias, a esquerda da grade. */
+const WEEKDAY_WIDTH = 14;
 
 /**
  * Respiro entre meses, em celulas. Proporcional a grade, nao um valor fixo em
  * pixels: assim a separacao entre os meses acompanha o tamanho do quadrado e a
  * densidade continua a mesma em qualquer largura de tela.
  */
-const BLOCK_GAP_CELLS = 2;
+const BLOCK_GAP_CELLS = 1;
 
 type Props = {
   dots: readonly DayDot[];
@@ -75,7 +79,7 @@ export function DotMatrix({ dots, width, showMonths = true, showRecord = true }:
     // Os vaos entram na conta em unidades de celula, entao a largura inteira e
     // repartida de uma vez so — sem sobra para distribuir depois.
     const units = totalColumns + BLOCK_GAP_CELLS * Math.max(0, grouped.length - 1);
-    const sized = Math.min(MAX_CELL, width / units);
+    const sized = Math.min(MAX_CELL, (width - WEEKDAY_WIDTH) / units);
 
     return { blocks: grouped, cell: sized, gap: sized * BLOCK_GAP_CELLS };
   }, [dots, width]);
@@ -84,8 +88,31 @@ export function DotMatrix({ dots, width, showMonths = true, showRecord = true }:
   // Centraliza o quadrado na celula: a sobra vira respiro igual dos dois lados.
   const inset = (cell - square) / 2;
 
+  // O ultimo dia da janela e hoje: ganha um contorno, o "voce esta aqui".
+  const today = dots[dots.length - 1]?.dateKey;
+
   return (
     <View style={[styles.row, { gap }]}>
+      <View
+        style={{ marginTop: showMonths ? MONTH_HEIGHT : 0 }}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      >
+        {weekdayInitials().map((initial, row) => (
+          <Meta
+            key={row}
+            style={[
+              styles.weekday,
+              { height: cell, lineHeight: cell },
+              // So segunda, quarta e sexta: sete letras empilhadas viram coluna
+              // de texto, e tres ja situam a linha.
+              row % 2 === 0 && styles.hidden,
+            ]}
+          >
+            {initial}
+          </Meta>
+        ))}
+      </View>
       {blocks.map((block) => (
         <View key={`${block.year}-${block.month}`}>
           {showMonths ? <Label style={styles.month}>{monthLabelShort(block.month)}</Label> : null}
@@ -100,6 +127,8 @@ export function DotMatrix({ dots, width, showMonths = true, showRecord = true }:
                 height={square}
                 rx={SQUARE_RADIUS}
                 fill={squareColor(entry, showRecord)}
+                stroke={entry.dateKey === today ? colors.textPrimary : undefined}
+                strokeWidth={entry.dateKey === today ? 1 : 0}
               />
             ))}
           </Svg>
@@ -129,8 +158,15 @@ const styles = StyleSheet.create({
     // grade perde a leitura de campo continuo.
     justifyContent: 'center',
   },
+  weekday: {
+    width: WEEKDAY_WIDTH,
+    fontSize: fontSize.label - 2,
+  },
+  hidden: {
+    opacity: 0,
+  },
   month: {
-    height: 18,
+    height: MONTH_HEIGHT,
     // Centralizado sobre o proprio bloco, como na referencia — nao alinhado a
     // esquerda da coluna em que o mes comeca.
     textAlign: 'center',

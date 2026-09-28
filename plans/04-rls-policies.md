@@ -2,7 +2,7 @@
 
 **Arquivo:** `supabase/schema.sql:132-150` (bloco `do $$` que cria `own_rows`)
 **Severidade:** performance na escala multiusuário
-**Estado:** aberto
+**Estado:** **feito** — schema atualizado e rodado no Supabase em 2026-09-17
 
 ## Problema
 

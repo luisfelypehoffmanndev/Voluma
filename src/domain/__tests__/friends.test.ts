@@ -1,9 +1,12 @@
 import {
   closedWeeks,
+  colorSlots,
+  firstName,
   friendSeries,
   rankByFrequency,
   rankByValue,
   rankWithSelf,
+  rankingLabels,
   splitFriends,
   type FriendRow,
   type WeeklyDaysRow,
@@ -18,6 +21,9 @@ function makeRow(overrides: Partial<FriendRow> = {}): FriendRow {
     sharesStats: false,
     age: null,
     trainingYears: null,
+    avatarPath: null,
+    since: '2026-09-01T10:00:00+00:00',
+    displayName: null,
     ...overrides,
   };
 }
@@ -226,6 +232,7 @@ describe('rankWithSelf', () => {
 
 function makeWeekRow(overrides: Partial<WeeklyDaysRow> = {}): WeeklyDaysRow {
   return {
+    id: 'u-ana',
     handle: 'ana',
     shares: true,
     plannedDays: 3,
@@ -247,30 +254,46 @@ describe('friendSeries', () => {
       semanas,
     );
 
-    expect(ana).toEqual({ handle: 'ana', plannedDays: 3, weeks: [2, 0, 4] });
+    expect(ana).toEqual({ id: 'u-ana', handle: 'ana', plannedDays: 3, weeks: [2, 0, 4] });
   });
 
-  it('agrupa varias pessoas, uma serie por handle', () => {
+  it('agrupa varias pessoas, uma serie por pessoa', () => {
     const series = friendSeries(
       [
-        makeWeekRow({ handle: 'ana', weekStart: '2026-09-13', days: 1 }),
-        makeWeekRow({ handle: 'bia', weekStart: '2026-09-20', days: 3, plannedDays: 2 }),
-        makeWeekRow({ handle: 'ana', weekStart: '2026-09-20', days: 5 }),
+        makeWeekRow({ weekStart: '2026-09-13', days: 1 }),
+        makeWeekRow({
+          id: 'u-bia',
+          handle: 'bia',
+          weekStart: '2026-09-20',
+          days: 3,
+          plannedDays: 2,
+        }),
+        makeWeekRow({ weekStart: '2026-09-20', days: 5 }),
       ],
       semanas,
     );
 
     expect(series).toEqual([
-      { handle: 'ana', plannedDays: 3, weeks: [1, 5, 0] },
-      { handle: 'bia', plannedDays: 2, weeks: [0, 3, 0] },
+      { id: 'u-ana', handle: 'ana', plannedDays: 3, weeks: [1, 5, 0] },
+      { id: 'u-bia', handle: 'bia', plannedDays: 2, weeks: [0, 3, 0] },
     ]);
+  });
+
+  // Agrupa pelo id: o @ e escolha da pessoa e pode mudar.
+  it('duas pessoas com o mesmo @ nao se misturam', () => {
+    const series = friendSeries(
+      [makeWeekRow({ id: 'u-1', weekStart: '2026-09-13' }), makeWeekRow({ id: 'u-2' })],
+      semanas,
+    );
+
+    expect(series.map((row) => row.id)).toEqual(['u-1', 'u-2']);
   });
 
   // O servidor manda uma linha sem semana para quem compartilha e nao treinou,
   // justamente para a pessoa nao sumir.
   it('quem compartilha e nao treinou vira tudo zero, nao some', () => {
     const series = friendSeries([makeWeekRow({ weekStart: null, days: null })], semanas);
-    expect(series).toEqual([{ handle: 'ana', plannedDays: 3, weeks: [0, 0, 0] }]);
+    expect(series).toEqual([{ id: 'u-ana', handle: 'ana', plannedDays: 3, weeks: [0, 0, 0] }]);
   });
 
   it('quem nao compartilha fica com semanas e meta nulas', () => {
@@ -279,7 +302,7 @@ describe('friendSeries', () => {
       semanas,
     );
 
-    expect(series).toEqual([{ handle: 'ana', plannedDays: null, weeks: null }]);
+    expect(series).toEqual([{ id: 'u-ana', handle: 'ana', plannedDays: null, weeks: null }]);
   });
 
   it('ignora semana fora da lista pedida', () => {
@@ -327,5 +350,118 @@ describe('closedWeeks', () => {
 
   it('sem semanas nao quebra', () => {
     expect(closedWeeks([], 3)).toEqual({ weeks: [], count: 0, of: 0 });
+  });
+});
+
+describe('firstName', () => {
+  it.each([
+    ['Ana Souza', 'Ana'],
+    ['  Bruno   Lima ', 'Bruno'],
+    ['Luís', 'Luís'],
+    ['', null],
+    ['   ', null],
+    [null, null],
+  ])('%p vira %p', (full, first) => {
+    expect(firstName(full)).toBe(first);
+  });
+});
+
+describe('rankingLabels', () => {
+  const pessoa = (id: string, handle: string, displayName: string | null) => ({
+    id,
+    handle,
+    displayName,
+  });
+
+  it('mostra o primeiro nome, sem o @', () => {
+    const labels = rankingLabels([pessoa('a', 'ana.s', 'Ana Souza')]);
+    expect(labels.get('a')).toEqual({ title: 'Ana', subtitle: null });
+  });
+
+  it('sem nome, o @ vira o titulo', () => {
+    const labels = rankingLabels([pessoa('a', 'ana.s', null)]);
+    expect(labels.get('a')).toEqual({ title: '@ana.s', subtitle: null });
+  });
+
+  // Duas Anas no ranking seriam a mesma pessoa aos olhos de quem le.
+  it('primeiro nome repetido ganha o @ embaixo, nos dois', () => {
+    const labels = rankingLabels([
+      pessoa('a', 'ana.s', 'Ana Souza'),
+      pessoa('b', 'ana.l', 'Ana Lima'),
+      pessoa('c', 'bruno', 'Bruno'),
+    ]);
+
+    expect(labels.get('a')).toEqual({ title: 'Ana', subtitle: '@ana.s' });
+    expect(labels.get('b')).toEqual({ title: 'Ana', subtitle: '@ana.l' });
+    expect(labels.get('c')).toEqual({ title: 'Bruno', subtitle: null });
+  });
+
+  it('a repeticao ignora maiuscula e acento', () => {
+    const labels = rankingLabels([pessoa('a', 'x', 'Luís'), pessoa('b', 'y', 'luis')]);
+    expect(labels.get('a')?.subtitle).toBe('@x');
+    expect(labels.get('b')?.subtitle).toBe('@y');
+  });
+});
+
+describe('colorSlots', () => {
+  const amigo = (id: string, since: string) => ({ id, since });
+
+  it('da as cores na ordem em que a amizade comecou', () => {
+    const slots = colorSlots(
+      [amigo('b', '2026-09-20T10:00:00Z'), amigo('a', '2026-09-01T10:00:00Z')],
+      5,
+    );
+
+    expect(slots.get('a')).toBe(0);
+    expect(slots.get('b')).toBe(1);
+  });
+
+  // A cor segue a pessoa: nao pode depender da ordem em que a lista chegou.
+  it('a mesma pessoa tem a mesma cor em qualquer ordem de entrada', () => {
+    const lista = [
+      amigo('a', '2026-09-01T10:00:00Z'),
+      amigo('b', '2026-09-10T10:00:00Z'),
+      amigo('c', '2026-09-20T10:00:00Z'),
+    ];
+
+    expect(colorSlots(lista, 5)).toEqual(colorSlots([...lista].reverse(), 5));
+  });
+
+  it('um amigo novo nao repinta os antigos', () => {
+    const antes = colorSlots(
+      [amigo('a', '2026-09-01T10:00:00Z'), amigo('b', '2026-09-10T10:00:00Z')],
+      5,
+    );
+    const depois = colorSlots(
+      [
+        amigo('a', '2026-09-01T10:00:00Z'),
+        amigo('b', '2026-09-10T10:00:00Z'),
+        amigo('c', '2026-09-28T10:00:00Z'),
+      ],
+      5,
+    );
+
+    expect(depois.get('a')).toBe(antes.get('a'));
+    expect(depois.get('b')).toBe(antes.get('b'));
+    expect(depois.get('c')).toBe(2);
+  });
+
+  it('passou do tamanho da paleta, volta ao comeco', () => {
+    const slots = colorSlots(
+      ['a', 'b', 'c'].map((id, index) => amigo(id, `2026-09-0${index + 1}T10:00:00Z`)),
+      2,
+    );
+
+    expect([slots.get('a'), slots.get('b'), slots.get('c')]).toEqual([0, 1, 0]);
+  });
+
+  it('amizades do mesmo instante desempatam pelo id, para a ordem nao pular', () => {
+    const slots = colorSlots(
+      [amigo('z', '2026-09-01T10:00:00Z'), amigo('m', '2026-09-01T10:00:00Z')],
+      5,
+    );
+
+    expect(slots.get('m')).toBe(0);
+    expect(slots.get('z')).toBe(1);
   });
 });

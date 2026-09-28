@@ -325,7 +325,10 @@ $$;
 revoke all on function public.request_friendship(text) from public, anon;
 grant execute on function public.request_friendship(text) to authenticated;
 
-create or replace function public.list_friends()
+-- (drop antes do create: a v9 muda as colunas de retorno, e sem isto colar o
+-- arquivo de novo falharia aqui ao tentar voltar ao formato antigo.)
+drop function if exists public.list_friends();
+create function public.list_friends()
 returns table (
   id uuid,
   handle text,
@@ -391,7 +394,10 @@ drop function if exists public.friend_weekly_frequency(date, date);
 -- linha so com `week_start` nulo: o cliente precisa saber que a pessoa existe.
 -- `planned_days` sao os dias da semana com rotina no Plano — a meta da
 -- consistencia —, e tambem so saem com o toggle.
-create or replace function public.friend_weekly_days(first_week date, last_week date)
+-- (drop antes do create: a v9 muda as colunas de retorno, e sem isto colar o
+-- arquivo de novo falharia aqui ao tentar voltar ao formato antigo.)
+drop function if exists public.friend_weekly_days(date, date);
+create function public.friend_weekly_days(first_week date, last_week date)
 returns table (
   handle       text,
   shares       boolean,
@@ -460,7 +466,10 @@ grant execute on function public.friend_weekly_days(date, date) to authenticated
 -- Km corridos no intervalo, a regra do `distanceByDate` do cliente: soma de
 -- `distance_km` das series concluidas e nao apagadas. Arredonda a uma casa no
 -- servidor: somar 0,1 dez vezes em `real` nao da 1.
-create or replace function public.friend_monthly_distance(month_start date, month_end date)
+-- (drop antes do create: a v9 muda as colunas de retorno, e sem isto colar o
+-- arquivo de novo falharia aqui ao tentar voltar ao formato antigo.)
+drop function if exists public.friend_monthly_distance(date, date);
+create function public.friend_monthly_distance(month_start date, month_end date)
 returns table (handle text, km real)
 language sql
 security definer
@@ -493,3 +502,292 @@ $$;
 
 revoke all on function public.friend_monthly_distance(date, date) from public, anon;
 grant execute on function public.friend_monthly_distance(date, date) to authenticated;
+
+-- ------------------------------------------ v9: foto de perfil e cor por pessoa
+-- A foto e identidade, como o @: aparece para amigo aceito sem depender do
+-- toggle de numeros (decisao do item 12). Mora num bucket PRIVADO — URL publica
+-- deixaria qualquer um com o link ver a foto —, lida por URL assinada, que o
+-- Storage so emite para quem passa na policy de `select` abaixo.
+--
+-- O caminho e `{user_id}/{timestamp}.jpg`: a pasta amarra o arquivo ao dono
+-- (as policies conferem isso), e o timestamp troca a URL a cada foto nova, sem
+-- o cache do aparelho mostrar a antiga.
+
+alter table public.profiles
+  add column if not exists avatar_path text
+    check (avatar_path is null or avatar_path ~ ('^' || id::text || '/[0-9]+\.jpg$'));
+
+-- 512 KB e so JPEG: o app sempre reencoda para 256x256 antes de subir, entao
+-- qualquer coisa maior ou de outro tipo nao veio do app.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('avatars', 'avatars', false, 524288, array['image/jpeg'])
+on conflict (id) do update
+  set public = false,
+      file_size_limit = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+
+-- Escrever e apagar: so na propria pasta. Sem `update`: cada foto nova e um
+-- arquivo novo, e a antiga e apagada depois.
+drop policy if exists avatar_insert on storage.objects;
+create policy avatar_insert on storage.objects
+  for insert
+  to authenticated
+  with check (
+    bucket_id = 'avatars'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  );
+
+drop policy if exists avatar_delete on storage.objects;
+create policy avatar_delete on storage.objects
+  for delete
+  to authenticated
+  using (
+    bucket_id = 'avatars'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  );
+
+-- Ler: o dono, qualquer lado de uma amizade ACEITA, e quem RECEBEU um pedido do
+-- dono — quem pede escolheu se mostrar para ser reconhecido. Quem so sabe o seu
+-- @, ou a quem voce so pediu, nao ve a sua foto. A subconsulta em `friendships`
+-- roda com o RLS de quem pergunta, que ja deixa os dois lados lerem a relacao.
+drop policy if exists avatar_select on storage.objects;
+create policy avatar_select on storage.objects
+  for select
+  to authenticated
+  using (
+    bucket_id = 'avatars'
+    and (
+      (storage.foldername(name))[1] = (select auth.uid())::text
+      or exists (
+        select 1
+        from public.friendships f
+        where (
+            f.status = 'accepted'
+            and (select auth.uid()) in (f.requester_id, f.addressee_id)
+            and (storage.foldername(name))[1] in (f.requester_id::text, f.addressee_id::text)
+          )
+          or (
+            f.status = 'pending'
+            and f.addressee_id = (select auth.uid())
+            and f.requester_id::text = (storage.foldername(name))[1]
+          )
+      )
+    )
+  );
+
+-- `list_friends` ganha a foto e `since` (quando a relacao comecou): a cor de
+-- cada amigo segue essa ordem, nao o ranking, para ninguem trocar de cor entre
+-- um card e outro. A foto sai na mesma regra do Storage: aceita, ou pedido
+-- recebido. Mudar as colunas de retorno exige recriar a funcao.
+drop function if exists public.list_friends();
+create function public.list_friends()
+returns table (
+  id             uuid,
+  handle         text,
+  status         text,
+  direction      text,
+  shares_stats   boolean,
+  age            int,
+  training_years int,
+  avatar_path    text,
+  since          timestamptz
+)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select
+    p.id,
+    p.handle,
+    f.status,
+    case when f.requester_id = (select auth.uid()) then 'outgoing' else 'incoming' end,
+    p.shares_stats,
+    -- Idade e anos de treino so saem do servidor com os DOIS consentimentos.
+    case when p.shares_stats and f.status = 'accepted' then p.age end,
+    case when p.shares_stats and f.status = 'accepted' then p.training_years end,
+    case
+      when f.status = 'accepted' or f.requester_id <> (select auth.uid()) then p.avatar_path
+    end,
+    f.created_at
+  from public.friendships f
+  join public.profiles p
+    on p.id = case
+      when f.requester_id = (select auth.uid()) then f.addressee_id
+      else f.requester_id
+    end
+  where (select auth.uid()) in (f.requester_id, f.addressee_id);
+$$;
+
+revoke all on function public.list_friends() from public, anon;
+grant execute on function public.list_friends() to authenticated;
+
+-- As RPCs dos graficos ganham o `id`: e ele, e nao o @ (que a pessoa pode
+-- trocar), que liga a linha do grafico a foto e a cor.
+drop function if exists public.friend_weekly_days(date, date);
+create function public.friend_weekly_days(first_week date, last_week date)
+returns table (
+  id           uuid,
+  handle       text,
+  shares       boolean,
+  planned_days int,
+  week_start   date,
+  days         int
+)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  with amigos as (
+    select p.id, p.handle, p.shares_stats
+    from public.friendships f
+    join public.profiles p
+      on p.id = case
+        when f.requester_id = (select auth.uid()) then f.addressee_id
+        else f.requester_id
+      end
+    where (select auth.uid()) in (f.requester_id, f.addressee_id)
+      and f.status = 'accepted'
+  ),
+  dias as (
+    select distinct a.id, s.date
+    from amigos a
+    join public.sessions s
+      on s.user_id = a.id
+    join public.session_sets st
+      on st.session_id = s.id
+     and st.user_id = a.id
+    where a.shares_stats
+      and s.deleted_at is null
+      and st.deleted_at is null
+      and st.done
+      and st.reps * st.weight_kg > 0
+      and s.date between first_week and last_week + 6
+  ),
+  semanas as (
+    select id, date - extract(dow from date)::int as week_start, count(*)::int as days
+    from dias
+    group by 1, 2
+  ),
+  planos as (
+    select r.user_id as id, count(distinct r.weekday)::int as planned
+    from public.routines r
+    join amigos a on a.id = r.user_id
+    where a.shares_stats
+      and r.deleted_at is null
+    group by r.user_id
+  )
+  select
+    a.id,
+    a.handle,
+    a.shares_stats,
+    case when a.shares_stats then coalesce(pl.planned, 0) end,
+    w.week_start,
+    w.days
+  from amigos a
+  left join planos pl on pl.id = a.id
+  left join semanas w on w.id = a.id;
+$$;
+
+revoke all on function public.friend_weekly_days(date, date) from public, anon;
+grant execute on function public.friend_weekly_days(date, date) to authenticated;
+
+drop function if exists public.friend_monthly_distance(date, date);
+create function public.friend_monthly_distance(month_start date, month_end date)
+returns table (id uuid, handle text, km real)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select
+    p.id,
+    p.handle,
+    case when p.shares_stats then (
+      select round(coalesce(sum(st.distance_km), 0)::numeric, 1)::real
+      from public.sessions s
+      join public.session_sets st
+        on st.session_id = s.id
+       and st.user_id = p.id
+      where s.user_id = p.id
+        and s.deleted_at is null
+        and st.deleted_at is null
+        and st.done
+        and s.date between month_start and month_end
+    ) end
+  from public.friendships f
+  join public.profiles p
+    on p.id = case
+      when f.requester_id = (select auth.uid()) then f.addressee_id
+      else f.requester_id
+    end
+  where (select auth.uid()) in (f.requester_id, f.addressee_id)
+    and f.status = 'accepted';
+$$;
+
+revoke all on function public.friend_monthly_distance(date, date) from public, anon;
+grant execute on function public.friend_monthly_distance(date, date) to authenticated;
+
+-- ------------------------------------------------------- v10: nome de exibicao
+-- O nome que aparece no ranking. Identidade, como o @ e a foto: sai para amigo
+-- aceito sem depender do toggle de numeros. Vem preenchido com o nome da conta
+-- Google (o app grava no login, se estiver vazio) e a pessoa pode trocar.
+--
+-- 1 a 40 caracteres, sem so espaco: o app mostra so o primeiro nome, mas o
+-- limite e o que impede alguem de colar um paragrafo no lugar do nome.
+alter table public.profiles
+  add column if not exists display_name text
+    check (
+      display_name is null
+      or (char_length(display_name) between 1 and 40 and btrim(display_name) <> '')
+    );
+
+-- `list_friends` ganha o nome: mesma regra da foto — amizade aceita, ou pedido
+-- recebido (quem pede escolheu se mostrar). Mudar as colunas exige recriar.
+drop function if exists public.list_friends();
+create function public.list_friends()
+returns table (
+  id             uuid,
+  handle         text,
+  status         text,
+  direction      text,
+  shares_stats   boolean,
+  age            int,
+  training_years int,
+  avatar_path    text,
+  since          timestamptz,
+  display_name   text
+)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select
+    p.id,
+    p.handle,
+    f.status,
+    case when f.requester_id = (select auth.uid()) then 'outgoing' else 'incoming' end,
+    p.shares_stats,
+    -- Idade e anos de treino so saem do servidor com os DOIS consentimentos.
+    case when p.shares_stats and f.status = 'accepted' then p.age end,
+    case when p.shares_stats and f.status = 'accepted' then p.training_years end,
+    case
+      when f.status = 'accepted' or f.requester_id <> (select auth.uid()) then p.avatar_path
+    end,
+    f.created_at,
+    case
+      when f.status = 'accepted' or f.requester_id <> (select auth.uid()) then p.display_name
+    end
+  from public.friendships f
+  join public.profiles p
+    on p.id = case
+      when f.requester_id = (select auth.uid()) then f.addressee_id
+      else f.requester_id
+    end
+  where (select auth.uid()) in (f.requester_id, f.addressee_id);
+$$;
+
+revoke all on function public.list_friends() from public, anon;
+grant execute on function public.list_friends() to authenticated;

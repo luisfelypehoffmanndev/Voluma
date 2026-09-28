@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 
+import { NAME_MAX } from '@/domain/friends';
 import { HANDLE_MAX, HANDLE_MIN, isValidHandle, normalizeHandle } from '@/domain/handle';
 import { colors, fontSize, radius, spacing, surfaces } from '@/theme/tokens';
 
@@ -25,12 +26,15 @@ const AGE_START = 25;
 const YEARS_START = 1;
 
 export type ProfileValues = {
+  /** Nulo quando em branco: quem nao tem nome aparece pelo @. */
+  displayName: string | null;
   handle: string;
   age: number | null;
   trainingYears: number | null;
 };
 
 type Props = {
+  initialName: string;
   initialHandle: string;
   initialAge: number | null;
   initialTrainingYears: number | null;
@@ -43,6 +47,7 @@ type Props = {
 };
 
 export function ProfileForm({
+  initialName,
   initialHandle,
   initialAge,
   initialTrainingYears,
@@ -51,6 +56,7 @@ export function ProfileForm({
   busy = false,
   onSubmit,
 }: Props) {
+  const [name, setName] = useState(initialName);
   const [handle, setHandle] = useState(initialHandle);
   const [age, setAge] = useState(initialAge ?? UNSET);
   const [years, setYears] = useState(initialTrainingYears ?? UNSET);
@@ -61,6 +67,7 @@ export function ProfileForm({
   const submit = () => {
     if (busy || !isValidHandle(handle)) return;
     onSubmit({
+      displayName: name.trim() === '' ? null : name.trim().replace(/\s+/g, ' '),
       handle,
       age: age === UNSET ? null : age,
       trainingYears: years === UNSET ? null : years,
@@ -69,6 +76,25 @@ export function ProfileForm({
 
   return (
     <View style={styles.form}>
+      <View>
+        <Label>Seu nome</Label>
+        <View style={styles.field}>
+          <TextInput
+            accessibilityLabel="Nome"
+            style={styles.input}
+            value={name}
+            onChangeText={setName}
+            autoCapitalize="words"
+            autoComplete="name"
+            maxLength={NAME_MAX}
+            placeholder="como seus amigos te chamam"
+            placeholderTextColor={colors.textSecondary}
+            returnKeyType="next"
+          />
+        </View>
+        <Meta>no ranking aparece só o primeiro nome</Meta>
+      </View>
+
       <View>
         <Label>Seu @</Label>
         <View style={styles.field}>

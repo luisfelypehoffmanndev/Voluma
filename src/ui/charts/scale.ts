@@ -96,34 +96,6 @@ export function signedDelta(delta: number, format: (value: number) => string): s
 }
 
 /**
- * Os blocos de uma coluna empilhada, de baixo para cima: a distancia de cada um
- * ate a base e a altura dele.
- *
- * A coluna mede o total, e as frestas entre os blocos saem de dentro dela, nao
- * somam por fora: uma semana de cinco treinos nao pode ficar mais alta que uma
- * de dois com o mesmo volume so por ter mais frestas. Cada bloco fica com a sua
- * fatia do que sobra. Nenhum bloco some (`minBlock`): um treino leve continua
- * sendo um treino, e nesse caso raro a coluna passa um pouco do total.
- */
-export function stackBlocks(
-  values: readonly number[],
-  columnHeight: number,
-  gap: number,
-  minBlock: number,
-): { bottom: number; height: number }[] {
-  const total = values.reduce((sum, value) => sum + value, 0);
-  if (total <= 0) return [];
-
-  const room = Math.max(0, columnHeight - gap * (values.length - 1));
-  let bottom = 0;
-  return values.map((value) => {
-    const block = { bottom, height: Math.max(minBlock, (value / total) * room) };
-    bottom += block.height + gap;
-    return block;
-  });
-}
-
-/**
  * A barra sob o dedo numa fileira de `count` barras espalhadas pela largura.
  *
  * Cada barra responde pela sua fatia inteira da largura, e nao so pelos poucos

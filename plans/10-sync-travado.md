@@ -2,7 +2,7 @@
 
 **Arquivos:** `src/sync/engine.ts:48` (`runCycle`), `src/sync/auth.ts:106` (`runSync`)
 **Severidade:** alta num app usado dentro de academia, onde cair a rede é rotina
-**Estado:** aberto
+**Estado:** **feito**
 
 ## Problema
 

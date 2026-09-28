@@ -31,6 +31,9 @@ type Row = {
   shares_stats: boolean;
   age: number | null;
   training_years: number | null;
+  avatar_path: string | null;
+  since: string;
+  display_name: string | null;
 };
 
 export async function listFriends(): Promise<FriendRow[]> {
@@ -43,6 +46,7 @@ export async function listFriends(): Promise<FriendRow[]> {
 }
 
 type WeeklyDaysDbRow = {
+  id: string;
   handle: string;
   shares: boolean;
   planned_days: number | null;
@@ -67,6 +71,7 @@ export async function weeklyDays(firstWeek: string, lastWeek: string): Promise<W
   if (error) throw new Error(error.message);
 
   return ((data ?? []) as WeeklyDaysDbRow[]).map((row) => ({
+    id: row.id,
     handle: row.handle,
     shares: row.shares,
     plannedDays: row.planned_days,
@@ -76,7 +81,10 @@ export async function weeklyDays(firstWeek: string, lastWeek: string): Promise<W
 }
 
 /** Km corridos por cada amigo aceito no mes; `value` nulo sem o toggle. */
-export async function monthlyDistance(monthStart: string, monthEnd: string): Promise<ValueRow[]> {
+export async function monthlyDistance(
+  monthStart: string,
+  monthEnd: string,
+): Promise<(ValueRow & { id: string })[]> {
   const client = requireClient();
 
   const { data, error } = await client.rpc('friend_monthly_distance', {
@@ -85,7 +93,8 @@ export async function monthlyDistance(monthStart: string, monthEnd: string): Pro
   });
   if (error) throw new Error(error.message);
 
-  return ((data ?? []) as { handle: string; km: number | null }[]).map((row) => ({
+  return ((data ?? []) as { id: string; handle: string; km: number | null }[]).map((row) => ({
+    id: row.id,
     handle: row.handle,
     value: row.km,
   }));
@@ -162,5 +171,8 @@ function toFriend(row: Row): FriendRow {
     sharesStats: row.shares_stats,
     age: row.age,
     trainingYears: row.training_years,
+    avatarPath: row.avatar_path,
+    since: row.since,
+    displayName: row.display_name,
   };
 }

@@ -2,7 +2,7 @@
 
 **Arquivos:** `src/db/__tests__/` (novos)
 **Acompanha:** [01](01-corrida-errada.md) e [02](02-migrations-atomicas.md)
-**Estado:** aberto
+**Estado:** **feito**
 
 ## Contexto da decisão
 

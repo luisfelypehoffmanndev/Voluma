@@ -2,7 +2,7 @@
 
 **Arquivo:** `src/db/repo.ts:143` (`ensureRunExercise`)
 **Severidade:** bug visível ao usuário
-**Estado:** aberto
+**Estado:** **feito**
 
 ## Problema
 
