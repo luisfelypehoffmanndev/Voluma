@@ -1,4 +1,5 @@
 import {
+  closedWeeksAverage,
   completedSets,
   formatVolume,
   formatWeight,
@@ -195,8 +196,56 @@ describe('volumeByWeek', () => {
       ['2027-01-02', 100],
     ]);
     expect(volumeByWeek(volumes, newYear, 2)).toEqual([
-      { weekStart: '2026-12-20', volume: 300 },
-      { weekStart: '2026-12-27', volume: 300 },
+      { weekStart: '2026-12-20', volume: 300, workouts: [{ date: '2026-12-26', volume: 300 }] },
+      {
+        weekStart: '2026-12-27',
+        volume: 300,
+        workouts: [
+          { date: '2026-12-31', volume: 200 },
+          { date: '2027-01-02', volume: 100 },
+        ],
+      },
     ]);
+  });
+
+  it('lista os treinos da semana em ordem de data, qualquer que seja a do mapa', () => {
+    const volumes = new Map([
+      ['2026-09-24', 700],
+      ['2026-09-21', 800],
+      ['2026-09-22', 600],
+    ]);
+    const [week] = volumeByWeek(volumes, now, 1);
+    expect(week.workouts.map((workout) => workout.date)).toEqual([
+      '2026-09-21',
+      '2026-09-22',
+      '2026-09-24',
+    ]);
+  });
+
+  it('dia sem volume nao vira treino', () => {
+    // So corrida, ou series por concluir: o dia existe, a carga nao.
+    const volumes = new Map([
+      ['2026-09-21', 0],
+      ['2026-09-22', 600],
+    ]);
+    const [week] = volumeByWeek(volumes, now, 1);
+    expect(week.workouts).toEqual([{ date: '2026-09-22', volume: 600 }]);
+    expect(week.volume).toBe(600);
+  });
+});
+
+describe('closedWeeksAverage', () => {
+  it('deixa a semana atual de fora', () => {
+    // A atual (1000) esta pela metade e nao pode puxar a media para baixo.
+    expect(closedWeeksAverage([30000, 20000, 1000])).toBe(25000);
+  });
+
+  it('conta semana sem treino como zero', () => {
+    expect(closedWeeksAverage([30000, 0, 5000])).toBe(15000);
+  });
+
+  it('e null sem semana fechada', () => {
+    expect(closedWeeksAverage([4000])).toBeNull();
+    expect(closedWeeksAverage([])).toBeNull();
   });
 });

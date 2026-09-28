@@ -1326,6 +1326,12 @@ export type ExerciseRecord = {
   bestVolume: number;
 };
 
+/**
+ * O recorde de cada movimento com carga: a serie mais pesada e a de mais volume.
+ *
+ * Carga zero fica de fora, pela mesma regra de `progressCandidates`: barra fixa
+ * e prancha nao tem recorde de carga, e entravam na lista como "0 · 0".
+ */
 export async function listExerciseRecords(): Promise<ExerciseRecord[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<{
@@ -1341,6 +1347,7 @@ export async function listExerciseRecords(): Promise<ExerciseRecord[]> {
        FROM session_sets ss
        JOIN exercises e ON e.id = ss.exercise_id
       WHERE ss.done = 1 AND ss.deleted_at IS NULL AND e.deleted_at IS NULL
+        AND ss.weight_kg > 0
       GROUP BY ss.exercise_id, e.name
       ORDER BY heaviest DESC`,
   );

@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import {
   distanceByDate,
@@ -11,35 +12,36 @@ import {
   progressCandidates,
   volumeByDate,
   volumeByMuscleGroup,
+  type ExerciseRecord,
   type ProgressCandidate,
 } from '@/db/repo';
 import { dailyBodyWeight } from '@/domain/bodyweight';
 import { formatDistance } from '@/domain/run';
-import { formatVolume, formatWeight, volumeByWeek } from '@/domain/volume';
+import {
+  closedWeeksAverage,
+  formatVolume,
+  formatWeight,
+  volumeByWeek,
+  type WeekVolume,
+} from '@/domain/volume';
 import { addWeeks, fromDateKey, lastNDays, toDateKey, weekStartKey } from '@/domain/week';
 import { bumpData, useQuery } from '@/store/data';
 import { colors, fontSize, spacing } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
-import { BarStrip } from '@/ui/charts/BarStrip';
 import { DotLine } from '@/ui/charts/DotLine';
 import { signedDelta } from '@/ui/charts/scale';
+import { StackedBars } from '@/ui/charts/StackedBars';
 import { Chip } from '@/ui/Chip';
 import { DashedBar } from '@/ui/DashedBar';
 import { EmptyState } from '@/ui/EmptyState';
+import { ChevronRightIcon } from '@/ui/icons';
 import { LoadError } from '@/ui/LoadError';
+import { useListMotion } from '@/ui/motion';
+import { PressableSurface } from '@/ui/PressableSurface';
 import { shortDate } from '@/ui/relative';
 import { StatNumber } from '@/ui/StatNumber';
 import { useTabBarClearance } from '@/ui/tabBar';
 import { Body, Label, Meta, Mono } from '@/ui/Text';
-
-/**
- * Dias no grafico de volume.
- *
- * Duas semanas, e nao mais: a comparacao que interessa e "hoje contra os
- * ultimos dias", e cada barra precisa de largura para ser lida uma a uma. Num
- * telefone comum, 14 barras ficam com ~10px cada; 30 virariam uma serra.
- */
-const DAYS = 14;
 
 /**
  * A janela dos graficos de evolucao (volume por semana, progressao, peso).
@@ -55,10 +57,14 @@ const GROUP_DAYS = 30;
 /**
  * Numeros do historico — o painel "Números" da aba Histórico.
  *
- * O accent desta tela e a barra de hoje no grafico de volume — o unico elemento
- * colorido. Os graficos de evolucao, os recordes e os grupos ficam em cinza e
- * branco: destaque demais dilui o proprio destaque. O seletor segmentado acima
- * do painel e sem cor por isso.
+ * O accent desta tela e o bloco do treino de hoje no volume — o unico elemento
+ * colorido, e so em dia de treino. Os graficos de evolucao, os recordes e os
+ * grupos ficam em cinza e branco: destaque demais dilui o proprio destaque. O
+ * seletor segmentado acima do painel e sem cor por isso.
+ *
+ * Todos os graficos tem a mesma anatomia (base, regua, escala, datas nas
+ * pontas — ver `StackedBars` e `DotLine`), para a tela ler como um instrumento
+ * so e nao como uma colecao de widgets.
  *
  * A distancia dos ultimos 7 dias veio da home, que passou a ter um trabalho so
  * (comecar o treino de hoje).
@@ -68,35 +74,37 @@ export function StatsPanel() {
   const { width } = useWindowDimensions();
 
   const router = useRouter();
+  // O periodo em leitura no grafico de peso (ver `useScrub`); null e o padrao,
+  // a pesagem mais recente. Cada card com grafico guarda a sua.
+  const [weightSelected, setWeightSelected] = useState<number | null>(null);
   const { data, error, reload } = useQuery(
     useCallback(async () => {
       const now = new Date();
       const todayKey = toDateKey(now);
-      const window = lastNDays(now, DAYS);
-      const weekKeys = lastNDays(now, 7);
-      // Uma consulta de volume so para os dois graficos: as 12 semanas sempre
-      // contem os 14 dias.
+      const weekKeys = new Set(lastNDays(now, 7));
       const since = addWeeks(weekStartKey(now), -(WEEKS - 1));
       const [volumes, records, logs, distances, groups, candidates] = await Promise.all([
         volumeByDate(since, todayKey),
         listExerciseRecords(),
         listBodyWeightLogs(WEEKS * 7),
-        distanceByDate(weekKeys[0], todayKey),
+        distanceByDate(since, todayKey),
         volumeByMuscleGroup(lastNDays(now, GROUP_DAYS)[0], todayKey),
         progressCandidates(since),
       ]);
       // Arredonda a uma casa: somar 0,1 sete vezes rende 0,7000000000000001.
-      const weekDistance =
-        Math.round(weekKeys.reduce((sum, key) => sum + (distances.get(key) ?? 0), 0) * 10) / 10;
-      // Dia sem treino nao some do grafico: vira uma barra no piso, e e o vazio
-      // entre os treinos que da sentido a comparacao.
-      const days = window.map((key) => ({ key, volume: volumes.get(key) ?? 0 }));
+      let weekDistance = 0;
+      for (const [key, km] of distances) if (weekKeys.has(key)) weekDistance += km;
+      weekDistance = Math.round(weekDistance * 10) / 10;
+      // Quem nao corre nao precisa de um card dizendo "0 km" toda semana: ele so
+      // aparece se houve distancia em algum treino da janela.
+      const runs = [...distances.values()].some((km) => km > 0);
       return {
-        days,
+        today: todayKey,
         weeks: volumeByWeek(volumes, now, WEEKS),
         records,
         weights: dailyBodyWeight(logs, since),
         weekDistance,
+        runs,
         groups,
         candidates,
         since,
@@ -104,77 +112,31 @@ export function StatsPanel() {
     }, []),
   );
 
-  const days = data?.days ?? [];
-  const weeks = data?.weeks ?? [];
-  const chartWidth = width - spacing.xl * 4;
-
-  const today = days[days.length - 1]?.volume ?? 0;
-  const thisWeek = weeks[weeks.length - 1]?.volume ?? 0;
-  // A semana atual quase sempre esta pela metade: compara-la com as outras em
-  // porcentagem diria "caiu 60%" toda segunda. A media das semanas fechadas e o
-  // numero de referencia, sem delta.
-  const closed = weeks.slice(0, -1);
-  const weeklyAverage =
-    closed.length > 0 ? closed.reduce((sum, week) => sum + week.volume, 0) / closed.length : 0;
-
-  const weights = data?.weights ?? [];
-  const latestWeight = weights[weights.length - 1];
-  const groups = data?.groups ?? [];
-  const heaviestGroup = groups[0]?.volume ?? 0;
-
   if (error) return <LoadError error={error} onRetry={reload} />;
+  // Nada ate a primeira consulta voltar, que no SQLite e questao de
+  // milissegundos. Desenhar os cards com listas vazias enquanto isso piscava
+  // os "Nenhum treino..." e um "0 kg" antes dos numeros de verdade. Nas
+  // recargas o dado anterior fica na tela (ver `useQuery`).
+  if (!data) return null;
+
+  const chartWidth = width - spacing.xl * 4;
+  const { weights, groups } = data;
+  const latestWeight = weights[weights.length - 1];
+  const weightIndex = inRange(weightSelected, weights.length);
+  const shownWeight = weights[weightIndex ?? weights.length - 1];
+  const heaviestGroup = groups[0]?.volume ?? 0;
 
   return (
     <ScrollView
       contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
       showsVerticalScrollIndicator={false}
     >
-      <Card>
-        <Label>Volume por dia</Label>
-        <View style={styles.chartHead}>
-          <StatNumber value={formatVolume(today)} unit="kg" size={fontSize.numberMd} />
-          <Meta>hoje</Meta>
-        </View>
+      <VolumeCard weeks={data.weeks} today={data.today} width={chartWidth} />
 
-        <BarStrip
-          values={days.map((day) => day.volume)}
-          width={chartWidth}
-          highlight={days.length - 1}
-          highlightColor={colors.accent}
-        />
-
-        <View style={styles.chartFoot}>
-          <Meta>{days[0] ? shortDate(fromDateKey(days[0].key)) : ''}</Meta>
-          <Meta>hoje</Meta>
-        </View>
-      </Card>
+      <ProgressCard candidates={data.candidates} since={data.since} width={chartWidth} />
 
       <Card>
-        <Label>Volume por semana</Label>
-        <View style={styles.chartHead}>
-          <StatNumber value={formatVolume(thisWeek)} unit="kg" size={fontSize.numberMd} />
-          <Meta>{`esta semana · média ${formatVolume(weeklyAverage)} kg`}</Meta>
-        </View>
-
-        <BarStrip
-          values={weeks.map((week) => week.volume)}
-          width={chartWidth}
-          highlight={weeks.length - 1}
-          highlightColor={colors.textPrimary}
-        />
-
-        <View style={styles.chartFoot}>
-          <Meta>{weeks[0] ? shortDate(fromDateKey(weeks[0].weekStart)) : ''}</Meta>
-          <Meta>esta semana</Meta>
-        </View>
-      </Card>
-
-      {data ? (
-        <ProgressCard candidates={data.candidates} since={data.since} width={chartWidth} />
-      ) : null}
-
-      <Card>
-        <Label>{`Grupos · últimos ${GROUP_DAYS} dias`}</Label>
+        <Label>{`Volume por grupo · últimos ${GROUP_DAYS} dias`}</Label>
         {groups.map((group) => (
           <View key={group.group} style={styles.groupRow}>
             <Body numberOfLines={1} style={styles.groupName}>
@@ -194,78 +156,283 @@ export function StatsPanel() {
 
       <Card>
         <Label>Peso corporal</Label>
-        {latestWeight ? (
+        {shownWeight ? (
           <View style={styles.chartHead}>
-            <StatNumber value={formatWeight(latestWeight.weightKg)} unit="kg" size={fontSize.numberMd} />
+            <StatNumber
+              value={formatWeight(shownWeight.weightKg)}
+              unit="kg"
+              size={fontSize.numberMd}
+            />
             <Meta>
-              {weights.length > 1
-                ? `${signedDelta(latestWeight.weightKg - weights[0].weightKg, formatWeight)} kg em ${WEEKS} sem`
-                : shortDate(fromDateKey(latestWeight.date))}
+              {weights.length > 1 && weightIndex === null
+                ? `${signedDelta(shownWeight.weightKg - weights[0].weightKg, formatWeight)} kg em ${WEEKS} sem`
+                : shortDate(fromDateKey(shownWeight.date))}
             </Meta>
           </View>
         ) : null}
         {weights.length > 1 ? (
-          <>
-            <DotLine values={weights.map((point) => point.weightKg)} width={chartWidth} />
-            <View style={styles.chartFoot}>
-              <Meta>{shortDate(fromDateKey(weights[0].date))}</Meta>
-              <Meta>{shortDate(fromDateKey(latestWeight!.date))}</Meta>
-            </View>
-          </>
+          <DotLine
+            values={weights.map((point) => point.weightKg)}
+            width={chartWidth}
+            selected={weightIndex}
+            onSelect={setWeightSelected}
+            formatTick={formatWeight}
+            start={shortDate(fromDateKey(weights[0].date))}
+            end={shortDate(fromDateKey(latestWeight.date))}
+            accessibilityLabel="Peso corporal"
+            describe={(index) =>
+              `${shortDate(fromDateKey(weights[index].date))}, ${formatWeight(weights[index].weightKg)} kg`
+            }
+          />
         ) : null}
         {weights.length === 0 ? (
           <Meta style={styles.empty}>{`Nenhuma pesagem nas últimas ${WEEKS} semanas.`}</Meta>
         ) : null}
       </Card>
 
-      <Card>
-        <Label>Recordes por movimento</Label>
-        {(data?.records ?? []).slice(0, 10).map((record) => (
-          <View key={record.exerciseId} style={styles.row}>
-            <Body numberOfLines={1} style={styles.rowName}>
-              {record.exerciseName}
-            </Body>
-            <Meta>
-              {formatWeight(record.heaviestKg)} kg · {formatVolume(record.bestVolume)} kg
-            </Meta>
-          </View>
-        ))}
-        {(data?.records.length ?? 0) === 0 ? (
-          <EmptyState
-            title="Nenhum recorde ainda"
-            message="Seus recordes aparecem aqui depois do primeiro treino."
-            action={{
-              label: 'Começar treino',
-              onPress: async () => {
-                const session = await getOrCreateSessionForDate(new Date());
-                bumpData();
-                router.push(`/session/${session.id}`);
-              },
-            }}
-          />
-        ) : null}
-      </Card>
+      <RecordsCard
+        records={data.records}
+        onStart={async () => {
+          const session = await getOrCreateSessionForDate(new Date());
+          bumpData();
+          router.push(`/session/${session.id}`);
+        }}
+      />
 
       {/* Km e kg nao somam: distancia tem card proprio, nunca um total misturado. */}
-      <Card>
-        <Label>Distância</Label>
-        <View style={styles.chartHead}>
-          <StatNumber
-            value={formatDistance(data?.weekDistance ?? 0)}
-            unit="km"
-            size={fontSize.numberMd}
-          />
-          <Meta>últimos 7 dias</Meta>
-        </View>
-      </Card>
+      {/* `resizes` tambem anima a posicao: quando os recordes abrem, este card
+          desce junto, em vez de pular. */}
+      {data.runs ? (
+        <Card resizes>
+          <Label>Distância</Label>
+          <View style={styles.chartHead}>
+            <StatNumber
+              value={formatDistance(data.weekDistance)}
+              unit="km"
+              size={fontSize.numberMd}
+            />
+            <Meta>últimos 7 dias</Meta>
+          </View>
+        </Card>
+      ) : null}
     </ScrollView>
   );
+}
+
+/** A leitura so vale enquanto aponta para um periodo que ainda existe. */
+function inRange(index: number | null, length: number): number | null {
+  return index !== null && index < length ? index : null;
+}
+
+/** "esta semana" ou "semana de 8 set". */
+function weekName(weekStart: string, isCurrent: boolean): string {
+  return isCurrent ? 'esta semana' : `semana de ${shortDate(fromDateKey(weekStart))}`;
 }
 
 /** Largura do nome do grupo e do numero, somadas, ao lado da barra de tracinhos. */
 const GROUP_NAME_WIDTH = 72;
 const GROUP_VALUE_WIDTH = 64;
 const GROUP_LABELS_WIDTH = GROUP_NAME_WIDTH + GROUP_VALUE_WIDTH + spacing.sm * 2;
+/** Cabe "167,5" e "2010" em mono com folga. */
+const RECORD_COLUMN_WIDTH = 60;
+/**
+ * O grafico do card de abertura e mais alto que os outros: e o numero e o
+ * grafico que a tela existe para mostrar (§4, tamanho conforme a importancia).
+ */
+const HERO_CHART_HEIGHT = 120;
+
+/**
+ * O volume das ultimas semanas, com os treinos dentro — o card que abre o
+ * painel.
+ *
+ * Uma coluna por semana, um bloco por treino (ver `StackedBars`). Antes eram
+ * dois graficos, por dia e por semana, e depois um so com seletor entre os
+ * dois; os blocos dizem as duas coisas de uma vez, sem esconder nenhuma atras
+ * de um toque: a coluna e a semana, o bloco e o dia de treino, e quantos blocos
+ * ha e a frequencia.
+ *
+ * O numero grande e a media por semana, a mesma da linha tracejada. Mostrar a
+ * semana atual abria o painel num "0 kg" gigante sempre que ela ainda nao tinha
+ * treino. A semana atual, e qualquer outra, fica a um toque: tocar numa coluna
+ * poe o total dela no lugar da media (ver `useScrub`).
+ */
+function VolumeCard({
+  weeks,
+  today,
+  width,
+}: {
+  weeks: readonly WeekVolume[];
+  today: string;
+  width: number;
+}) {
+  const [selected, setSelected] = useState<number | null>(null);
+
+  const totals = weeks.map((week) => week.volume);
+  const average = closedWeeksAverage(totals);
+  const index = inRange(selected, weeks.length);
+  const name = (at: number) => weekName(weeks[at].weekStart, at === weeks.length - 1);
+  const readout = volumeReadout(weeks, average, index, name);
+
+  // O treino de hoje, se houver, e o unico bloco no accent: ele esta sempre na
+  // ultima coluna, e e sempre o ultimo bloco dela.
+  const current = weeks.length - 1;
+  const todayBlock = weeks[current]?.workouts.findIndex((workout) => workout.date === today) ?? -1;
+
+  return (
+    <Card>
+      <Label>Volume</Label>
+
+      <View style={styles.chartHead}>
+        <StatNumber value={formatVolume(readout.value)} unit="kg" size={fontSize.numberLg} />
+        <Meta>{readout.meta}</Meta>
+      </View>
+
+      <StackedBars
+        columns={weeks.map((week) => week.workouts.map((workout) => workout.volume))}
+        width={width}
+        height={HERO_CHART_HEIGHT}
+        selected={index}
+        onSelect={setSelected}
+        accent={todayBlock >= 0 ? { column: current, block: todayBlock } : null}
+        reference={average ?? undefined}
+        referenceLabel="média"
+        major={(at) => startsMonth(weeks[at].weekStart)}
+        start={weeks[0] && shortDate(fromDateKey(weeks[0].weekStart))}
+        end="esta semana"
+        accessibilityLabel="Volume por semana"
+        describe={(at) =>
+          `${name(at)}, ${formatVolume(totals[at])} kg, ${workoutCount(weeks[at].workouts.length)}`
+        }
+      />
+
+      {/* Uma linha so, porque a leitura nao e obvia na primeira vez: sem ela, os
+          blocos podiam passar por series, ou por exercicios. */}
+      <Meta style={styles.legend}>cada bloco é um treino</Meta>
+    </Card>
+  );
+}
+
+/**
+ * O que o cabecalho do volume mostra: a semana em leitura, se houver; senao a
+ * media; e, sem semana fechada para fazer media (conta nova), a atual.
+ */
+function volumeReadout(
+  weeks: readonly WeekVolume[],
+  average: number | null,
+  index: number | null,
+  name: (at: number) => string,
+): { value: number; meta: string } {
+  if (index !== null) {
+    const week = weeks[index];
+    return { value: week.volume, meta: `${name(index)} · ${workoutCount(week.workouts.length)}` };
+  }
+  if (average !== null) return { value: average, meta: 'média por semana' };
+  const current = weeks[weeks.length - 1];
+  if (!current) return { value: 0, meta: '' };
+  return {
+    value: current.volume,
+    meta: `${name(weeks.length - 1)} · ${workoutCount(current.workouts.length)}`,
+  };
+}
+
+/** "1 treino", "4 treinos", "nenhum treino". */
+function workoutCount(count: number): string {
+  if (count === 0) return 'nenhum treino';
+  return count === 1 ? '1 treino' : `${count} treinos`;
+}
+
+/** A semana que contem o dia 1 de um mes: ganha o tracinho longo da regua. */
+function startsMonth(weekStart: string): boolean {
+  const start = fromDateKey(weekStart);
+  const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
+  return start.getDate() === 1 || end.getMonth() !== start.getMonth();
+}
+
+/** Quantos recordes o card mostra fechado. */
+const RECORDS_COLLAPSED = 5;
+
+/**
+ * O recorde de cada movimento: a maior carga e a melhor serie (repeticoes x
+ * carga), em colunas nomeadas — dois numeros lado a lado sem nome eram uma
+ * adivinhacao.
+ *
+ * Fechado, mostra os cinco mais pesados; o resto abre ali mesmo. Antes eram dez
+ * fixos, cortados sem aviso: longo demais para ler de relance (a tela virava
+ * planilha, §4) e curto demais para achar o decimo primeiro.
+ */
+function RecordsCard({
+  records,
+  onStart,
+}: {
+  records: readonly ExerciseRecord[];
+  onStart: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const listMotion = useListMotion();
+  const extra = records.length - RECORDS_COLLAPSED;
+
+  return (
+    <Card resizes>
+      <View style={styles.recordsHead}>
+        <Label style={styles.recordsTitle}>Recordes por movimento</Label>
+        {records.length > 0 ? (
+          <>
+            <Label style={styles.recordColumn}>carga</Label>
+            <Label style={styles.recordColumn}>série</Label>
+          </>
+        ) : null}
+      </View>
+
+      {records.slice(0, RECORDS_COLLAPSED).map((record) => (
+        <RecordRow key={record.exerciseId} record={record} />
+      ))}
+      {open ? (
+        <Animated.View {...listMotion}>
+          {records.slice(RECORDS_COLLAPSED).map((record) => (
+            <RecordRow key={record.exerciseId} record={record} />
+          ))}
+        </Animated.View>
+      ) : null}
+
+      {extra > 0 ? (
+        <PressableSurface
+          feedback="solid"
+          onPress={() => setOpen((value) => !value)}
+          style={[styles.row, styles.moreRow]}
+          accessibilityLabel={open ? 'Mostrar menos recordes' : 'Mostrar todos os recordes'}
+        >
+          <Meta>{open ? 'Mostrar menos' : `Todos os ${records.length} movimentos`}</Meta>
+          {/* A mesma seta do resto do app, girada: para baixo abre, para cima fecha. */}
+          <View style={open ? styles.chevronUp : styles.chevronDown}>
+            <ChevronRightIcon size={14} color={colors.textSecondary} />
+          </View>
+        </PressableSurface>
+      ) : null}
+
+      {records.length === 0 ? (
+        <EmptyState
+          title="Nenhum recorde ainda"
+          message="Seus recordes aparecem aqui depois do primeiro treino."
+          action={{ label: 'Começar treino', onPress: onStart }}
+        />
+      ) : null}
+    </Card>
+  );
+}
+
+function RecordRow({ record }: { record: ExerciseRecord }) {
+  return (
+    <View style={styles.row}>
+      <Body numberOfLines={1} style={styles.rowName}>
+        {record.exerciseName}
+      </Body>
+      <Mono style={styles.recordColumn}>{formatWeight(record.heaviestKg)}</Mono>
+      <Mono style={[styles.recordColumn, styles.recordSecondary]}>
+        {formatVolume(record.bestVolume)}
+      </Mono>
+    </View>
+  );
+}
 
 /**
  * A carga mais pesada de um exercicio, treino a treino, nas ultimas semanas.
@@ -286,6 +453,7 @@ function ProgressCard({
   width: number;
 }) {
   const [chosen, setChosen] = useState<string | null>(null);
+  const [pointSelected, setPointSelected] = useState<number | null>(null);
   // O escolhido pode ter saido da lista (apagado, ou a janela andou): volta ao
   // primeiro em vez de mostrar um grafico vazio.
   const selected =
@@ -301,6 +469,8 @@ function ProgressCard({
   const points = data ?? [];
   const first = points[0];
   const last = points[points.length - 1];
+  const pointIndex = inRange(pointSelected, points.length);
+  const shown = points[pointIndex ?? points.length - 1];
 
   return (
     <Card>
@@ -324,24 +494,41 @@ function ProgressCard({
                 key={candidate.exerciseId}
                 label={candidate.exerciseName}
                 selected={candidate.exerciseId === exerciseId}
-                onPress={() => setChosen(candidate.exerciseId)}
+                onPress={() => {
+                  setChosen(candidate.exerciseId);
+                  setPointSelected(null);
+                }}
               />
             ))}
           </ScrollView>
 
-          {first && last ? (
+          {first && last && shown ? (
             <>
               <View style={styles.chartHead}>
-                <StatNumber value={formatWeight(last.weightKg)} unit="kg" size={fontSize.numberMd} />
+                <StatNumber
+                  value={formatWeight(shown.weightKg)}
+                  unit="kg"
+                  size={fontSize.numberMd}
+                />
                 <Meta>
-                  {`${signedDelta(last.weightKg - first.weightKg, formatWeight)} kg em ${WEEKS} sem · ${points.length} treinos`}
+                  {pointIndex === null
+                    ? `${signedDelta(last.weightKg - first.weightKg, formatWeight)} kg em ${WEEKS} sem · ${points.length} treinos`
+                    : shortDate(fromDateKey(shown.date))}
                 </Meta>
               </View>
-              <DotLine values={points.map((point) => point.weightKg)} width={width} />
-              <View style={styles.chartFoot}>
-                <Meta>{shortDate(fromDateKey(first.date))}</Meta>
-                <Meta>{shortDate(fromDateKey(last.date))}</Meta>
-              </View>
+              <DotLine
+                values={points.map((point) => point.weightKg)}
+                width={width}
+                selected={pointIndex}
+                onSelect={setPointSelected}
+                formatTick={formatWeight}
+                start={shortDate(fromDateKey(first.date))}
+                end={shortDate(fromDateKey(last.date))}
+                accessibilityLabel="Progressão de carga"
+                describe={(index) =>
+                  `${shortDate(fromDateKey(points[index].date))}, ${formatWeight(points[index].weightKg)} kg`
+                }
+              />
             </>
           ) : null}
         </>
@@ -359,10 +546,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     marginBottom: spacing.xl,
   },
-  chartFoot: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: spacing.sm,
+  legend: {
+    marginTop: spacing.md,
   },
   row: {
     flexDirection: 'row',
@@ -377,6 +562,30 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: fontSize.body,
     marginRight: spacing.md,
+  },
+  recordsHead: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  recordsTitle: {
+    flex: 1,
+  },
+  // Largura fixa para as colunas alinharem de uma linha para a outra.
+  recordColumn: {
+    width: RECORD_COLUMN_WIDTH,
+    textAlign: 'right',
+  },
+  recordSecondary: {
+    color: colors.textSecondary,
+  },
+  moreRow: {
+    alignItems: 'center',
+  },
+  chevronDown: {
+    transform: [{ rotate: '90deg' }],
+  },
+  chevronUp: {
+    transform: [{ rotate: '-90deg' }],
   },
   empty: {
     paddingTop: spacing.lg,
