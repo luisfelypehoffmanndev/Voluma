@@ -1,5 +1,6 @@
-import { addWeeks, daysSinceMonthStart, fromDateKey, lastNDays, monthGrid, nextRoutine, routineForWeekday, toDateKey, weekPlan, weekRangeLabel, weekStartKey, weekdayLabel, weekdayName, weekdayOf, weeksBetween, everyWeekday, lastWeekday } from '../week';
+import { addWeeks, daysSinceMonthStart, fromDateKey, lastNDays, monthGrid, nextRoutine, routineForWeekday, toDateKey, weekPlan, weekRange, weekRangeLabel, weekStartKey, lastWeekKeys, monthRange, weekdayLabel, weekdayName, weekdayOf, weeksBetween, everyWeekday, lastWeekday } from '../week';
 import type { Routine, Weekday } from '../types';
+import { volumeByWeek } from '../volume';
 
 function makeRoutine(overrides: Partial<Routine> & { weekday: Weekday }): Routine {
   return {
@@ -213,6 +214,80 @@ describe('addWeeks', () => {
 
   it('zero semanas devolve a mesma chave', () => {
     expect(addWeeks('2026-08-16', 0)).toBe('2026-08-16');
+  });
+});
+
+describe('weekRange', () => {
+  it('num domingo comeca nele mesmo e termina no sabado seguinte', () => {
+    // Domingo 16/08/2026.
+    expect(weekRange(new Date(2026, 7, 16))).toEqual({ start: '2026-08-16', end: '2026-08-22' });
+  });
+
+  it('num sabado a noite ainda e a semana que comecou no domingo anterior', () => {
+    // Sabado 22/08/2026 as 23:59. Em UTC ja e domingo — a semana nao pode virar.
+    expect(weekRange(new Date(2026, 7, 22, 23, 59))).toEqual({
+      start: '2026-08-16',
+      end: '2026-08-22',
+    });
+  });
+
+  it('atravessa virada de mes', () => {
+    // Quarta 30/09/2026.
+    expect(weekRange(new Date(2026, 8, 30))).toEqual({ start: '2026-09-27', end: '2026-10-03' });
+  });
+
+  it('atravessa virada de ano', () => {
+    // Quinta 31/12/2026.
+    expect(weekRange(new Date(2026, 11, 31))).toEqual({ start: '2026-12-27', end: '2027-01-02' });
+  });
+
+  // O ranking e o grafico de volume tem que concordar sobre onde a semana
+  // quebra, senao "esta semana" seriam dias diferentes nas duas abas.
+  it('comeca sempre na mesma chave de weekStartKey', () => {
+    for (let day = 1; day <= 14; day += 1) {
+      const date = new Date(2026, 8, day, 12);
+      expect(weekRange(date).start).toBe(weekStartKey(date));
+    }
+  });
+});
+
+describe('lastWeekKeys', () => {
+  it('devolve n chaves, da mais antiga ate a semana atual', () => {
+    // Quarta 30/09/2026: a semana atual comeca no domingo 27/09.
+    expect(lastWeekKeys(new Date(2026, 8, 30), 3)).toEqual([
+      '2026-09-13',
+      '2026-09-20',
+      '2026-09-27',
+    ]);
+  });
+
+  it('atravessa virada de ano', () => {
+    // Sabado 02/01/2027: semana de 27/12/2026.
+    expect(lastWeekKeys(new Date(2027, 0, 2), 2)).toEqual(['2026-12-20', '2026-12-27']);
+  });
+
+  it('com n = 1 e so a semana atual', () => {
+    expect(lastWeekKeys(new Date(2026, 8, 30), 1)).toEqual(['2026-09-27']);
+  });
+
+  // Os cards de amigos e o grafico de volume tem que falar das mesmas semanas.
+  it('bate com as semanas do volumeByWeek', () => {
+    const now = new Date(2026, 8, 30, 12);
+    expect(lastWeekKeys(now, 12)).toEqual(
+      volumeByWeek(new Map(), now, 12).map((week) => week.weekStart),
+    );
+  });
+});
+
+describe('monthRange', () => {
+  it.each([
+    ['mes de 30 dias', new Date(2026, 8, 15), '2026-09-01', '2026-09-30'],
+    ['mes de 31 dias', new Date(2026, 9, 31, 23, 59), '2026-10-01', '2026-10-31'],
+    ['fevereiro comum', new Date(2027, 1, 1), '2027-02-01', '2027-02-28'],
+    ['fevereiro bissexto', new Date(2028, 1, 29), '2028-02-01', '2028-02-29'],
+    ['dezembro', new Date(2026, 11, 31), '2026-12-01', '2026-12-31'],
+  ])('%s', (_caso, now, start, end) => {
+    expect(monthRange(now)).toEqual({ start, end });
   });
 });
 

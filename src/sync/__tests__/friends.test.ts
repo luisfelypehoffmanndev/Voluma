@@ -1,4 +1,11 @@
-import { listFriends, removeFriendship, requestFriendship, respondFriendship } from '../friends';
+import {
+  listFriends,
+  monthlyDistance,
+  removeFriendship,
+  requestFriendship,
+  respondFriendship,
+  weeklyDays,
+} from '../friends';
 
 /**
  * A rede e falsa, mas o que esta sob teste e real: a traducao das linhas do
@@ -101,6 +108,81 @@ describe('listFriends', () => {
   it('propaga erro do servidor', async () => {
     mockRpcResponse = { data: null, error: { message: 'Sem conexão' } };
     await expect(listFriends()).rejects.toThrow('Sem conexão');
+  });
+});
+
+describe('weeklyDays', () => {
+  it('manda o intervalo de semanas exato para a RPC', async () => {
+    mockRpcResponse = { data: [], error: null };
+
+    await weeklyDays('2026-07-12', '2026-09-27');
+
+    expect(mockRpcCalls).toEqual([
+      { fn: 'friend_weekly_days', args: { first_week: '2026-07-12', last_week: '2026-09-27' } },
+    ]);
+  });
+
+  it('traduz as linhas e preserva os nulos de quem nao compartilha', async () => {
+    mockRpcResponse = {
+      data: [
+        { handle: 'ana', shares: true, planned_days: 4, week_start: '2026-09-27', days: 3 },
+        { handle: 'bia', shares: false, planned_days: null, week_start: null, days: null },
+      ],
+      error: null,
+    };
+
+    expect(await weeklyDays('2026-07-12', '2026-09-27')).toEqual([
+      { handle: 'ana', shares: true, plannedDays: 4, weekStart: '2026-09-27', days: 3 },
+      { handle: 'bia', shares: false, plannedDays: null, weekStart: null, days: null },
+    ]);
+  });
+
+  it.each([[[]], [null]])('sem amigos devolve lista vazia (data %p)', async (data) => {
+    mockRpcResponse = { data, error: null };
+    expect(await weeklyDays('2026-07-12', '2026-09-27')).toEqual([]);
+  });
+
+  it('propaga erro do servidor', async () => {
+    mockRpcResponse = { data: null, error: { message: 'Sem conexão' } };
+    await expect(weeklyDays('2026-07-12', '2026-09-27')).rejects.toThrow('Sem conexão');
+  });
+});
+
+describe('monthlyDistance', () => {
+  it('manda o mes exato para a RPC', async () => {
+    mockRpcResponse = { data: [], error: null };
+
+    await monthlyDistance('2026-09-01', '2026-09-30');
+
+    expect(mockRpcCalls).toEqual([
+      {
+        fn: 'friend_monthly_distance',
+        args: { month_start: '2026-09-01', month_end: '2026-09-30' },
+      },
+    ]);
+  });
+
+  // Nulo e "nao compartilha"; zero e "compartilha e nao correu".
+  it('preserva km nulo e zero como vieram', async () => {
+    mockRpcResponse = {
+      data: [
+        { handle: 'ana', km: 12.4 },
+        { handle: 'bia', km: null },
+        { handle: 'carla', km: 0 },
+      ],
+      error: null,
+    };
+
+    expect(await monthlyDistance('2026-09-01', '2026-09-30')).toEqual([
+      { handle: 'ana', value: 12.4 },
+      { handle: 'bia', value: null },
+      { handle: 'carla', value: 0 },
+    ]);
+  });
+
+  it('propaga erro do servidor', async () => {
+    mockRpcResponse = { data: null, error: { message: 'Sem conexão' } };
+    await expect(monthlyDistance('2026-09-01', '2026-09-30')).rejects.toThrow('Sem conexão');
   });
 });
 

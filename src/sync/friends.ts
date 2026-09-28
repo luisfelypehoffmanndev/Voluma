@@ -1,4 +1,10 @@
-import type { FriendDirection, FriendRow, FriendStatus } from '@/domain/friends';
+import type {
+  FriendDirection,
+  FriendRow,
+  FriendStatus,
+  ValueRow,
+  WeeklyDaysRow,
+} from '@/domain/friends';
 
 import { requireClient } from './requireClient';
 
@@ -34,6 +40,55 @@ export async function listFriends(): Promise<FriendRow[]> {
   if (error) throw new Error(error.message);
 
   return ((data ?? []) as Row[]).map(toFriend);
+}
+
+type WeeklyDaysDbRow = {
+  handle: string;
+  shares: boolean;
+  planned_days: number | null;
+  week_start: string | null;
+  days: number | null;
+};
+
+/**
+ * Dias treinados por semana de cada amigo aceito, de `firstWeek` ate
+ * `lastWeek` (chaves de domingo), mais a meta de dias da rotina.
+ *
+ * Os nulos de quem nao compartilha seguem nulos ate a tela — o corte e no
+ * servidor, e a tela os mostra como "nao compartilha", nunca como zero.
+ */
+export async function weeklyDays(firstWeek: string, lastWeek: string): Promise<WeeklyDaysRow[]> {
+  const client = requireClient();
+
+  const { data, error } = await client.rpc('friend_weekly_days', {
+    first_week: firstWeek,
+    last_week: lastWeek,
+  });
+  if (error) throw new Error(error.message);
+
+  return ((data ?? []) as WeeklyDaysDbRow[]).map((row) => ({
+    handle: row.handle,
+    shares: row.shares,
+    plannedDays: row.planned_days,
+    weekStart: row.week_start,
+    days: row.days,
+  }));
+}
+
+/** Km corridos por cada amigo aceito no mes; `value` nulo sem o toggle. */
+export async function monthlyDistance(monthStart: string, monthEnd: string): Promise<ValueRow[]> {
+  const client = requireClient();
+
+  const { data, error } = await client.rpc('friend_monthly_distance', {
+    month_start: monthStart,
+    month_end: monthEnd,
+  });
+  if (error) throw new Error(error.message);
+
+  return ((data ?? []) as { handle: string; km: number | null }[]).map((row) => ({
+    handle: row.handle,
+    value: row.km,
+  }));
 }
 
 export async function requestFriendship(handle: string): Promise<RequestResult> {

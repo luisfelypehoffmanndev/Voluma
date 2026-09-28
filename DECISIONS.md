@@ -82,12 +82,27 @@ consentimentos** — a amizade aceita *e* o toggle ligado. Um só não basta.
   plano). "Desfazer" é não mandar nada. Quem segura o tempo é o store
   (`src/store/friends.ts`), não a tela.
 
-## Comparação de estatísticas entre amigos (ideia, não iniciado)
+## Comparação de estatísticas entre amigos
 
-**Data:** 2026-09-16 (atualizado em 2026-09-22)
-**Status:** rascunho de abordagem, não implementado
+**Data:** 2026-09-16 (atualizado em 2026-09-28)
+**Status:** implementado — ranking da semana, 12 semanas, consistência e
+corrida; ver [`plans/13-ranking-amigos.md`](plans/13-ranking-amigos.md) e
+[`plans/14-amigos-graficos.md`](plans/14-amigos-graficos.md)
 
-Próximo passo depois dos amigos: comparar evolução na aba de Estatísticas.
+Mudanças em relação ao rascunho abaixo, decididas em 2026-09-28:
+
+- As RPCs são **`friend_weekly_days(first_week, last_week)`** (dias treinados
+  por semana e a meta da rotina) e **`friend_monthly_distance`** (km no mês),
+  uma chamada para todos os amigos aceitos — e não
+  `friend_weekly_volume(friend_id)`, uma por amigo, devolvendo volume. A
+  métrica decidida é frequência, e volume por dia seria mais dado do que os
+  gráficos precisam.
+- **Consistência** usa como meta os dias com treino no Plano de cada um: nada
+  novo para configurar, e compara constância, não quantidade.
+- A UI é um **terceiro segmento "Amigos" no Histórico**, e não uma seção no
+  painel de Números. Você entra no ranking junto com os amigos.
+
+Rascunho original:
 
 - **Ranking por frequência, não por carga.** Comparar volume ou carga absoluta
   entre pessoas de níveis diferentes desmotiva em vez de motivar; dias
