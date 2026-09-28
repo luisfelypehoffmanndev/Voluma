@@ -334,7 +334,9 @@ function DayNameInput({ routineId, value }: { routineId: string; value: string }
   const dirty = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef(name);
-  latest.current = name;
+  useEffect(() => {
+    latest.current = name;
+  });
 
   useEffect(() => {
     if (dirty.current) return;

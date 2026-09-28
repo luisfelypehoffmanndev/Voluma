@@ -49,7 +49,9 @@ type Props = {
 export function Sheet({ visible, onClose, onDismissed, children }: Props) {
   const animation = useModalAnimation();
   const dismissedRef = useRef(onDismissed);
-  dismissedRef.current = onDismissed;
+  useEffect(() => {
+    dismissedRef.current = onDismissed;
+  });
   const wasVisible = useRef(visible);
   const fired = useRef(true);
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { colors, spacing } from '@/theme/tokens';
@@ -43,11 +43,13 @@ type Props = {
 export function ActionSheet({ visible, title, actions, onClose }: Props) {
   const [confirming, setConfirming] = useState<SheetAction | null>(null);
 
-  // Reabrir o menu comeca sempre pela lista, nunca por uma pergunta que ficou
-  // pendurada da ultima vez.
-  useEffect(() => {
-    if (!visible) setConfirming(null);
-  }, [visible]);
+  const [prevVisible, setPrevVisible] = useState(visible);
+  if (visible !== prevVisible) {
+    setPrevVisible(visible);
+    if (!visible) {
+      setConfirming(null);
+    }
+  }
 
   const chosen = useRef<SheetAction | null>(null);
 
