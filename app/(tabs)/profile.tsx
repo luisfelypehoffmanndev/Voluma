@@ -67,8 +67,7 @@ export default function ProfileScreen() {
           <Label>Ajuda</Label>
           <View style={styles.row}>
             <View style={styles.rowText}>
-              <Body>Como o Voluma funciona</Body>
-              <Meta>plano, treino e histórico em duas telas</Meta>
+              <Body>Guia rápido</Body>
             </View>
             <ChevronRightIcon size={16} color={colors.textSecondary} />
           </View>
@@ -111,8 +110,7 @@ function MotionCard() {
       <Label>Vibração</Label>
       <View style={styles.row}>
         <View style={styles.rowText}>
-          <Body>Ao confirmar</Body>
-          <Meta>um toque ao marcar concluído, nunca ao navegar</Meta>
+          <Body>Feedback tátil</Body>
         </View>
         <CheckCell
           checked={haptics}
@@ -146,13 +144,15 @@ function PublicProfileCard() {
 
   if (status !== 'signedIn') return null;
 
+  const meta = profileMeta({ profile, loading, error });
+
   return (
     <Card onPress={() => router.push('/profile-setup')}>
       <Label>Perfil</Label>
       <View style={styles.row}>
         <View style={styles.rowText}>
-          <Body>{profile ? `@${profile.handle}` : 'Escolher seu @'}</Body>
-          <Meta>{profileMeta({ profile, loading, error })}</Meta>
+          <Body>{profile ? `@${profile.handle}` : 'Definir @'}</Body>
+          {meta ? <Meta>{meta}</Meta> : null}
         </View>
         <ChevronRightIcon size={16} color={colors.textSecondary} />
       </View>
@@ -227,7 +227,7 @@ function AvatarCard() {
         />
         <View style={styles.rowText}>
           <Meta>
-            {failure ?? 'Aparece ao lado do seu @ para amigos e para quem recebe um pedido seu.'}
+            {failure ?? 'Visível apenas para amigos'}
           </Meta>
           <View style={styles.avatarActions}>
             <Button
@@ -259,18 +259,18 @@ function profileMeta({
   profile: Profile | null;
   loading: boolean;
   error: string | null;
-}): string {
+}): string | null {
   if (loading) return 'carregando…';
   // Sem cor de estado: a falha se comunica por texto, como no resto da tela.
   if (error) return `${error}, toque para tentar de novo`;
-  if (!profile) return 'é assim que seus amigos vão te achar';
+  if (!profile) return 'Como seus amigos te encontram';
 
   const traits = [
     profile.age === null ? null : `${profile.age} anos`,
     profile.trainingYears === null ? null : `${profile.trainingYears} de treino`,
   ].filter(Boolean);
 
-  return traits.length > 0 ? traits.join(' · ') : 'idade e anos de treino em branco';
+  return traits.length > 0 ? traits.join(' · ') : null;
 }
 
 /**
@@ -306,8 +306,8 @@ function friendsTitle(count: number): string {
 }
 
 function friendsMeta(pending: number): string {
-  if (pending === 0) return 'pelo @ · com aceite dos dois lados';
-  return pending === 1 ? '1 pedido esperando você' : `${pending} pedidos esperando você`;
+  if (pending === 0) return 'Buscar e gerenciar';
+  return pending === 1 ? '1 pedido pendente' : `${pending} pedidos pendentes`;
 }
 
 /**
@@ -335,11 +335,11 @@ function SharingCard() {
       <Label>Compartilhar</Label>
       <View style={styles.row}>
         <View style={styles.rowText}>
-          <Body>Com seus amigos</Body>
+          <Body>Estatísticas</Body>
           <Meta>
             {profile.sharesStats
-              ? 'volume, treinos, idade e anos de treino'
-              : 'ninguém vê seus números, só o seu @'}
+              ? 'Compartilhando com amigos'
+              : 'Oculto para amigos'}
           </Meta>
         </View>
         <CheckCell
@@ -370,8 +370,8 @@ function SyncCard() {
       <Card>
         <Label>Nuvem</Label>
         <View style={styles.rowText}>
-          <Body>Somente local</Body>
-          <Meta>preencha o .env para sincronizar</Meta>
+          <Body>Modo offline</Body>
+          <Meta>Configure o .env para sincronizar</Meta>
         </View>
       </Card>
     );
@@ -384,7 +384,7 @@ function SyncCard() {
         <View style={styles.row}>
           <View style={styles.rowText}>
             <Body>Entrar</Body>
-            <Meta>backup e segundo aparelho</Meta>
+            <Meta>Backup e sincronização</Meta>
           </View>
           <ChevronRightIcon size={16} color={colors.textSecondary} />
         </View>
@@ -415,7 +415,7 @@ function SyncCard() {
       <Pressable style={styles.row} onPress={() => void signOut()}>
         <View style={styles.rowText}>
           <Body>Sair</Body>
-          <Meta>apaga os dados deste aparelho</Meta>
+          <Meta>Remove os dados deste aparelho</Meta>
         </View>
       </Pressable>
     </Card>

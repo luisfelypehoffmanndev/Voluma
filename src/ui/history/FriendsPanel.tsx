@@ -27,7 +27,7 @@ export function FriendsPanel() {
   const status = useAuth((state) => state.status);
 
   if (!isCloudConfigured) {
-    return <Meta style={styles.local}>Amigos precisam da nuvem: preencha o .env.</Meta>;
+    return <Meta style={styles.local}>Conecte-se para adicionar amigos.</Meta>;
   }
   if (status === 'loading') return null;
   if (status !== 'signedIn') return <SignedOut />;
@@ -38,8 +38,8 @@ function SignedOut() {
   const router = useRouter();
   return (
     <EmptyState
-      title="Entre para ver seus amigos"
-      message="Amigos e o ranking da semana precisam de uma conta."
+      title="Acesse sua conta"
+      message="O ranking da semana é sincronizado na nuvem."
       action={{ label: 'Entrar', onPress: () => router.push('/login') }}
       style={styles.pad}
     />
@@ -58,8 +58,8 @@ function Friends() {
   if (data.people.length === 1) {
     return (
       <EmptyState
-        title="Nenhum amigo ainda"
-        message="Adicione alguém pelo @ para comparar quantos dias cada um treinou."
+        title="Nenhum amigo"
+        message="Adicione amigos para ver o ranking."
         action={{ label: 'Adicionar amigos', onPress: () => router.push('/friends') }}
         style={styles.pad}
       />
