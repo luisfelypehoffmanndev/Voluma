@@ -120,7 +120,7 @@ export default function FriendsScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 maxLength={HANDLE_MAX}
-                placeholder="o @ da pessoa"
+                placeholder="@usuario"
                 placeholderTextColor={colors.textSecondary}
                 returnKeyType="done"
                 onSubmitEditing={() => void submit()}
@@ -133,8 +133,7 @@ export default function FriendsScreen() {
                 <PlusIcon size={14} color={colors.textPrimary} />
               </RoundAction>
             </View>
-            {/* Sem cor de estado: o que informa e o texto. */}
-            <Meta>{requestMessage(result)}</Meta>
+            {requestMessage(result) ? <Meta>{requestMessage(result)}</Meta> : null}
           </Card>
 
           {lists.incoming.length > 0 ? (
@@ -145,7 +144,6 @@ export default function FriendsScreen() {
                   <FriendAvatar row={row} urls={urls} color={colors.textSecondary} />
                   <View style={styles.rowText}>
                     <Body>@{row.handle}</Body>
-                    <Meta>quer ser seu amigo</Meta>
                   </View>
                   <View style={styles.actions}>
                     <RoundAction
@@ -214,8 +212,8 @@ export default function FriendsScreen() {
 
           {empty && !loading ? (
             <EmptyState
-              title="Nenhum amigo ainda"
-              message="Peça o @ de alguém da academia e adicione aqui."
+              title="Nenhum amigo"
+              message="Adicione amigos pelo @ para comparar treinos."
               action={{ label: 'Atualizar', onPress: () => void load() }}
             />
           ) : null}
@@ -275,23 +273,22 @@ function RoundAction({
 }
 
 /**
- * Cada codigo do servidor diz uma coisa diferente, e a tela tem que dizer qual:
- * "nao existe esse @" nao e "voces ja sao amigos".
+ * Cada codigo do servidor diz uma coisa diferente, e a tela tem que dizer qual.
  */
-function requestMessage(result: RequestResult | 'error' | null): string {
+function requestMessage(result: RequestResult | 'error' | null): string | null {
   switch (result) {
     case 'ok':
-      return 'pedido enviado, falta a outra pessoa aceitar';
+      return 'Pedido enviado';
     case 'not-found':
-      return 'não existe ninguém com esse @';
+      return 'Usuário não encontrado';
     case 'already':
-      return 'vocês já têm um pedido ou uma amizade';
+      return 'Já existe um pedido ou amizade';
     case 'self':
-      return 'esse @ é o seu';
+      return 'Você não pode adicionar a si mesmo';
     case 'error':
-      return 'não foi possível enviar, tente de novo';
+      return 'Não foi possível enviar';
     default:
-      return 'o @ exato da pessoa, não há busca por parte do nome';
+      return null;
   }
 }
 
