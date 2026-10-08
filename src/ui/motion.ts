@@ -141,6 +141,21 @@ export function useListMotion() {
 }
 
 /**
+ * Se a rolagem programatica deve animar — a tela de treino rolando ate o
+ * proximo exercicio.
+ *
+ * Nao e animacao de elemento (nada muda de forma, nem de tamanho), mas e
+ * movimento que o app causa sozinho, e o §10 nao abre excecao: com "reduzir
+ * movimento" a lista salta direto para o lugar, que e o estado final correto.
+ *
+ * Mora aqui pela mesma razao de todo o resto: nenhum call site consulta
+ * `useReducedMotion` por conta propria.
+ */
+export function useScrollAnimated(): boolean {
+  return !useReducedMotion();
+}
+
+/**
  * O `animationType` de um `Modal` do React Native, atras do mesmo portao.
  *
  * O `Modal` e o unico movimento do app que nao passa por aqui: quem anima e a

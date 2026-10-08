@@ -1,11 +1,11 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { formatWeight } from '@/domain/volume';
-import { colors, hitSlop, radius, spacing, surfaces } from '@/theme/tokens';
+import { colors, fonts, fontSize, radius, spacing, surfaces } from '@/theme/tokens';
 
+import { CheckCell } from './CheckCell';
 import { Stepper } from './Stepper';
-import { Meta } from './Text';
-import { TrashIcon } from './icons';
+import { Label, Meta, Mono } from './Text';
 
 type Props = {
   /** 1-based, so para exibir — a posicao no array, nao o `setIndex` guardado
@@ -13,59 +13,109 @@ type Props = {
   index: number;
   reps: number;
   weightKg: number;
+  done: boolean;
+  /**
+   * Esta e a serie da vez: a primeira nao marcada do exercicio.
+   *
+   * Ganha o contorno accent e os controles de ajuste. E o unico elemento com
+   * accent da sessao fora das caixas marcadas — ver Design/design.md §2.
+   */
+  isNext: boolean;
+  /** O que foi feito nesta serie no ultimo treino deste exercicio. */
+  previous?: { reps: number; weightKg: number } | null;
+  onToggle: () => void;
   onChangeReps: (reps: number) => void;
   onChangeWeight: (weightKg: number) => void;
-  /** Omitido quando e a unica serie do exercicio — sempre sobra pelo menos uma. */
-  onRemove?: () => void;
+  /** Copia o que foi feito na ultima vez para esta serie. */
+  onCopyPrevious?: () => void;
 };
 
 /**
- * Uma serie dentro do exercicio expandido: reps e carga proprios, ajustaveis
- * independente das demais series do mesmo exercicio.
+ * Uma serie do exercicio: o que fazer, e a caixa que diz que foi feito.
  *
- * Reusa o `Stepper` em `layout="row"` duas vezes — o mesmo controle e o mesmo
- * gesto do `TargetsEditor`, so que um par por serie em vez de um so para o
- * exercicio inteiro. Empilhados, e nao lado a lado: dois `Stepper` ocupam
- * ~276px de controles cada, e a area util do card e ~310px — a mesma conta que
- * ja mantinha `TargetsEditor` empilhado em vez de numa linha so.
+ * **A serie e a unidade de registro**, nao o exercicio. Antes havia uma caixa
+ * por exercicio e as series eram so campos: no meio do treino nada na tela
+ * dizia em que serie o usuario estava, e era essa a queixa de "nao entendo o
+ * que fazer". Agora a linha nao marcada mais acima e, literalmente, a proxima.
  *
- * Este componente nao sabe se o toque grava na hora ou fica so no rascunho —
- * quem decide isso e a tela (`StrengthExerciseCard`, `app/session/[id].tsx`),
- * pela mesma regra que ja valia para o exercicio inteiro: mexer no stepper NAO
- * grava a menos que o exercicio ja esteja concluido.
+ * Os `+`/`−` aparecem SO na serie da vez. Quem só confirma o que estava
+ * previsto toca na caixa e pronto; quem mudou a carga ajusta ali, sem que as
+ * outras cinco linhas carreguem controles que ninguem vai tocar agora. E o
+ * "acao rapida primeiro, correcao depois" dos apps da categoria.
  */
-export function SetRow({ index, reps, weightKg, onChangeReps, onChangeWeight, onRemove }: Props) {
+export function SetRow({
+  index,
+  reps,
+  weightKg,
+  done,
+  isNext,
+  previous,
+  onToggle,
+  onChangeReps,
+  onChangeWeight,
+  onCopyPrevious,
+}: Props) {
   return (
-    <View style={styles.row}>
-      <View style={styles.header}>
-        <Meta>{`SÉRIE ${index}`}</Meta>
-        {onRemove ? (
-          <Pressable hitSlop={hitSlop} onPress={onRemove}>
-            <TrashIcon size={14} color={colors.textSecondary} />
-          </Pressable>
-        ) : null}
+    <View style={[styles.row, isNext && styles.next]}>
+      <View style={styles.line}>
+        <Label style={[styles.index, isNext && styles.indexNext]}>{`SÉRIE ${index}`}</Label>
+
+        {/* Em mono, e lado a lado: a serie e uma linha so, como nos apps da
+            categoria. Empilhado, cada serie virava um bloco alto e a proxima
+            saia da tela. */}
+        <View style={styles.values}>
+          <Mono style={styles.value}>{`${reps} × ${formatWeight(weightKg)}`}</Mono>
+          <Label style={styles.unit}>kg</Label>
+        </View>
+
+        <CheckCell checked={done} onPress={onToggle} />
       </View>
 
-      <Stepper
-        layout="row"
-        label="REPS"
-        value={reps}
-        min={1}
-        max={100}
-        editable
-        integer
-        onChange={onChangeReps}
-      />
-      <Stepper
-        layout="row"
-        label="PESO"
-        value={weightKg}
-        step={2.5}
-        suffix="kg"
-        editable
-        format={formatWeight}
-        onChange={onChangeWeight}
-      />
+      {/* A ultima vez naquela MESMA serie, nao a media do exercicio: e o que
+          responde "quanto eu levantei aqui?" sem sair da tela. Tocar copia. */}
+      {previous !== undefined ? (
+        <Pressable
+          disabled={!previous || !onCopyPrevious}
+          onPress={onCopyPrevious}
+          accessibilityLabel={
+            previous
+              ? `Repetir ${previous.reps} por ${formatWeight(previous.weightKg)} quilos da última vez`
+              : undefined
+          }
+          style={styles.previous}
+        >
+          <Meta>
+            {previous
+              ? `última vez · ${previous.reps} × ${formatWeight(previous.weightKg)} kg`
+              : 'última vez · —'}
+          </Meta>
+        </Pressable>
+      ) : null}
+
+      {isNext ? (
+        <View style={styles.controls}>
+          <Stepper
+            layout="row"
+            label="REPS"
+            value={reps}
+            min={1}
+            max={100}
+            editable
+            integer
+            onChange={onChangeReps}
+          />
+          <Stepper
+            layout="row"
+            label="PESO"
+            value={weightKg}
+            step={2.5}
+            suffix="kg"
+            editable
+            format={formatWeight}
+            onChange={onChangeWeight}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -78,11 +128,51 @@ const styles = StyleSheet.create({
     borderRadius: radius.inner,
     padding: spacing.md,
     marginBottom: spacing.sm,
+    // A borda existe em toda serie, transparente por padrao: so aparecendo na
+    // da vez, o conteudo andaria 1px ao virar a proxima (§6).
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
-  header: {
+  next: {
+    borderColor: colors.accent,
+  },
+  line: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.xs,
+    // 48 e o alvo confortavel para o polegar; a caixa marcavel continua com a
+    // mesma caixa visual e cresce so o alvo (ver `CheckCell`).
+    minHeight: 48,
+    gap: spacing.md,
+  },
+  index: {
+    fontFamily: fonts.sansMedium,
+    width: 62,
+  },
+  indexNext: {
+    color: colors.accent,
+  },
+  values: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'flex-end',
+    gap: 3,
+  },
+  value: {
+    fontFamily: fonts.monoLight,
+    fontSize: fontSize.numberSm,
+  },
+  unit: {
+    color: colors.textSecondary,
+  },
+  previous: {
+    paddingTop: 2,
+    paddingBottom: spacing.xs,
+  },
+  controls: {
+    marginTop: spacing.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.divider,
+    paddingTop: spacing.xs,
   },
 });

@@ -14,6 +14,18 @@ export type SetDraft = Pick<SessionSet, 'reps' | 'weightKg'> & {
   id: string | null;
   /** 1-based — so para exibir; a ordem de verdade e a posicao no array. */
   setIndex: number;
+  /**
+   * Esta serie foi feita.
+   *
+   * E por serie, e nao por exercicio, porque e assim que se treina: marca-se
+   * uma serie, descansa-se, marca-se a proxima. O `done` do exercicio virou
+   * derivado disto (`allDone`) — antes era o contrario, e durante o treino nao
+   * existia "proxima serie" nenhuma na tela.
+   *
+   * O banco ja guardava assim desde a primeira migration (`session_sets.done`);
+   * quem forcava o exercicio inteiro era a tela e a escrita.
+   */
+  done: boolean;
 };
 
 export type SetsSummary = {
@@ -80,7 +92,52 @@ export function sameSetDrafts(a: readonly SetDraft[], b: readonly SetDraft[]): b
       row.id === other.id &&
       row.setIndex === other.setIndex &&
       row.reps === other.reps &&
-      row.weightKg === other.weightKg
+      row.weightKg === other.weightKg &&
+      row.done === other.done
     );
   });
+}
+
+/**
+ * A proxima serie a fazer: a primeira nao marcada. `null` quando o exercicio
+ * acabou.
+ *
+ * E o que responde "o que eu faco agora?" sem o usuario tocar em nada — a tela
+ * destaca exatamente esta. Primeira NAO marcada, e nao "a de menor indice
+ * pendente depois da ultima marcada": quem marcou a 3 e voltou para corrigir a
+ * 1 continua vendo a 1 como a da vez, que e onde a mao dele esta.
+ */
+export function nextSetIndex(rows: readonly Pick<SetDraft, 'done'>[]): number | null {
+  const index = rows.findIndex((row) => !row.done);
+  return index === -1 ? null : index;
+}
+
+/** Exercicio concluido = toda serie marcada. Sem serie nenhuma, nao esta. */
+export function allDone(rows: readonly Pick<SetDraft, 'done'>[]): boolean {
+  return rows.length > 0 && rows.every((row) => row.done);
+}
+
+/**
+ * O par "feitas / total" do treino, contado em SERIES.
+ *
+ * O cabecalho e o botao de finalizar contavam exercicios ("3 de 5"), que e uma
+ * unidade grossa demais para o meio do treino: marcar a terceira serie de
+ * quatro nao mexia em nada na tela. Corrida entra como uma serie so — ela nao
+ * se fatia (ver `run.ts`), e some do contador se contar zero.
+ */
+export function countSets(
+  items: readonly { rows: readonly Pick<SetDraft, 'done'>[]; done: boolean }[],
+): { done: number; total: number } {
+  let done = 0;
+  let total = 0;
+  for (const item of items) {
+    if (item.rows.length === 0) {
+      total += 1;
+      if (item.done) done += 1;
+      continue;
+    }
+    total += item.rows.length;
+    done += item.rows.filter((row) => row.done).length;
+  }
+  return { done, total };
 }

@@ -1170,16 +1170,27 @@ export async function removeSet(id: string): Promise<void> {
  * series que nunca foram gravadas) pelos ids reais — sem isso, editar uma
  * serie logo depois de marcar o exercicio concluido nao encontraria linha
  * nenhuma para atualizar.
+ *
+ * `done` vem POR LINHA, e nao um para o exercicio inteiro: o usuario marca uma
+ * serie, descansa e marca a proxima, entao metade do exercicio marcada e o
+ * estado normal durante o treino, nao um caso de borda. O banco ja comportava
+ * isso (`session_sets.done` sempre foi por linha); era esta funcao que repetia
+ * o mesmo valor em todas.
  */
 export async function setSessionExerciseSets(
   sessionId: string,
   exerciseId: string,
-  rows: readonly { reps: number; weightKg: number }[],
-  done: boolean,
-): Promise<{ id: string; setIndex: number; reps: number; weightKg: number }[]> {
+  rows: readonly { reps: number; weightKg: number; done: boolean }[],
+): Promise<{ id: string; setIndex: number; reps: number; weightKg: number; done: boolean }[]> {
   const db = await getDb();
   const timestamp = now();
-  const inserted: { id: string; setIndex: number; reps: number; weightKg: number }[] = [];
+  const inserted: {
+    id: string;
+    setIndex: number;
+    reps: number;
+    weightKg: number;
+    done: boolean;
+  }[] = [];
 
   await db.withTransactionAsync(async () => {
     // Mesmo tratamento de `setSessionExerciseTargets`: uma UPDATE em lote em
@@ -1209,8 +1220,23 @@ export async function setSessionExerciseSets(
       rows.forEach((row, index) => {
         const setId = newId();
         const setIndex = index + 1;
-        values.push(setId, sessionId, exerciseId, setIndex, row.reps, row.weightKg, done ? 1 : 0, timestamp);
-        inserted.push({ id: setId, setIndex, reps: row.reps, weightKg: row.weightKg });
+        values.push(
+          setId,
+          sessionId,
+          exerciseId,
+          setIndex,
+          row.reps,
+          row.weightKg,
+          row.done ? 1 : 0,
+          timestamp,
+        );
+        inserted.push({
+          id: setId,
+          setIndex,
+          reps: row.reps,
+          weightKg: row.weightKg,
+          done: row.done,
+        });
       });
       await db.runAsync(
         `INSERT INTO session_sets
