@@ -49,7 +49,23 @@ export default function PlanScreen() {
   const today = weekdayOf(new Date());
 
   return (
-    <Screen>
+    <Screen
+      overlay={
+        /* O Plano e a tela que ninguem adivinha: o dia da semana e que guarda
+           os exercicios, e e tocando nele que se monta o treino. Vai no
+           `overlay` pelo mesmo motivo da Hoje — coordenadas de janela. */
+        <Tour
+          id="plan"
+          active={data != null}
+          steps={[
+            {
+              target: 'plan.week',
+              text: 'Toque num dia para escolher os exercícios dele. Vale para toda semana.',
+            },
+          ]}
+        />
+      }
+    >
       <Header title="Plano" />
 
       {error ? <LoadError error={error} onRetry={reload} /> : (
@@ -101,19 +117,6 @@ export default function PlanScreen() {
         </Card>
       </ScrollView>
       )}
-
-      {/* O Plano e a tela que ninguem adivinha: o dia da semana e que guarda os
-          exercicios, e e tocando nele que se monta o treino. */}
-      <Tour
-        id="plan"
-        active={data != null}
-        steps={[
-          {
-            target: 'plan.week',
-            text: 'Toque num dia para escolher os exercícios dele. Vale para toda semana.',
-          },
-        ]}
-      />
     </Screen>
   );
 }
