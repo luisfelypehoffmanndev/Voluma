@@ -407,7 +407,17 @@ export const fontSize = {
   labelLg: 13,
   body: 15,
   bodyLg: 16,
-  title: 22,
+  /**
+   * Titulo de secao dentro de uma tela — "Treino de hoje", "Progresso".
+   *
+   * Existe porque sem ele a tela inteira vivia entre 12 e 16: nada era
+   * manifestamente mais importante que o resto, e o olho nao tinha onde
+   * pousar primeiro. Dois degraus acima do corpo e o minimo para um titulo
+   * ler como titulo.
+   */
+  section: 19,
+  /** Titulo de tela ("Hoje", "Plano"). O maior texto em sans do app. */
+  title: 30,
   /** numero secundario (o "43" ao lado da hora) */
   numberSm: 20,
   numberMd: 34,
