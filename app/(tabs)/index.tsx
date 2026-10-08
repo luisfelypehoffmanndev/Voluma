@@ -44,6 +44,8 @@ import { ProgressRing } from '@/ui/ProgressRing';
 import { shortDate } from '@/ui/relative';
 import { LoadError } from '@/ui/LoadError';
 import { Header, Screen } from '@/ui/Screen';
+import { Tour } from '@/ui/tour/Tour';
+import { TourTarget } from '@/ui/tour/TourTarget';
 import { StatNumber } from '@/ui/StatNumber';
 import { useTabBarClearance } from '@/ui/tabBar';
 import { Reveal } from '@/ui/Reveal';
@@ -173,7 +175,9 @@ export default function HomeScreen() {
           ) : null}
         </Card>
 
-        <TodayAction state={today.state} sets={today.sets} onPress={openWorkout} />
+        <TourTarget id="home.action">
+          <TodayAction state={today.state} sets={today.sets} onPress={openWorkout} />
+        </TourTarget>
 
         {/* Daqui para baixo e consulta, nao acao: um titulo de secao separa, e
             os numeros encolhem. Antes peso, volume e sequencia ocupavam tres
@@ -243,6 +247,19 @@ export default function HomeScreen() {
         ) : null}
       </ScrollView>
       </Reveal>
+
+      {/* Uma frase, uma vez. A dica aponta o botao porque ele e a resposta a
+          "o que eu faco agora?" — e e o unico lugar da Hoje que age. */}
+      <Tour
+        id="home"
+        active
+        steps={[
+          {
+            target: 'home.action',
+            text: 'O treino de hoje começa aqui. O número são as séries do dia.',
+          },
+        ]}
+      />
     </Screen>
   );
 }
