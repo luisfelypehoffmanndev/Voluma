@@ -22,6 +22,18 @@ export function Title({ style, ...props }: TextProps) {
   return <RNText {...props} style={[styles.title, style]} />;
 }
 
+/**
+ * Titulo de um bloco dentro da tela: "Treino de hoje", "Progresso".
+ *
+ * A hierarquia do app vinha so de tamanho de NUMERO; o texto ficava todo entre
+ * 12 e 16 e nenhuma tela dizia onde comecar a ler. Este degrau e o que separa
+ * "o assunto" de "o conteudo" — e, junto com o `Label` em caixa alta, da nome
+ * ao que antes era uma pilha de cards iguais.
+ */
+export function Section({ style, ...props }: TextProps) {
+  return <RNText {...props} style={[styles.section, style]} />;
+}
+
 /** Metadado secundario: "há 31 min", "Sextas". */
 export function Meta({ style, ...props }: TextProps) {
   return <RNText {...props} style={[styles.meta, style]} />;
@@ -47,6 +59,14 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: fonts.sansMedium,
     fontSize: fontSize.title,
+    color: colors.textPrimary,
+    // 30px em sans medium com entrelinha padrao corta acento maiusculo em
+    // alguns aparelhos Android; a linha explicita da folga sem mexer no peso.
+    lineHeight: 36,
+  },
+  section: {
+    fontFamily: fonts.sansMedium,
+    fontSize: fontSize.section,
     color: colors.textPrimary,
   },
   meta: {
