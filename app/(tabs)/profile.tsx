@@ -38,6 +38,7 @@ export default function ProfileScreen() {
   const router = useRouter();
 
   const { data: weights, error, reload } = useQuery(useCallback(() => listBodyWeightLogs(1), []));
+  const signedIn = useAuth((state) => state.status === 'signedIn');
   const latest = weights?.[0] ?? null;
 
   return (
@@ -52,6 +53,10 @@ export default function ProfileScreen() {
             continuam funcionando mesmo se a consulta falhar. */}
         {error ? <LoadError error={error} onRetry={reload} /> : null}
 
+        {/* Tres grupos, com nome. Nove cards seguidos, todos do mesmo
+            tamanho e sem titulo, nao diziam onde procurar o que. */}
+        <Label style={styles.sectionLabel}>VOCÊ</Label>
+
         <Card onPress={() => router.push('/bodyweight')}>
           <Label>Peso corporal</Label>
           <View style={styles.row}>
@@ -62,6 +67,20 @@ export default function ProfileScreen() {
             <ChevronRightIcon size={16} color={colors.textSecondary} />
           </View>
         </Card>
+
+        <PublicProfileCard />
+
+        <AvatarCard />
+
+        {/* O rotulo do grupo so aparece com conta: sem login estes quatro cards
+            somem, e um titulo sozinho e pior que nenhum. */}
+        {signedIn ? <Label style={styles.sectionLabel}>SOCIAL</Label> : null}
+
+        <FriendsCard />
+
+        <SharingCard />
+
+        <Label style={styles.sectionLabel}>APP</Label>
 
         <Card onPress={() => router.push('/onboarding?replay=1')}>
           <Label>Ajuda</Label>
@@ -74,14 +93,6 @@ export default function ProfileScreen() {
         </Card>
 
         <MotionCard />
-
-        <PublicProfileCard />
-
-        <AvatarCard />
-
-        <FriendsCard />
-
-        <SharingCard />
 
         <SyncCard />
 
@@ -442,6 +453,11 @@ function CreditsCard() {
 }
 
 const styles = StyleSheet.create({
+  sectionLabel: {
+    marginTop: spacing.lg,
+    marginLeft: spacing.xs,
+    marginBottom: spacing.xs,
+  },
   content: {
     paddingHorizontal: spacing.xl,
     gap: spacing.md,

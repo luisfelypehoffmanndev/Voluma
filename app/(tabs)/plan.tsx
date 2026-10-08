@@ -4,9 +4,9 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { listExercises, listRoutines, routineExerciseCounts } from '@/db/repo';
 import type { Weekday } from '@/domain/types';
-import { weekPlan, weekdayName } from '@/domain/week';
+import { weekPlan, weekdayName, weekdayOf } from '@/domain/week';
 import { useQuery } from '@/store/data';
-import { colors, fontSize, spacing } from '@/theme/tokens';
+import { colors, spacing } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
 import { PressableSurface } from '@/ui/PressableSurface';
 import { LoadError } from '@/ui/LoadError';
@@ -14,7 +14,7 @@ import { Header, Screen } from '@/ui/Screen';
 import { Tour } from '@/ui/tour/Tour';
 import { TourTarget } from '@/ui/tour/TourTarget';
 import { useTabBarClearance } from '@/ui/tabBar';
-import { Body, Label, Meta } from '@/ui/Text';
+import { Label, Meta, Section } from '@/ui/Text';
 import { ChevronRightIcon } from '@/ui/icons';
 
 /**
@@ -46,6 +46,7 @@ export default function PlanScreen() {
 
   const days = data?.days ?? [];
   const counts = data?.counts ?? [];
+  const today = weekdayOf(new Date());
 
   return (
     <Screen>
@@ -56,21 +57,28 @@ export default function PlanScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
         showsVerticalScrollIndicator={false}
       >
+        <Label style={styles.sectionLabel}>SUA SEMANA</Label>
+
         <TourTarget id="plan.week">
         <Card>
-          <Label>Semana</Label>
           {days.map((day, weekday) => {
             const count = counts[weekday] ?? 0;
+            // Hoje e o unico dia com accent na tela: num plano de sete linhas
+            // iguais, nada dizia em qual delas o usuario esta.
+            const isToday = weekday === today;
             return (
               <PressableSurface
                 key={weekday}
                 feedback="solid"
-                style={styles.row}
+                style={[styles.row, weekday > 0 && styles.rowDivided]}
                 onPress={() => router.push({ pathname: '/day/[weekday]', params: { weekday } })}
-                accessibilityLabel={`Editar ${weekdayName(weekday as Weekday)}`}
+                accessibilityLabel={`Editar ${weekdayName(weekday as Weekday)}${isToday ? ', hoje' : ''}`}
               >
                 <View style={styles.rowText}>
-                  <Body numberOfLines={1}>{weekdayName(weekday as Weekday)}</Body>
+                  <View style={styles.dayLine}>
+                    <Section numberOfLines={1}>{weekdayName(weekday as Weekday)}</Section>
+                    {isToday ? <Label style={styles.todayTag}>HOJE</Label> : null}
+                  </View>
                   <Meta>{daySummary(day?.name ?? '', count)}</Meta>
                 </View>
                 <ChevronRightIcon size={16} color={colors.textSecondary} />
@@ -80,11 +88,12 @@ export default function PlanScreen() {
         </Card>
         </TourTarget>
 
+        <Label style={styles.sectionLabel}>MOVIMENTOS</Label>
+
         <Card onPress={() => router.push('/catalog')}>
-          <Label>Catálogo</Label>
           <View style={styles.row}>
             <View style={styles.rowText}>
-              <Body style={styles.catalogCount}>{data?.exercises.length ?? 0} movimentos</Body>
+              <Section>{`${data?.exercises.length ?? 0} no catálogo`}</Section>
               <Meta>adicionar, apagar e organizar por grupo</Meta>
             </View>
             <ChevronRightIcon size={16} color={colors.textSecondary} />
@@ -128,21 +137,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     gap: spacing.md,
   },
+  sectionLabel: {
+    marginTop: spacing.lg,
+    marginLeft: spacing.xs,
+    marginBottom: spacing.xs,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: spacing.lg,
+  },
+  rowDivided: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.divider,
-    marginTop: spacing.sm,
+  },
+  dayLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  /** O unico accent da tela: onde o usuario esta na semana. */
+  todayTag: {
+    color: colors.accent,
   },
   rowText: {
     flex: 1,
     gap: 2,
-    marginTop: spacing.sm,
-  },
-  catalogCount: {
-    fontSize: fontSize.bodyLg,
   },
 });
