@@ -74,6 +74,16 @@ export function useQuery<T>(query: () => Promise<T>, options?: QueryOptions): Qu
   const [error, setError] = useState<Error | null>(null);
   const [localVersion, setLocalVersion] = useState(0);
   const settled = useRef(false);
+  /**
+   * A consulta inicial ja rodou?
+   *
+   * Existe por um bug real: uma tela de aba pode MONTAR antes de o navegador
+   * marca-la como em foco. Ai o efeito abaixo desistia (`isFocusedRef` falso),
+   * o efeito de foco assumia "o mount ja consultou" e nao consultava — e a aba
+   * ficava vazia ate o usuario sair e voltar. Era o "Progresso bugado".
+   */
+  const queried = useRef(false);
+  /** Ja passou pelo primeiro foco (que vem junto com o mount). */
   const focused = useRef(false);
 
   // Lido dentro do efeito sem entrar nas deps dele: um `bumpData` de OUTRA
@@ -91,6 +101,7 @@ export function useQuery<T>(query: () => Promise<T>, options?: QueryOptions): Qu
 
   useEffect(() => {
     if (!isFocusedRef.current) return;
+    queried.current = true;
 
     let cancelled = false;
 
@@ -130,9 +141,17 @@ export function useQuery<T>(query: () => Promise<T>, options?: QueryOptions): Qu
   // outra rota e voltado com o gesto de swipe.
   useFocusEffect(
     useCallback(() => {
-      // O primeiro foco acontece junto com o mount, cuja consulta o efeito
-      // acima ja disparou. Sem este guarda toda tela consulta o banco duas
-      // vezes ao abrir.
+      // O primeiro foco normalmente acontece junto com o mount, cuja consulta o
+      // efeito acima ja disparou — sem este guarda toda tela consultaria o
+      // banco duas vezes ao abrir.
+      //
+      // Mas quando a tela monta ANTES do foco, o efeito acima desiste e nunca
+      // ha consulta nenhuma. `queried` distingue os dois casos: "ja consultei,
+      // nao repita" de "nunca consultei, consulte agora".
+      if (!queried.current) {
+        setLocalVersion((current) => current + 1);
+        return;
+      }
       if (!focused.current) {
         focused.current = true;
         return;
