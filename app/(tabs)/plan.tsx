@@ -11,6 +11,8 @@ import { Card } from '@/ui/Card';
 import { PressableSurface } from '@/ui/PressableSurface';
 import { LoadError } from '@/ui/LoadError';
 import { Header, Screen } from '@/ui/Screen';
+import { Tour } from '@/ui/tour/Tour';
+import { TourTarget } from '@/ui/tour/TourTarget';
 import { useTabBarClearance } from '@/ui/tabBar';
 import { Body, Label, Meta } from '@/ui/Text';
 import { ChevronRightIcon } from '@/ui/icons';
@@ -54,6 +56,7 @@ export default function PlanScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
         showsVerticalScrollIndicator={false}
       >
+        <TourTarget id="plan.week">
         <Card>
           <Label>Semana</Label>
           {days.map((day, weekday) => {
@@ -75,6 +78,7 @@ export default function PlanScreen() {
             );
           })}
         </Card>
+        </TourTarget>
 
         <Card onPress={() => router.push('/catalog')}>
           <Label>Catálogo</Label>
@@ -88,6 +92,19 @@ export default function PlanScreen() {
         </Card>
       </ScrollView>
       )}
+
+      {/* O Plano e a tela que ninguem adivinha: o dia da semana e que guarda os
+          exercicios, e e tocando nele que se monta o treino. */}
+      <Tour
+        id="plan"
+        active={data != null}
+        steps={[
+          {
+            target: 'plan.week',
+            text: 'Toque num dia para escolher os exercícios dele. Vale para toda semana.',
+          },
+        ]}
+      />
     </Screen>
   );
 }

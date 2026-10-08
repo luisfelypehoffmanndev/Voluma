@@ -59,6 +59,8 @@ import { ReorderableList } from '@/ui/ReorderableList';
 import { EmptyState } from '@/ui/EmptyState';
 import { LoadError } from '@/ui/LoadError';
 import { Header, Screen } from '@/ui/Screen';
+import { Tour } from '@/ui/tour/Tour';
+import { TourTarget } from '@/ui/tour/TourTarget';
 import { SetRow } from '@/ui/SetRow';
 import { COMMIT_DELAY, TargetsEditor } from '@/ui/TargetsEditor';
 import { Body, Label, Meta } from '@/ui/Text';
@@ -514,6 +516,19 @@ export default function SessionScreen() {
           onClose={() => setPendingPick(null)}
         />
       </ExercisePicker>
+
+      {/* A marcacao por serie e o conceito novo do app: a dica aponta a serie
+          da vez, uma vez so, e explica o que a caixa faz. */}
+      <Tour
+        id="session"
+        active={exercises.length > 0}
+        steps={[
+          {
+            target: 'session.next',
+            text: 'Marque a caixa quando terminar esta série. A próxima fica destacada.',
+          },
+        ]}
+      />
 
       <ConfirmModal
         visible={confirmingFinish}
@@ -1369,7 +1384,8 @@ function StrengthExerciseCard(props: CardProps) {
 
       {expanded ? (
         <Animated.View {...setsMotion} style={styles.setsList}>
-          {rows.map((row, index) => (
+          {rows.map((row, index) => {
+            const setRow = (
             <SetRow
               key={row.id ?? `draft-${index}`}
               index={index + 1}
@@ -1381,7 +1397,18 @@ function StrengthExerciseCard(props: CardProps) {
               onChangeReps={(reps) => updateRow(index, { reps })}
               onChangeWeight={(weightKg) => updateRow(index, { weightKg })}
             />
-          ))}
+            );
+
+            /* So a serie da vez do PRIMEIRO exercicio e alvo do tour: a dica
+               aponta um lugar, nao seis. */
+            return index === next && isCurrent ? (
+              <TourTarget key={row.id ?? `draft-${index}`} id="session.next">
+                {setRow}
+              </TourTarget>
+            ) : (
+              setRow
+            );
+          })}
 
           <Pressable style={styles.addSet} onPress={addRow}>
             <PlusIcon size={14} color={colors.textSecondary} />

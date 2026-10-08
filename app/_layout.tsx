@@ -16,6 +16,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useOnboarding } from '@/store/onboarding';
 import { usePrefs } from '@/store/prefs';
+import { useTour } from '@/store/tour';
 import { useSyncLifecycle } from '@/sync/auth';
 import { colors } from '@/theme/tokens';
 import { BlurTargetProvider } from '@/ui/blurTarget';
@@ -40,6 +41,7 @@ export default function RootLayout() {
   // padrao vale, entao nada aqui bloqueia a montagem.
   useEffect(() => {
     void usePrefs.getState().load();
+    void useTour.getState().load();
   }, []);
 
   // Primeira abertura ou nao — decidido antes de qualquer tela aparecer, para a
