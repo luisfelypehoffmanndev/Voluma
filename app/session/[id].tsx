@@ -37,14 +37,14 @@ import {
 import type { ExerciseKind, SessionSet, Targets } from '@/domain/types';
 import { applyOrder } from '@/domain/order';
 import { formatDistance, formatDuration, runTargetsFromSets } from '@/domain/run';
-import { type SetDraft, sameSetDrafts, summarizeSets } from '@/domain/sets';
+import { allDone, countSets, nextSetIndex, type SetDraft, sameSetDrafts, summarizeSets } from '@/domain/sets';
 import { sameTargets, targetsFromSets } from '@/domain/targets';
 import { formatVolume, formatWeight } from '@/domain/volume';
 import { everyWeekday, fromDateKey, weekStartKey, weekdayName, weekdayOf } from '@/domain/week';
 import { bumpData, useQuery } from '@/store/data';
 import { useAuth } from '@/sync/auth';
 import { colors, fontSize, radius, spacing } from '@/theme/tokens';
-import { useFlag, useListMotion } from '@/ui/motion';
+import { useFlag, useListMotion, useScrollAnimated } from '@/ui/motion';
 import { confirm } from '@/ui/haptics';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
@@ -62,7 +62,7 @@ import { Header, Screen } from '@/ui/Screen';
 import { SetRow } from '@/ui/SetRow';
 import { COMMIT_DELAY, TargetsEditor } from '@/ui/TargetsEditor';
 import { Body, Label, Meta } from '@/ui/Text';
-import { ActionSheet } from '@/ui/ActionSheet';
+import { ActionSheet, type SheetAction } from '@/ui/ActionSheet';
 import { UndoToast, type UndoOffer } from '@/ui/UndoToast';
 import { ChevronRightIcon, MoreIcon, PlusIcon } from '@/ui/icons';
 
@@ -125,18 +125,39 @@ export default function SessionScreen() {
    * mostra o numero certo, sem passar por zero — o que faria a contagem animar
    * do nada ao abrir a tela.
    */
-  const [drafts, setDrafts] = useState<Record<string, { done: boolean; volume: number }>>({});
+  const [drafts, setDrafts] = useState<Record<string, ExerciseDraft>>({});
 
-  const reportDraft = useCallback((exerciseId: string, done: boolean, volume: number) => {
+  const reportDraft = useCallback((exerciseId: string, draft: ExerciseDraft) => {
     setDrafts((current) => {
       const previous = current[exerciseId];
-      if (previous && previous.done === done && previous.volume === volume) return current;
-      return { ...current, [exerciseId]: { done, volume } };
+      if (
+        previous &&
+        previous.done === draft.done &&
+        previous.volume === draft.volume &&
+        previous.doneSets === draft.doneSets &&
+        previous.totalSets === draft.totalSets
+      ) {
+        return current;
+      }
+      return { ...current, [exerciseId]: draft };
     });
   }, []);
 
   const [picking, setPicking] = useState(false);
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
+  const scrollAnimated = useScrollAnimated();
+
+  /**
+   * A altura de cada card, para rolar ate o proximo exercicio quando um acaba.
+   *
+   * Altura, e nao posicao: `onLayout` de um filho da `ReorderableList` mede
+   * contra a propria linha, entao `y` daria sempre zero. A altura, sim, e
+   * confiavel — e a soma das anteriores (mais o `gap`) e a posicao.
+   */
+  const heights = useRef(new Map<string, number>());
+  const reportHeight = useCallback((key: string, height: number) => {
+    heights.current.set(key, height);
+  }, []);
   const listMotion = useListMotion();
   const [undo, setUndo] = useState<UndoOffer | null>(null);
 
@@ -222,11 +243,54 @@ export default function SessionScreen() {
     );
   }, [items, drafts]);
 
-  const doneCount = useMemo(
-    () =>
-      (items ?? []).filter((item) => drafts[item.exerciseId]?.done ?? item.done).length,
-    [items, drafts],
+  /**
+   * O treino contado em SERIES, com o rascunho da tela na frente do banco.
+   *
+   * Exercicios era uma unidade grossa demais para o meio do treino: marcar a
+   * terceira de quatro series nao mexia em nada no cabecalho nem no botao.
+   */
+  const counts = useMemo(() => {
+    const list = (items ?? []).map((item) => {
+      const draft = drafts[item.exerciseId];
+      if (draft) {
+        return {
+          done: draft.done,
+          rows: Array.from({ length: draft.totalSets }, (_, index) => ({
+            done: index < draft.doneSets,
+          })),
+        };
+      }
+      return { done: item.done, rows: item.rows };
+    });
+    return countSets(list);
+  }, [items, drafts]);
+
+  const orderKeys = useMemo(() => (items ?? []).map(exerciseKey), [items]);
+
+  /**
+   * Rola ate o exercicio seguinte ao que acabou.
+   *
+   * A posicao sai da soma das alturas anteriores (`heights`) mais o `gap` da
+   * lista: `onLayout` de um filho da `ReorderableList` mede contra a propria
+   * linha, entao `y` viria sempre zero.
+   */
+  const scrollToExercise = useCallback(
+    (finishedKey: string) => {
+      const index = orderKeys.indexOf(finishedKey) + 1;
+      if (index <= 0 || index >= orderKeys.length) return;
+      const y = orderKeys
+        .slice(0, index)
+        .reduce((sum, key) => sum + (heights.current.get(key) ?? 0) + spacing.lg, 0);
+      scrollRef.current?.scrollTo({ y, animated: scrollAnimated });
+    },
+    [orderKeys, scrollRef, scrollAnimated],
   );
+
+  /** O exercicio da vez: o primeiro que ainda nao acabou. E ele que nasce aberto. */
+  const currentKey = useMemo(() => {
+    const current = (items ?? []).find((item) => !(drafts[item.exerciseId]?.done ?? item.done));
+    return current ? exerciseKey(current) : null;
+  }, [items, drafts]);
 
   // Sair da tela e o melhor momento para tentar subir: o treino acabou de ser
   // registrado e normalmente o usuario ja saiu da area morta da academia. Se
@@ -260,7 +324,7 @@ export default function SessionScreen() {
 
   // "toda segunda" / "todo sábado" — o alcance de tudo que mexe no plano.
   const everyDay = everyWeekday(weekdayOf(date));
-  const pending = exercises.length - doneCount;
+  const pending = counts.total - counts.done;
 
   /**
    * Adicionar pergunta o alcance: "So hoje" ou "Toda segunda".
@@ -326,7 +390,7 @@ export default function SessionScreen() {
                   label={
                     finishing
                       ? 'Finalizando…'
-                      : `Finalizar treino · ${doneCount} de ${exercises.length}`
+                      : `Finalizar treino · ${counts.done} de ${counts.total}`
                   }
                   disabled={finishing}
                   onPress={() => (pending > 0 ? setConfirmingFinish(true) : void finish())}
@@ -355,7 +419,7 @@ export default function SessionScreen() {
         <View style={styles.summaryMeta}>
           <Label>Volume levantado</Label>
           <Meta>
-            {`${weekdayName(weekdayOf(date))} · ${shortDate(date)} · ${doneCount} de ${exercises.length} concluídos`}
+            {`${weekdayName(weekdayOf(date))} · ${shortDate(date)} · ${counts.done} de ${counts.total} séries`}
           </Meta>
         </View>
       </View>
@@ -390,6 +454,9 @@ export default function SessionScreen() {
                 onStructuralChange={reload}
                 onSkip={skipToday}
                 registerSettle={registerSettle}
+                isCurrent={exerciseKey(item) === currentKey}
+                onMeasure={reportHeight}
+                onFinished={scrollToExercise}
               />
             )}
           />
@@ -450,7 +517,7 @@ export default function SessionScreen() {
 
       <ConfirmModal
         visible={confirmingFinish}
-        title={`Finalizar com ${pending} ${pending === 1 ? 'exercício pendente' : 'exercícios pendentes'}?`}
+        title={`Finalizar com ${pending} ${pending === 1 ? 'série pendente' : 'séries pendentes'}?`}
         message="O que não foi marcado não entra no volume de hoje."
         cancelLabel="Voltar ao treino"
         confirmLabel="Finalizar"
@@ -503,10 +570,26 @@ function draftVolume(
   rows: readonly SetDraft[],
   targets: Targets,
 ): number {
-  if (!done) return 0;
-  if (kind === 'run') return targets.reps * targets.weightKg;
-  return summarizeSets(rows).volume;
+  // Corrida nao se fatia: o `done` dela e do exercicio inteiro.
+  if (kind === 'run') return done ? targets.reps * targets.weightKg : 0;
+  // Serie a serie: metade do exercicio marcada e o estado normal no meio do
+  // treino, e o numero do topo tem que acompanhar cada caixa.
+  return rows.reduce((sum, row) => sum + (row.done ? row.reps * row.weightKg : 0), 0);
 }
+
+/**
+ * O que um card esta mostrando AGORA, para o topo e o rodape da tela somarem
+ * sem consultar o banco.
+ *
+ * `doneSets`/`totalSets` existem porque o cabecalho conta series: o card e o
+ * unico que sabe quantas linhas tem na tela antes da escrita cair.
+ */
+type ExerciseDraft = {
+  done: boolean;
+  volume: number;
+  doneSets: number;
+  totalSets: number;
+};
 
 /**
  * Escrita adiada, coalescida e que nunca desiste.
@@ -672,7 +755,7 @@ type CardProps = {
   item: SessionExercise;
   sessionId: string;
   /** Avisa a tela do estado otimista deste card — ver `drafts` em `SessionScreen`. */
-  onDraft: (exerciseId: string, done: boolean, volume: number) => void;
+  onDraft: (exerciseId: string, draft: ExerciseDraft) => void;
   /** Para quando a LISTA muda (exercicio removido), nao os numeros dele. */
   onStructuralChange: () => void;
   /** "toda segunda" — para o menu dizer de qual dia o exercicio sai. */
@@ -681,6 +764,17 @@ type CardProps = {
   onSkip: (sessionId: string, item: SessionExercise) => void;
   /** Entrega a tela um jeito de esperar as escritas pendentes deste card. */
   registerSettle: (key: string, settle: (() => Promise<void>) | null) => void;
+  /**
+   * Este e o exercicio da vez (o primeiro que ainda nao acabou): nasce aberto.
+   *
+   * Com cinco exercicios fechados, o treino inteiro ficava atras de cinco
+   * toques — e quem esta entre series nao devia precisar de nenhum.
+   */
+  isCurrent: boolean;
+  /** A altura do card, para a tela saber onde o proximo comeca. */
+  onMeasure: (key: string, height: number) => void;
+  /** A ultima serie acabou de ser marcada: a tela rola ate o proximo. */
+  onFinished: (key: string) => void;
 };
 
 const ExerciseCard = memo(
@@ -700,6 +794,9 @@ const ExerciseCard = memo(
     prev.onStructuralChange === next.onStructuralChange &&
     prev.onSkip === next.onSkip &&
     prev.registerSettle === next.registerSettle &&
+    prev.isCurrent === next.isCurrent &&
+    prev.onMeasure === next.onMeasure &&
+    prev.onFinished === next.onFinished &&
     sameSessionExercise(prev.item, next.item),
 );
 
@@ -748,8 +845,18 @@ function ExerciseMenu({
   onSkip,
   onStructuralChange,
   beforeLeave,
+  extraActions = [],
 }: Pick<CardProps, 'item' | 'sessionId' | 'everyDay' | 'onSkip' | 'onStructuralChange'> & {
   beforeLeave: () => void;
+  /**
+   * Acoes do card que nao existem para todo tipo de exercicio — hoje, remover
+   * uma serie da musculacao.
+   *
+   * Moram aqui, e nao numa lixeira na linha da serie: a linha fica na faixa do
+   * polegar e ao lado da caixa de marcar, que e exatamente onde a rodada
+   * passada tirou o que apaga sem perguntar.
+   */
+  extraActions?: readonly SheetAction[];
 }) {
   const [open, setOpen] = useState(false);
 
@@ -769,6 +876,7 @@ function ExerciseMenu({
         title={item.exerciseName}
         onClose={() => setOpen(false)}
         actions={[
+          ...extraActions,
           {
             label: 'Pular hoje',
             detail: 'só neste treino, o plano não muda',
@@ -828,7 +936,14 @@ function RunExerciseCard(props: CardProps) {
   // A tela soma o volume e conta os concluidos a partir daqui, nao do banco —
   // e o que faz o numero do topo responder no mesmo quadro do toque.
   useEffect(() => {
-    onDraft(item.exerciseId, done, draftVolume(item.exerciseKind, done, item.rows, targets));
+    onDraft(item.exerciseId, {
+      done,
+      volume: draftVolume(item.exerciseKind, done, item.rows, targets),
+      // Corrida e uma "serie" so para o contador do cabecalho: ela nao se
+      // fatia, e contar zero a faria desaparecer do total.
+      doneSets: done ? 1 : 0,
+      totalSets: 1,
+    });
   }, [onDraft, item.exerciseId, item.exerciseKind, item.rows, done, targets]);
 
   /**
@@ -937,21 +1052,46 @@ function RunExerciseCard(props: CardProps) {
  * de apagar e reinserir N linhas a cada toque num peso so.
  */
 function StrengthExerciseCard(props: CardProps) {
-  const { item, sessionId, onDraft } = props;
+  const { item, sessionId, onDraft, isCurrent, onMeasure, onFinished } = props;
   const [rows, setRows] = useState<SetDraft[]>(item.rows);
-  const [done, setDone] = useState(item.done);
-  const [expanded, setExpanded] = useState(false);
+  // Derivado, nao estado: o exercicio esta feito quando toda serie esta. Dois
+  // estados para a mesma verdade e como ela divergia antes.
+  const done = allDone(rows);
+  const next = nextSetIndex(rows);
+  const [expanded, setExpanded] = useState(isCurrent);
+
+  /**
+   * O card da vez abre sozinho, e o que acabou fecha: durante o treino a tela
+   * mostra um exercicio aberto por vez, o que esta acontecendo agora.
+   *
+   * Derivado no render, e nao num efeito: `setState` dentro de efeito custa um
+   * render em cascata (e o ESLint do projeto o proibe). O padrao do "valor
+   * anterior em estado" e o mesmo que `UndoToast` e `history.tsx` ja usam.
+   */
+  const [wasCurrent, setWasCurrent] = useState(isCurrent);
+  if (isCurrent !== wasCurrent) {
+    setWasCurrent(isCurrent);
+    if (isCurrent) setExpanded(true);
+    else if (done) setExpanded(false);
+  }
 
   const rowTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
-  const pendingPatches = useRef(new Map<string, Partial<Pick<SetDraft, 'reps' | 'weightKg'>>>());
+  const pendingPatches = useRef(
+    new Map<string, Partial<Pick<SetDraft, 'reps' | 'weightKg' | 'done'>>>(),
+  );
 
   // A tela soma o volume e conta os concluidos a partir daqui, nao do banco —
   // e o que faz o numero do topo responder no mesmo quadro do toque.
   useEffect(() => {
-    onDraft(item.exerciseId, done, draftVolume(item.exerciseKind, done, rows, item.targets));
+    onDraft(item.exerciseId, {
+      done,
+      volume: draftVolume(item.exerciseKind, done, rows, item.targets),
+      doneSets: rows.filter((row) => row.done).length,
+      totalSets: rows.length,
+    });
   }, [onDraft, item.exerciseId, item.exerciseKind, item.targets, done, rows]);
 
-  const commitRowNow = (id: string, patch: Partial<Pick<SetDraft, 'reps' | 'weightKg'>>) =>
+  const commitRowNow = (id: string, patch: Partial<Pick<SetDraft, 'reps' | 'weightKg' | 'done'>>) =>
     updateSet(id, patch)
       .then(bumpData)
       .catch((error) => console.warn('[Voluma] falha ao gravar série', item.exerciseName, error));
@@ -964,7 +1104,10 @@ function StrengthExerciseCard(props: CardProps) {
   // Debounce por serie, mesmo numero (`COMMIT_DELAY`) e mesma razao do
   // `TargetsEditor`: curto o bastante para nao se perder ao sair da tela,
   // longo o bastante para tres toques seguidos virarem uma escrita so.
-  const scheduleRowCommit = (id: string, patch: Partial<Pick<SetDraft, 'reps' | 'weightKg'>>) => {
+  const scheduleRowCommit = (
+    id: string,
+    patch: Partial<Pick<SetDraft, 'reps' | 'weightKg' | 'done'>>,
+  ) => {
     const existingTimer = rowTimers.current.get(id);
     if (existingTimer) clearTimeout(existingTimer);
 
@@ -1010,14 +1153,13 @@ function StrengthExerciseCard(props: CardProps) {
    * na fila nesse meio tempo — senao sobrescreveria uma edicao mais recente do
    * usuario com o retorno de uma escrita ja velha.
    */
-  const { schedule, discard, settle } = useWriteBehind<{ rows: SetDraft[]; done: boolean }>(
+  const { schedule, discard, settle } = useWriteBehind<{ rows: SetDraft[] }>(
     useCallback(
       (value) =>
         setSessionExerciseSets(
           sessionId,
           item.exerciseId,
-          value.rows.map((row) => ({ reps: row.reps, weightKg: row.weightKg })),
-          value.done,
+          value.rows.map((row) => ({ reps: row.reps, weightKg: row.weightKg, done: row.done })),
         )
           .then((inserted) => {
             setRows((current) =>
@@ -1061,11 +1203,42 @@ function StrengthExerciseCard(props: CardProps) {
     };
   }, [registerSettle, item.exerciseId]);
 
-  const toggle = () => {
+  /**
+   * Marcar UMA serie.
+   *
+   * Dois caminhos de escrita, pela mesma razao de sempre (`useWriteBehind`
+   * existe porque duas transacoes proximas colidiam):
+   *
+   * - A serie ja existe no banco (`id`): `updateSet` naquela linha, na hora.
+   *   Marcar e confirmacao, e debounce aqui faria o usuario esperar para ver o
+   *   volume mudar.
+   * - A serie e sintetica (`id: null`, exercicio nunca tocado nesta sessao):
+   *   a escrita adiada materializa o exercicio inteiro e devolve os ids.
+   */
+  const toggleSet = (index: number) => {
+    const row = rows[index];
+    if (!row) return;
     confirm();
-    const nextDone = !done;
-    setDone(nextDone);
-    schedule({ rows, done: nextDone });
+
+    const nextRows = rows.map((current, position) =>
+      position === index ? { ...current, done: !current.done } : current,
+    );
+    setRows(nextRows);
+
+    if (row.id) {
+      const timer = rowTimers.current.get(row.id);
+      if (timer) clearTimeout(timer);
+      rowTimers.current.delete(row.id);
+      const merged = { ...pendingPatches.current.get(row.id), done: !row.done };
+      pendingPatches.current.delete(row.id);
+      void commitRowNow(row.id, merged);
+    } else {
+      schedule({ rows: nextRows });
+    }
+
+    // A ultima serie: a tela rola ate o proximo exercicio. O card fecha pelo
+    // efeito de `isCurrent`, quando a tela recalcula quem e a vez.
+    if (allDone(nextRows)) onFinished(item.exerciseId);
   };
 
   // O chevron gira em vez de trocar de icone: diz que o cabecalho abre, e para
@@ -1079,20 +1252,24 @@ function StrengthExerciseCard(props: CardProps) {
   const updateRow = (index: number, patch: Partial<Pick<SetDraft, 'reps' | 'weightKg'>>) => {
     const row = rows[index];
     setRows((current) => current.map((r, i) => (i === index ? { ...r, ...patch } : r)));
-    // Mesma regra do stepper no card antigo: so grava ao vivo se o exercicio
-    // ja esta concluido. Desmarcado, o ajuste fica so no rascunho ate a caixa
-    // marcar — e o toggle leva `rows` junto, entao nada se perde.
-    if (done && row?.id) scheduleRowCommit(row.id, patch);
+    // Linha que existe no banco grava o ajuste, marcada ou nao: ela e a serie
+    // que o usuario vai fazer, e o numero dela e dado, nao rascunho. A
+    // sintetica espera a primeira marcacao, que materializa o exercicio e leva
+    // `rows` junto — nada se perde.
+    if (row?.id) scheduleRowCommit(row.id, patch);
   };
 
   const addRow = () => {
     const last = rows[rows.length - 1];
+    // O exercicio ja tem linha no banco: a serie nova nasce la tambem, nao
+    // marcada. Sem nenhuma linha gravada, ela fica no rascunho ate a primeira
+    // marcacao materializar o exercicio inteiro.
+    const materialized = rows.some((row) => row.id);
 
-    if (done) {
-      confirm();
-      addSet(sessionId, item.exerciseId, true)
+    if (materialized) {
+      addSet(sessionId, item.exerciseId, false)
         .then((created) => {
-          setRows((current) => [...current, created]);
+          setRows((current) => [...current, { ...created, done: false }]);
           bumpData();
         })
         .catch((error) =>
@@ -1101,7 +1278,13 @@ function StrengthExerciseCard(props: CardProps) {
     } else {
       setRows((current) => [
         ...current,
-        { id: null, setIndex: current.length + 1, reps: last?.reps ?? 10, weightKg: last?.weightKg ?? 0 },
+        {
+          id: null,
+          setIndex: current.length + 1,
+          reps: last?.reps ?? 10,
+          weightKg: last?.weightKg ?? 0,
+          done: false,
+        },
       ]);
     }
   };
@@ -1117,7 +1300,7 @@ function StrengthExerciseCard(props: CardProps) {
       pendingPatches.current.delete(row.id);
     }
 
-    if (done && row.id) {
+    if (row.id) {
       confirm();
       removeSet(row.id)
         .then(bumpData)
@@ -1132,10 +1315,30 @@ function StrengthExerciseCard(props: CardProps) {
   const setsMotion = useListMotion();
 
   return (
-    <Card resizes>
+    <Card resizes onLayout={(event) => onMeasure(item.exerciseId, event.nativeEvent.layout.height)}>
       <View style={[styles.itemHead, expanded && styles.itemHeadSpaced]}>
         <ExerciseMenu
           {...props}
+          extraActions={
+            rows.length > 1
+              ? [
+                  {
+                    label: 'Remover a última série',
+                    detail: `o exercício fica com ${rows.length - 1}`,
+                    // Pergunta so quando ha o que perder: serie marcada e carga
+                    // levantada, e apagar mexe no volume do dia.
+                    confirm: rows[rows.length - 1]?.done
+                      ? {
+                          title: 'Remover a última série?',
+                          message: 'Ela já está marcada, então sai do volume de hoje.',
+                          confirmLabel: 'Remover',
+                        }
+                      : undefined,
+                    onPress: () => removeRow(rows.length - 1),
+                  },
+                ]
+              : []
+          }
           beforeLeave={() => {
             discard();
             for (const timer of rowTimers.current.values()) clearTimeout(timer);
@@ -1155,15 +1358,13 @@ function StrengthExerciseCard(props: CardProps) {
           <View style={styles.itemText}>
             <Body numberOfLines={1}>{item.exerciseName}</Body>
             <Meta numberOfLines={1}>
-              {`${done ? 'concluído' : SOURCE_LABEL[item.source]} · ${strengthSummary(rows)}`}
+              {`${setsLabel(rows, done, item.source)} · ${strengthSummary(rows)}`}
             </Meta>
           </View>
           <Animated.View style={chevronStyle}>
             <ChevronRightIcon size={16} color={colors.textSecondary} />
           </Animated.View>
         </Pressable>
-
-        <CheckCell checked={done} onPress={toggle} />
       </View>
 
       {expanded ? (
@@ -1174,9 +1375,11 @@ function StrengthExerciseCard(props: CardProps) {
               index={index + 1}
               reps={row.reps}
               weightKg={row.weightKg}
+              done={row.done}
+              isNext={index === next}
+              onToggle={() => toggleSet(index)}
               onChangeReps={(reps) => updateRow(index, { reps })}
               onChangeWeight={(weightKg) => updateRow(index, { weightKg })}
-              onRemove={rows.length > 1 ? () => removeRow(index) : undefined}
             />
           ))}
 
@@ -1188,6 +1391,21 @@ function StrengthExerciseCard(props: CardProps) {
       ) : null}
     </Card>
   );
+}
+
+/**
+ * O que a linha de baixo do card diz antes do resumo das series.
+ *
+ * Fechado, o card precisa dizer em que pe o exercicio esta sem abrir: "2 de 4
+ * séries" e a informacao que o usuario busca de relance. So quando nada foi
+ * marcado ainda a origem do numero (`SOURCE_LABEL`) importa — ali o que esta na
+ * tela e previsao, nao registro.
+ */
+function setsLabel(rows: readonly SetDraft[], done: boolean, source: ItemSource): string {
+  if (done) return 'concluído';
+  const doneSets = rows.filter((row) => row.done).length;
+  if (doneSets === 0) return SOURCE_LABEL[source];
+  return `${doneSets} de ${rows.length} séries`;
 }
 
 /** "5 km · 28 min" — o que a corrida do dia vale. */
@@ -1323,9 +1541,8 @@ function groupSetsByExercise(sets: readonly SessionSet[]): Map<string, SessionSe
  * Os numeros ja gravados, um por exercicio, marcados ou nao.
  *
  * Olha tambem as linhas com `done = 0`, ao contrario do resto do app: elas sao
- * exatamente o exercicio que o usuario ajustou mas ainda nao marcou como feito,
- * e a tela precisa mostrar o numero dele. Quem filtra por `done` e o volume,
- * nao esta leitura.
+ * exatamente as series que faltam fazer, e a tela precisa mostrar o numero
+ * delas. Quem filtra por `done` e o volume, nao esta leitura.
  *
  * A derivacao dos numeros reusa as duas regras do resto do app: corrida soma as
  * linhas, carga pega a ultima serie e conta quantas foram. As duas exigem
@@ -1351,7 +1568,12 @@ function recordedByExercise(
               weightKg: set.weightKg,
             })),
           );
-    if (targets) result.set(exerciseId, { targets, done: bucket.some((set) => set.done) });
+    // Concluido = TODA serie marcada. Era `some`, de quando a caixa era do
+    // exercicio inteiro e as linhas nasciam todas com o mesmo `done`; com
+    // marcacao por serie, `some` diria "concluido" com uma de quatro feitas.
+    if (targets) {
+      result.set(exerciseId, { targets, done: bucket.every((set) => set.done) });
+    }
   }
   return result;
 }
@@ -1378,7 +1600,15 @@ function rowsForExercise(
   if (bucket && bucket.length > 0) {
     return [...bucket]
       .sort((a, b) => a.setIndex - b.setIndex)
-      .map((set) => ({ id: set.id, setIndex: set.setIndex, reps: set.reps, weightKg: set.weightKg }));
+      .map((set) => ({
+        id: set.id,
+        setIndex: set.setIndex,
+        reps: set.reps,
+        weightKg: set.weightKg,
+        // O banco sempre guardou `done` por linha; era a leitura que o
+        // colapsava num unico estado por exercicio.
+        done: set.done,
+      }));
   }
 
   return Array.from({ length: Math.max(0, Math.floor(targets.sets)) }, (_, index) => ({
@@ -1386,6 +1616,7 @@ function rowsForExercise(
     setIndex: index + 1,
     reps: targets.reps,
     weightKg: targets.weightKg,
+    done: false,
   }));
 }
 

@@ -1,4 +1,4 @@
-import { summarizeSets } from '../sets';
+import { allDone, countSets, nextSetIndex, summarizeSets } from '../sets';
 
 describe('summarizeSets', () => {
   it('series uniformes viram um numero so', () => {
@@ -48,5 +48,60 @@ describe('summarizeSets', () => {
       { reps: 10, weightKg: 65 },
     ]);
     expect(summary.weightRange).toEqual([60, 70]);
+  });
+});
+
+describe('nextSetIndex', () => {
+  const row = (done: boolean) => ({ done });
+
+  it('e a primeira nao marcada', () => {
+    expect(nextSetIndex([row(true), row(false), row(false)])).toBe(1);
+  });
+
+  it('volta para tras quando o usuario desmarca uma serie ja feita', () => {
+    expect(nextSetIndex([row(false), row(true), row(true)])).toBe(0);
+  });
+
+  it('e nulo com o exercicio inteiro feito', () => {
+    expect(nextSetIndex([row(true), row(true)])).toBeNull();
+  });
+
+  it('e nulo sem serie nenhuma', () => {
+    expect(nextSetIndex([])).toBeNull();
+  });
+});
+
+describe('allDone', () => {
+  it('exige todas as series', () => {
+    expect(allDone([{ done: true }, { done: false }])).toBe(false);
+    expect(allDone([{ done: true }, { done: true }])).toBe(true);
+  });
+
+  it('exercicio sem serie nenhuma nao esta concluido', () => {
+    expect(allDone([])).toBe(false);
+  });
+});
+
+describe('countSets', () => {
+  const set = (done: boolean) => ({ done });
+
+  it('conta series, nao exercicios', () => {
+    expect(
+      countSets([
+        { rows: [set(true), set(true), set(false)], done: false },
+        { rows: [set(false), set(false)], done: false },
+      ]),
+    ).toEqual({ done: 2, total: 5 });
+  });
+
+  it('corrida conta como uma serie, pelo done do exercicio', () => {
+    expect(countSets([{ rows: [], done: true }, { rows: [], done: false }])).toEqual({
+      done: 1,
+      total: 2,
+    });
+  });
+
+  it('treino vazio nao divide por zero', () => {
+    expect(countSets([])).toEqual({ done: 0, total: 0 });
   });
 });

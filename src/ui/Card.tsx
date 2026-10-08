@@ -1,5 +1,11 @@
 import type { ReactNode } from 'react';
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  type LayoutChangeEvent,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import Animated from 'react-native-reanimated';
 
 import { accentGlow, colors, radius, spacing, surfaces } from '@/theme/tokens';
@@ -20,6 +26,8 @@ type Props = {
    * enquanto ele cresce — em vez de o fundo pular para o tamanho final.
    */
   resizes?: boolean;
+  /** Para quem precisa da altura do card — a sessao rola ate o proximo por ela. */
+  onLayout?: (event: LayoutChangeEvent) => void;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -39,7 +47,14 @@ type Props = {
  * elemento de cor da tela, e o glow precisa de uma forma opaca de onde o iOS
  * tire a sombra.
  */
-export function Card({ children, onPress, accent = false, resizes = false, style }: Props) {
+export function Card({
+  children,
+  onPress,
+  accent = false,
+  resizes = false,
+  onLayout,
+  style,
+}: Props) {
   const listMotion = useListMotion();
   const surface: StyleProp<ViewStyle> = [
     styles.card,
@@ -50,6 +65,7 @@ export function Card({ children, onPress, accent = false, resizes = false, style
   const inner = !onPress ? (
     <Animated.View
       layout={resizes && 'layout' in listMotion ? listMotion.layout : undefined}
+      onLayout={onLayout}
       style={surface}
     >
       {children}
