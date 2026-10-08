@@ -406,6 +406,20 @@ export default function SessionScreen() {
             // Acima da barra de finalizar, nunca por cima dela.
             bottom={footerBottom + FOOTER_HEIGHT + spacing.md}
           />
+
+          {/* A marcacao por serie e o conceito novo do app: a dica aponta a
+              serie da vez, uma vez so, e explica o que a caixa faz. Mora no
+              `overlay` para medir nas mesmas coordenadas do alvo. */}
+          <Tour
+            id="session"
+            active={exercises.length > 0}
+            steps={[
+              {
+                target: 'session.next',
+                text: 'Marque a caixa quando terminar esta série. A próxima fica destacada.',
+              },
+            ]}
+          />
         </>
       }
     >
@@ -516,19 +530,6 @@ export default function SessionScreen() {
           onClose={() => setPendingPick(null)}
         />
       </ExercisePicker>
-
-      {/* A marcacao por serie e o conceito novo do app: a dica aponta a serie
-          da vez, uma vez so, e explica o que a caixa faz. */}
-      <Tour
-        id="session"
-        active={exercises.length > 0}
-        steps={[
-          {
-            target: 'session.next',
-            text: 'Marque a caixa quando terminar esta série. A próxima fica destacada.',
-          },
-        ]}
-      />
 
       <ConfirmModal
         visible={confirmingFinish}

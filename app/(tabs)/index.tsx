@@ -120,7 +120,24 @@ export default function HomeScreen() {
   const { today, upcoming, weekVolume, bodyWeight, dots, streak } = data;
 
   return (
-    <Screen>
+    <Screen
+      overlay={
+        /* No `overlay` do `Screen`, e nao entre os filhos: ali a camada e irma
+           do conteudo e cobre a tela inteira, nas mesmas coordenadas de janela
+           em que o alvo foi medido. Dentro do conteudo ela comecaria abaixo da
+           area segura e o recorte sairia deslocado. */
+        <Tour
+          id="home"
+          active
+          steps={[
+            {
+              target: 'home.action',
+              text: 'O treino de hoje começa aqui. O número são as séries do dia.',
+            },
+          ]}
+        />
+      }
+    >
       <Header title="Hoje" subtitle={todaySubtitle()} />
 
       {/* O `Header` fica FORA do fade: ele ja estava na tela durante o
@@ -247,19 +264,6 @@ export default function HomeScreen() {
         ) : null}
       </ScrollView>
       </Reveal>
-
-      {/* Uma frase, uma vez. A dica aponta o botao porque ele e a resposta a
-          "o que eu faco agora?" — e e o unico lugar da Hoje que age. */}
-      <Tour
-        id="home"
-        active
-        steps={[
-          {
-            target: 'home.action',
-            text: 'O treino de hoje começa aqui. O número são as séries do dia.',
-          },
-        ]}
-      />
     </Screen>
   );
 }

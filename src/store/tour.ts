@@ -25,6 +25,8 @@ type TourState = {
   targets: Record<string, Rect>;
   load: () => Promise<void>;
   markSeen: (tour: string) => void;
+  /** Esquece o que ja foi visto: as dicas voltam a aparecer uma vez cada. */
+  reset: () => void;
   register: (id: string, rect: Rect) => void;
   unregister: (id: string) => void;
 };
@@ -51,6 +53,13 @@ export const useTour = create<TourState>((set, get) => ({
     set({ seen });
     void AsyncStorage.setItem(KEY, JSON.stringify(seen)).catch((error) => {
       console.warn('[Voluma] falha ao gravar o tour', error);
+    });
+  },
+
+  reset: () => {
+    set({ seen: {} });
+    void AsyncStorage.removeItem(KEY).catch((error) => {
+      console.warn('[Voluma] falha ao limpar o tour', error);
     });
   },
 

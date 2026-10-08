@@ -1,6 +1,6 @@
 import { useIsFocused } from 'expo-router';
-import { useState } from 'react';
-import { Modal, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { BackHandler, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { spotlight, type Rect } from '@/domain/tour';
@@ -8,7 +8,6 @@ import { useTour } from '@/store/tour';
 import { colors, fonts, fontSize, radius, spacing, surfaces } from '@/theme/tokens';
 
 import { Button } from '../Button';
-import { useModalAnimation } from '../motion';
 import { Body, Label, Mono } from '../Text';
 
 export type TourStep = {
@@ -40,6 +39,17 @@ const MARK = [0.4, 0.62, 0.3, 0.78, 1] as const;
  * 3. **Identidade.** Era texto solto num retangulo. Agora tem a marca de
  *    barras, o rotulo em mono e o contorno em accent ligando a dica ao
  *    elemento aceso.
+ *
+ * **Nao e um `Modal`.** A primeira versao era, e deixava a tela preta ao
+ * fechar: desmontar um `Modal` do RN que ainda esta visivel — que e o que
+ * acontece quando o componente simplesmente para de renderizar — pode deixar a
+ * janela nativa pendurada por cima do app, no iOS e no Android. E a mesma
+ * familia do bug que travou o "So hoje" (ver `Sheet.tsx`). Como a dica nao
+ * precisa de janela propria (nao ha vidro nem teclado aqui), ela e uma camada
+ * absoluta dentro da propria tela, que monta e desmonta como qualquer View.
+ *
+ * A barra de abas fica POR CIMA da camada, de proposito: ela nao e o assunto
+ * da dica, e trocar de aba no meio continua sendo um jeito legitimo de sair.
  */
 export function Tour({
   id,
@@ -57,7 +67,6 @@ export function Tour({
 }) {
   const screen = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const animation = useModalAnimation();
   const focused = useIsFocused();
   const seen = useTour((state) => state.seen[id]);
   const ready = useTour((state) => state.ready);
@@ -77,15 +86,28 @@ export function Tour({
 
   const current = steps[step];
   const rect = current ? targets[current.target] : undefined;
+  const showing = live && ready && !seen && rect != null && current != null;
 
-  if (!live || !ready || seen || !rect || !current) return null;
+  // No Android o voltar fecha a dica, em vez de sair da tela por tras dela.
+  useEffect(() => {
+    if (!showing) return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      markSeen(id);
+      return true;
+    });
+    return () => subscription.remove();
+  }, [showing, id, markSeen]);
+
+  if (!showing || !rect || !current) return null;
 
   const { bars, hole, above } = spotlight(rect, { width: screen.width, height: screen.height });
   const last = step === steps.length - 1;
   const finish = () => markSeen(id);
 
   return (
-    <Modal visible transparent animationType={animation} onRequestClose={finish}>
+    // `pointerEvents="box-none"` no container: as faixas escuras engolem o
+    // toque (para nao se tocar no que esta escondido), e o resto passa.
+    <View style={styles.overlay} pointerEvents="box-none">
       {/* Quatro faixas, e nao uma mascara: `overflow` com buraco exigiria SVG
           ou duas camadas compostas, e isto e so posicao — a mesma conta que
           `spotlight` testa. */}
@@ -144,7 +166,7 @@ export function Tour({
           </View>
         </View>
       </View>
-    </Modal>
+    </View>
   );
 }
 
@@ -161,6 +183,20 @@ function frame(rect: Rect) {
 }
 
 const styles = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFill,
+    // Acima de tudo o que a tela desenha, inclusive do `overlay` do `Screen`
+    // (a barra de finalizar do treino).
+    zIndex: 10,
+    /*
+      `elevation` e o `zIndex` do Android, e ele nao e redundante aqui: la a
+      ordem de desenho entre irmaos e decidida pela elevacao, e o botao primario
+      da Hoje tem a sua (o glow do accent). Sem este valor acima do dele, a
+      dica ficaria ATRAS do botao que ela aponta. Nao cobre o elemento aceso —
+      o buraco das faixas continua sendo buraco.
+    */
+    elevation: 24,
+  },
   bar: {
     position: 'absolute',
     // Escurece sem apagar: a tela atras continua reconhecivel, e e isso que

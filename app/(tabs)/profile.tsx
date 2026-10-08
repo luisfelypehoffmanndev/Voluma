@@ -13,9 +13,11 @@ import { signedAvatarUrls } from '@/sync/avatar';
 import { isCloudConfigured } from '@/sync/supabase';
 import { colors, people, spacing } from '@/theme/tokens';
 import { usePrefs } from '@/store/prefs';
+import { useTour } from '@/store/tour';
 import { Avatar } from '@/ui/Avatar';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
+import { PressableSurface } from '@/ui/PressableSurface';
 import { pickAvatar } from '@/ui/profile/pickAvatar';
 import { CheckCell } from '@/ui/CheckCell';
 import { confirm, preview } from '@/ui/haptics';
@@ -82,15 +84,7 @@ export default function ProfileScreen() {
 
         <Label style={styles.sectionLabel}>APP</Label>
 
-        <Card onPress={() => router.push('/onboarding?replay=1')}>
-          <Label>Ajuda</Label>
-          <View style={styles.row}>
-            <View style={styles.rowText}>
-              <Body>Guia rápido</Body>
-            </View>
-            <ChevronRightIcon size={16} color={colors.textSecondary} />
-          </View>
-        </Card>
+        <HelpCard />
 
         <MotionCard />
 
@@ -99,6 +93,55 @@ export default function ProfileScreen() {
         <CreditsCard />
       </ScrollView>
     </Screen>
+  );
+}
+
+/**
+ * Ajuda: rever o guia e trazer as dicas de volta.
+ *
+ * As dicas aparecem uma vez por tela e ficam guardadas no aparelho — sem este
+ * botao, quem fechou nunca mais as ve, e quem instala para um amigo testar nao
+ * tem como mostrar.
+ */
+function HelpCard() {
+  const router = useRouter();
+  const [restored, setRestored] = useState(false);
+
+  return (
+    <Card>
+      <Label>Ajuda</Label>
+
+      <PressableSurface
+        feedback="solid"
+        style={styles.row}
+        onPress={() => router.push('/onboarding?replay=1')}
+      >
+        <View style={styles.rowText}>
+          <Body>Guia rápido</Body>
+          <Meta>como o Voluma funciona, em duas telas</Meta>
+        </View>
+        <ChevronRightIcon size={16} color={colors.textSecondary} />
+      </PressableSurface>
+
+      <PressableSurface
+        feedback="solid"
+        style={styles.row}
+        onPress={() => {
+          useTour.getState().reset();
+          confirm();
+          setRestored(true);
+        }}
+      >
+        <View style={styles.rowText}>
+          <Body>{restored ? 'Dicas restauradas' : 'Ver as dicas de novo'}</Body>
+          <Meta>
+            {restored
+              ? 'elas aparecem na próxima vez que você abrir cada tela'
+              : 'a dica de cada tela volta a aparecer uma vez'}
+          </Meta>
+        </View>
+      </PressableSurface>
+    </Card>
   );
 }
 
