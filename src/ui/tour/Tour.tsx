@@ -103,6 +103,15 @@ export function Tour({
   const markSeen = useTour((state) => state.markSeen);
 
   const [step, setStep] = useState(0);
+  /**
+   * De que lado do alvo o painel fica — decidido UMA vez por passo.
+   *
+   * Antes saia da medida, e a medida se repete enquanto a dica esta aberta:
+   * alvo alto (a semana inteira do Plano) tem o centro perto do meio da tela,
+   * entao bastava um pixel de diferenca para o painel saltar de cima para
+   * baixo e voltar. O usuario ve isso como a dica tremendo.
+   */
+  const [side, setSide] = useState<'above' | 'below' | null>(null);
   // Sair de foco no meio do tour volta ao primeiro passo. Derivado no render,
   // e nao num efeito: `setState` em efeito custa render em cascata e o ESLint
   // do projeto o proibe — o mesmo padrao de `UndoToast` e do card de forca.
@@ -110,7 +119,10 @@ export function Tour({
   const live = active && focused;
   if (live !== wasActive) {
     setWasActive(live);
-    if (!live) setStep(0);
+    if (!live) {
+      setStep(0);
+      setSide(null);
+    }
   }
 
   const current = steps[step];
@@ -124,6 +136,13 @@ export function Tour({
     setMeasuring(current.target);
     return () => setMeasuring(null);
   }, [showing, current, setMeasuring]);
+
+  // Passo novo, alvo novo: o lado volta a ser decidido pela proxima medida.
+  const [measuredStep, setMeasuredStep] = useState(step);
+  if (step !== measuredStep) {
+    setMeasuredStep(step);
+    setSide(null);
+  }
 
   // No Android o voltar fecha a dica, em vez de sair da tela por tras dela.
   useEffect(() => {
@@ -146,6 +165,9 @@ export function Tour({
     width: frameBox.width,
     height: frameBox.height,
   });
+
+  // A primeira medida decide o lado, e ele nao muda mais ate o passo trocar.
+  if (measured && side === null) setSide(above ? 'above' : 'below');
   const last = step === steps.length - 1;
   const finish = () => markSeen(id);
 
@@ -201,7 +223,9 @@ export function Tour({
           {
             paddingTop: insets.top + spacing.xl,
             paddingBottom: clearance,
-            justifyContent: above ? 'flex-start' : 'flex-end',
+            justifyContent: (side ?? (above ? 'above' : 'below')) === 'above'
+              ? 'flex-start'
+              : 'flex-end',
           },
         ]}
         pointerEvents="box-none"

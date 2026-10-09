@@ -80,15 +80,19 @@ export const useTour = create<TourState>((set, get) => ({
 
   register: (id, rect) => {
     const current = get().targets[id];
-    if (
+    /*
+      Diferenca menor que um ponto nao mexe nada na tela, mas trocava o estado
+      e redesenhava o recorte — com a medida repetindo a cada 250ms, isso virava
+      tremor. `measureInWindow` devolve fracao (490,3333...), entao comparar por
+      igualdade exata nunca filtrava nada.
+    */
+    const same =
       current &&
-      current.x === rect.x &&
-      current.y === rect.y &&
-      current.width === rect.width &&
-      current.height === rect.height
-    ) {
-      return;
-    }
+      Math.abs(current.x - rect.x) < 1 &&
+      Math.abs(current.y - rect.y) < 1 &&
+      Math.abs(current.width - rect.width) < 1 &&
+      Math.abs(current.height - rect.height) < 1;
+    if (same) return;
     set({ targets: { ...get().targets, [id]: rect } });
   },
 
