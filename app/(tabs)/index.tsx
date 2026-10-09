@@ -132,7 +132,9 @@ export default function HomeScreen() {
           steps={[
             {
               target: 'home.action',
-              text: 'O treino de hoje começa aqui. O número são as séries do dia.',
+              // Uma frase que vale em todo estado do dia: em dia de descanso
+              // nao ha numero nenhum no botao, e falar dele seria mentira.
+              text: 'O treino de hoje começa aqui.',
             },
           ]}
         />

@@ -23,8 +23,17 @@ type TourState = {
   /** Falso ate o disco responder: sem isso a dica pisca antes de sabermos. */
   ready: boolean;
   targets: Record<string, Rect>;
+  /**
+   * O alvo que a dica esta apontando AGORA, ou `null`.
+   *
+   * E o sinal para o `TourTarget` daquele id se remedir enquanto a dica esta
+   * aberta: a posicao muda quando a lista rola, quando um card abre, quando o
+   * teclado entra — e uma medida tirada no primeiro layout fica velha.
+   */
+  measuring: string | null;
   load: () => Promise<void>;
   markSeen: (tour: string) => void;
+  setMeasuring: (target: string | null) => void;
   /** Esquece o que ja foi visto: as dicas voltam a aparecer uma vez cada. */
   reset: () => void;
   register: (id: string, rect: Rect) => void;
@@ -35,6 +44,7 @@ export const useTour = create<TourState>((set, get) => ({
   seen: {},
   ready: false,
   targets: {},
+  measuring: null,
 
   load: async () => {
     try {
@@ -61,6 +71,11 @@ export const useTour = create<TourState>((set, get) => ({
     void AsyncStorage.removeItem(KEY).catch((error) => {
       console.warn('[Voluma] falha ao limpar o tour', error);
     });
+  },
+
+  setMeasuring: (target) => {
+    if (get().measuring === target) return;
+    set({ measuring: target });
   },
 
   register: (id, rect) => {

@@ -17,8 +17,14 @@ type Props = {
   /**
    * Esta e a serie da vez: a primeira nao marcada do exercicio.
    *
-   * Ganha o contorno accent e os controles de ajuste. E o unico elemento com
-   * accent da sessao fora das caixas marcadas — ver Design/design.md §2.
+   * Ganha contorno claro e os controles de ajuste — **sem accent**. O §2 do
+   * brief e explicito: numa tela que tem caixas de concluido, nenhum outro
+   * elemento pode usar accent. E a regra tem razao tecnica aqui: nesta tela o
+   * laranja ja quer dizer "feito"; usa-lo tambem para "faca agora" deixaria a
+   * mesma cor com dois sentidos na mesma lista.
+   *
+   * O destaque vem de luz, nao de cor: superficie um degrau acima, borda forte
+   * e o rotulo em branco contra o cinza das outras series.
    */
   isNext: boolean;
   /** O que foi feito nesta serie no ultimo treino deste exercicio. */
@@ -133,8 +139,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'transparent',
   },
+  /**
+   * A serie da vez: um degrau de luz acima das outras, nunca uma cor nova.
+   * Mesma caixa e mesmo raio — so preenchimento e borda mudam, como no §6.
+   */
   next: {
-    borderColor: colors.accent,
+    backgroundColor: surfaces.control,
+    borderColor: colors.borderStrong,
   },
   line: {
     flexDirection: 'row',
@@ -149,7 +160,7 @@ const styles = StyleSheet.create({
     width: 62,
   },
   indexNext: {
-    color: colors.accent,
+    color: colors.textPrimary,
   },
   values: {
     flex: 1,
