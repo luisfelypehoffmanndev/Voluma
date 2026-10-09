@@ -1,12 +1,13 @@
 import { useIsFocused } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { BackHandler, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { BackHandler, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { spotlight, type Rect } from '@/domain/tour';
 import { useTour } from '@/store/tour';
 import { colors, fonts, fontSize, radius, spacing, surfaces } from '@/theme/tokens';
 
+import { useTabBarClearance } from '../tabBar';
 import { Button } from '../Button';
 import { Body, Label, Mono } from '../Text';
 
@@ -17,8 +18,16 @@ export type TourStep = {
   text: string;
 };
 
-/** As barras do icone, em miniatura: a dica e do Voluma, nao de um balao genérico. */
+/** As barras do icone, em miniatura: a dica e do Voluma, nao de um balao generico. */
 const MARK = [0.4, 0.62, 0.3, 0.78, 1] as const;
+
+/**
+ * Altura ate a qual o recorte e lido como pilula.
+ *
+ * Acima disso o alvo e um bloco (um card, a semana inteira) e o raio e o de
+ * card. O numero e a altura do botao do app mais o respiro do recorte.
+ */
+const PILL_MAX_HEIGHT = 80;
 
 /**
  * A dica da primeira visita: escurece a tela, deixa UM elemento aceso e diz
@@ -37,8 +46,12 @@ const MARK = [0.4, 0.62, 0.3, 0.78, 1] as const;
  *    Plano) nao deixa espaco, e o texto saia cortado no topo da tela. Agora ele
  *    mora na METADE OPOSTA a do alvo, dentro da area segura — sempre inteiro.
  * 3. **Identidade.** Era texto solto num retangulo. Agora tem a marca de
- *    barras, o rotulo em mono e o contorno em accent ligando a dica ao
- *    elemento aceso.
+ *    barras, o rotulo em mono e o contorno ligando a dica ao elemento aceso.
+ *
+ * **Sem accent nenhum.** A dica aparece POR CIMA de uma tela que ja gastou o
+ * seu unico destaque (§2) — na Hoje, o proprio botao; no treino, as caixas de
+ * concluido. Pintar o contorno de laranja acrescentaria um segundo. O recorte
+ * destaca por luz: o resto da tela escurece e o elemento continua aceso.
  *
  * **Nao e um `Modal`.** A primeira versao era, e deixava a tela preta ao
  * fechar: desmontar um `Modal` do RN que ainda esta visivel — que e o que
@@ -65,9 +78,25 @@ export function Tour({
    */
   active: boolean;
 }) {
-  const screen = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  // A barra de abas flutua por cima da tela, e o painel nao pode nascer debaixo
+  // dela: era a barra cobrindo o "Entendi". A mesma folga que todo conteudo
+  // rolavel do app ja usa.
+  const clearance = useTabBarClearance();
   const focused = useIsFocused();
+  const setMeasuring = useTour((state) => state.setMeasuring);
+
+  /**
+   * Onde esta camada comeca, e que tamanho ela tem — medido, nao assumido.
+   *
+   * O alvo e medido em coordenadas de JANELA (`measureInWindow`), e a camada
+   * desenha em coordenadas DELA. Assumir que as duas coincidem foi o que pos o
+   * enquadramento fora do lugar no aparelho: basta a camada comecar abaixo da
+   * barra de status para tudo escorregar junto. Subtraindo a origem medida, a
+   * conta passa a valer em qualquer aparelho e nas duas plataformas.
+   */
+  const overlayRef = useRef<View>(null);
+  const [frameBox, setFrameBox] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const seen = useTour((state) => state.seen[id]);
   const ready = useTour((state) => state.ready);
   const targets = useTour((state) => state.targets);
@@ -88,6 +117,14 @@ export function Tour({
   const rect = current ? targets[current.target] : undefined;
   const showing = live && ready && !seen && rect != null && current != null;
 
+  // Avisa o `TourTarget` para se remedir enquanto a dica esta aberta — a
+  // posicao muda com a rolagem, e layout nao e evento de rolagem.
+  useEffect(() => {
+    if (!showing || !current) return;
+    setMeasuring(current.target);
+    return () => setMeasuring(null);
+  }, [showing, current, setMeasuring]);
+
   // No Android o voltar fecha a dica, em vez de sair da tela por tras dela.
   useEffect(() => {
     if (!showing) return;
@@ -100,14 +137,42 @@ export function Tour({
 
   if (!showing || !rect || !current) return null;
 
-  const { bars, hole, above } = spotlight(rect, { width: screen.width, height: screen.height });
+  // Do sistema da janela para o desta camada.
+  const local = { ...rect, x: rect.x - frameBox.x, y: rect.y - frameBox.y };
+  // Antes da primeira medida nao ha onde desenhar: a camada monta vazia por um
+  // quadro, em vez de piscar um recorte no lugar errado.
+  const measured = frameBox.width > 0 && frameBox.height > 0;
+  const { bars, hole, above } = spotlight(local, {
+    width: frameBox.width,
+    height: frameBox.height,
+  });
   const last = step === steps.length - 1;
   const finish = () => markSeen(id);
 
   return (
     // `pointerEvents="box-none"` no container: as faixas escuras engolem o
     // toque (para nao se tocar no que esta escondido), e o resto passa.
-    <View style={styles.overlay} pointerEvents="box-none">
+    <View
+      ref={overlayRef}
+      collapsable={false}
+      style={styles.overlay}
+      pointerEvents="box-none"
+      onLayout={(event) => {
+        const { width, height } = event.nativeEvent.layout;
+        overlayRef.current?.measureInWindow((x, y) => {
+          setFrameBox((previous) =>
+            previous.x === x &&
+            previous.y === y &&
+            previous.width === width &&
+            previous.height === height
+              ? previous
+              : { x, y, width, height },
+          );
+        });
+      }}
+    >
+      {measured ? (
+      <>
       {/* Quatro faixas, e nao uma mascara: `overflow` com buraco exigiria SVG
           ou duas camadas compostas, e isto e so posicao — a mesma conta que
           `spotlight` testa. */}
@@ -116,7 +181,17 @@ export function Tour({
       <View style={[styles.bar, frame(bars.left)]} />
       <View style={[styles.bar, frame(bars.right)]} />
 
-      <View style={[styles.ring, frame(hole)]} pointerEvents="none" />
+      {/* O raio acompanha a forma do que esta sendo apontado: pilula no botao,
+          raio de card no bloco. Contorno quadrado em volta de um botao redondo
+          seria raio inconsistente entre elementos do mesmo nivel (§11). */}
+      <View
+        style={[
+          styles.ring,
+          frame(hole),
+          { borderRadius: hole.height <= PILL_MAX_HEIGHT ? radius.pill : radius.card },
+        ]}
+        pointerEvents="none"
+      />
 
       {/* O painel vai na metade OPOSTA a do alvo, dentro da area segura: assim
           ele nunca depende da altura do elemento apontado para caber. */}
@@ -125,7 +200,7 @@ export function Tour({
           styles.wrap,
           {
             paddingTop: insets.top + spacing.xl,
-            paddingBottom: insets.bottom + spacing.xxl,
+            paddingBottom: clearance,
             justifyContent: above ? 'flex-start' : 'flex-end',
           },
         ]}
@@ -166,6 +241,8 @@ export function Tour({
           </View>
         </View>
       </View>
+      </>
+      ) : null}
     </View>
   );
 }
@@ -203,18 +280,11 @@ const styles = StyleSheet.create({
     // liga a dica ao lugar dela.
     backgroundColor: 'rgba(10,10,10,0.86)',
   },
-  /**
-   * O contorno do elemento aceso, em accent.
-   *
-   * E o unico accent da dica, e ele aponta o mesmo elemento que o usuario vai
-   * tocar — na Hoje, o proprio botao laranja. Nao sao dois destaques
-   * competindo (§2): sao o mesmo.
-   */
+  /** O contorno do elemento aceso: branco, pelo §2 — ver a nota no topo. */
   ring: {
     position: 'absolute',
-    borderRadius: radius.inner,
     borderWidth: 1.5,
-    borderColor: colors.accent,
+    borderColor: colors.textPrimary,
   },
   wrap: {
     ...StyleSheet.absoluteFill,
@@ -236,7 +306,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
-  /** A marca em miniatura: as barras da semana, com hoje em accent. */
+  /** A marca em miniatura: as sete barras da semana, aqui em cinco. */
   mark: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -248,8 +318,13 @@ const styles = StyleSheet.create({
     borderRadius: 1,
     backgroundColor: colors.textSecondary,
   },
+  /**
+   * A ultima barra e a de hoje no icone, e la ela e laranja. Aqui ela e branca:
+   * a dica nao pode acrescentar accent a uma tela que ja tem o seu (§2). A
+   * forma — cinco barras de alturas desiguais — ja basta para a marca.
+   */
   markBarLast: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.textPrimary,
   },
   counter: {
     marginLeft: 'auto',

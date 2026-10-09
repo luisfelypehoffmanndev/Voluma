@@ -56,7 +56,11 @@ Duas famílias, papéis bem definidos — não uma pilha de 4 fontes "pra variar
 - **Display / números grandes (hora, peso, séries):** uma mono geométrica com traço fino — `Space Mono`, `JetBrains Mono` ou similar. É o que dá o ar "instrumento", como o relógio "08:26" das refs. Números grandes ficam com contorno fino (font-weight 300–400), não bold gordo.
 - **UI / labels / corpo:** uma sans neutra e discreta — `Inter` ou `SF Pro`. Peso 400–500. Nunca itálico.
 
-Escala sugerida: label 12–13px (secondary), corpo 15–16px, número de destaque 48–72px. Números secundários (o "43" ao lado da hora) ficam menores e alinhados pela base, não pelo centro.
+Escala: label 12–13px (secondary), corpo 15–16px, **título de bloco 19px**, **título de tela 30px**, número de destaque 48–72px. Números secundários (o "43" ao lado da hora) ficam menores e alinhados pela base, não pelo centro.
+
+Os dois degraus do meio — `Section` (19) e `Title` (30) — entraram depois, e por um motivo registrado: sem eles o app inteiro vivia entre 12 e 16px, nada era manifestamente mais importante que o resto e nenhuma tela dizia por onde começar a ler. Hierarquia aqui é **tamanho e espaço**, não cor: o brief só tem uma cor para gastar, e ela já tem dono.
+
+Cada tela de aba tem **um herói**: o treino do dia na Hoje, a semana no Plano. O resto desce de tamanho e ganha um rótulo de seção em caixa alta (`Label`), que é o que separa "agir" de "consultar".
 
 ## 4. Layout
 
@@ -148,6 +152,21 @@ Marcada, a célula é laranja **sólido** com glow (`--accent` + a mesma sombra 
 ## 8. Copy / microtexto
 
 Direto, técnico, sem "vozinha animadora de app de fitness". Ex: `"Volume lifted"`, `"Body weight"`, `"Last 7 days"` — substantivo + dado, sem frase motivacional. Timestamps relativos e objetivos (`31 min ago`, `Yesterday · 14 Aug`).
+
+## 9. A dica da primeira visita (tour)
+
+Cada tela tem, na primeira visita, **uma dica**: o resto da tela escurece, um elemento continua aceso com um contorno em volta, e um painel diz numa frase o que ele faz. Uma vez por tela, por aparelho, e nunca mais — quem já viu só reencontra em **Perfil → Ajuda → Ver as dicas de novo**.
+
+Ela existe porque o app pedia conhecimento que não estava em lugar nenhum: que o treino se registra série a série, que o dia da semana é que guarda os exercícios. A resposta não é encher a interface de instruções; é mostrar uma vez, no lugar certo.
+
+As regras que ela respeita, e que valem para qualquer dica futura:
+
+- **Sem accent.** A dica aparece por cima de uma tela que já gastou o seu único destaque (§2). O destaque dela é luz — o escurecido em volta —, não cor.
+- **Uma frase por passo, no máximo dois passos por tela.** E a frase vale em qualquer estado do dia: falar do número de séries numa tela de descanso seria mentira.
+- **"Pular" sempre disponível**, e o voltar do Android fecha a dica.
+- **Não é `Modal`.** Desmontar um `Modal` do RN ainda visível deixa a janela nativa pendurada — tela preta nas duas plataformas. A dica é uma camada absoluta no `overlay` do `Screen`.
+- **A posição é medida, nunca assumida**: o alvo em coordenadas de janela, a camada medindo a própria origem, e a medida se repetindo enquanto a dica está aberta (a lista rola, o card abre, o teclado entra).
+- O raio do contorno acompanha a forma do que ele aponta: pílula no botão, raio de card no bloco (§11).
 
 ## 10. Movimento
 
