@@ -59,7 +59,7 @@ export default function PlanScreen() {
           active={data != null}
           steps={[
             {
-              target: 'plan.week',
+              target: 'plan.day',
               text: 'Toque num dia para escolher os exercícios dele. Vale para toda semana.',
             },
           ]}
@@ -75,14 +75,16 @@ export default function PlanScreen() {
       >
         <Label style={styles.sectionLabel}>SUA SEMANA</Label>
 
-        <TourTarget id="plan.week">
         <Card>
           {days.map((day, weekday) => {
             const count = counts[weekday] ?? 0;
             // Hoje e o unico dia com accent na tela: num plano de sete linhas
             // iguais, nada dizia em qual delas o usuario esta.
             const isToday = weekday === today;
-            return (
+            // A dica aponta UM dia, nao a semana inteira: ela diz "toque num
+            // dia", e um alvo de sete linhas nao mostra onde tocar. Hoje e o
+            // dia que o usuario reconhece de imediato.
+            const row = (
               <PressableSurface
                 key={weekday}
                 feedback="solid"
@@ -100,9 +102,16 @@ export default function PlanScreen() {
                 <ChevronRightIcon size={16} color={colors.textSecondary} />
               </PressableSurface>
             );
+
+            return isToday ? (
+              <TourTarget key={weekday} id="plan.day">
+                {row}
+              </TourTarget>
+            ) : (
+              row
+            );
           })}
         </Card>
-        </TourTarget>
 
         <Label style={styles.sectionLabel}>MOVIMENTOS</Label>
 
