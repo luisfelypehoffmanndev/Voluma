@@ -1219,3 +1219,27 @@ $$;
 
 revoke all on function public.friend_monthly_distance(date, date, text) from public, anon;
 grant execute on function public.friend_monthly_distance(date, date, text) to authenticated;
+
+-- --------------------------------------------------- v12: slug de academia
+-- O slug vira tres coisas com regras diferentes: o package Android
+-- (`com.luisf.voluma.<slug>`, que nao aceita hifen), o scheme do login
+-- (`voluma-<slug>`, que nao aceita underscore) e o bundle do iOS. So letras
+-- minusculas e numeros, comecando por letra, cabem nos tres sem traducao.
+--
+-- A regra antiga e achada pelo conteudo, como na v11: inline, ela nao tem nome
+-- escolhido. Rodar de novo apaga e recria esta mesma.
+do $$
+declare
+  rule text;
+begin
+  for rule in
+    select conname from pg_constraint
+     where conrelid = 'public.gyms'::regclass
+       and contype = 'c'
+       and pg_get_constraintdef(oid) like '%id ~%'
+  loop
+    execute format('alter table public.gyms drop constraint %I', rule);
+  end loop;
+end $$;
+
+alter table public.gyms add constraint gyms_slug_check check (id ~ '^[a-z][a-z0-9]{1,29}$');

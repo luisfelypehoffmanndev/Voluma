@@ -6,15 +6,15 @@
 -- `assert` que falhar aborta com a mensagem do caso; chegar ao `select 'ok'` e
 -- passar.
 --
--- Dois mundos: 'padrao' (o app padrao) e 'zzt-x' (uma academia de teste).
+-- Dois mundos: 'padrao' (o app padrao) e 'zztx' (uma academia de teste).
 -- Pessoas, vistas por `eu`:
 --   bia  — amiga aceita nos DOIS mundos, e treina nos dois
---   caio — so existe no zzt-x
+--   caio — so existe no zztx
 --   dana — so existe no padrao, e me mandou um pedido la
 
 begin;
 
-insert into public.gyms (id, name) values ('zzt-x', 'Academia Teste');
+insert into public.gyms (id, name) values ('zztx', 'Academia Teste');
 
 insert into auth.users (id, email) values
   ('00000000-0000-4000-8000-0000000000e1', 'eu@teste.voluma'),
@@ -27,13 +27,13 @@ insert into auth.users (id, email) values
 -- no bucket.
 insert into public.profiles (id, gym_id, handle, shares_stats, avatar_path) values
   ('00000000-0000-4000-8000-0000000000e1', 'padrao', 'zzt_eu', false, null),
-  ('00000000-0000-4000-8000-0000000000e1', 'zzt-x', 'zzt_eu', false, null),
+  ('00000000-0000-4000-8000-0000000000e1', 'zztx', 'zzt_eu', false, null),
   ('00000000-0000-4000-8000-0000000000b1', 'padrao', 'zzt_bia', true,
     '00000000-0000-4000-8000-0000000000b1/1.jpg'),
-  ('00000000-0000-4000-8000-0000000000b1', 'zzt-x', 'zzt_bia', true,
-    '00000000-0000-4000-8000-0000000000b1/zzt-x/1.jpg'),
-  ('00000000-0000-4000-8000-0000000000c1', 'zzt-x', 'zzt_caio', true,
-    '00000000-0000-4000-8000-0000000000c1/zzt-x/1.jpg'),
+  ('00000000-0000-4000-8000-0000000000b1', 'zztx', 'zzt_bia', true,
+    '00000000-0000-4000-8000-0000000000b1/zztx/1.jpg'),
+  ('00000000-0000-4000-8000-0000000000c1', 'zztx', 'zzt_caio', true,
+    '00000000-0000-4000-8000-0000000000c1/zztx/1.jpg'),
   ('00000000-0000-4000-8000-0000000000d1', 'padrao', 'zzt_dana', true,
     '00000000-0000-4000-8000-0000000000d1/1.jpg');
 
@@ -45,8 +45,8 @@ begin
   -- O mesmo @ duas vezes no MESMO mundo.
   begin
     insert into public.profiles (id, gym_id, handle)
-      values ('00000000-0000-4000-8000-0000000000d1', 'zzt-x', 'zzt_caio');
-    raise exception 'aceitou o @ do caio duas vezes no zzt-x';
+      values ('00000000-0000-4000-8000-0000000000d1', 'zztx', 'zzt_caio');
+    raise exception 'aceitou o @ do caio duas vezes no zztx';
   exception
     when unique_violation then null;
   end;
@@ -56,12 +56,12 @@ begin
   foreach caminho in array array[
     '00000000-0000-4000-8000-0000000000e1/1.jpg',
     '00000000-0000-4000-8000-0000000000e1/padrao/1.jpg',
-    '00000000-0000-4000-8000-0000000000b1/zzt-x/1.jpg'
+    '00000000-0000-4000-8000-0000000000b1/zztx/1.jpg'
   ] loop
     begin
       update public.profiles set avatar_path = caminho
-       where id = '00000000-0000-4000-8000-0000000000e1' and gym_id = 'zzt-x';
-      raise exception 'avatar_path aceitou % no zzt-x', caminho;
+       where id = '00000000-0000-4000-8000-0000000000e1' and gym_id = 'zztx';
+      raise exception 'avatar_path aceitou % no zztx', caminho;
     exception
       when check_violation then null;
     end;
@@ -84,11 +84,11 @@ begin
 end
 $$;
 
--- Eu e a bia somos amigos nos dois mundos (no zzt-x foi ela quem pediu); a
+-- Eu e a bia somos amigos nos dois mundos (no zztx foi ela quem pediu); a
 -- dana me pediu no padrao.
 insert into public.friendships (requester_id, addressee_id, status, gym_id) values
   ('00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-0000000000b1', 'accepted', 'padrao'),
-  ('00000000-0000-4000-8000-0000000000b1', '00000000-0000-4000-8000-0000000000e1', 'accepted', 'zzt-x'),
+  ('00000000-0000-4000-8000-0000000000b1', '00000000-0000-4000-8000-0000000000e1', 'accepted', 'zztx'),
   ('00000000-0000-4000-8000-0000000000d1', '00000000-0000-4000-8000-0000000000e1', 'pending', 'padrao');
 
 -- Mas no mesmo mundo continua um par, uma linha, em qualquer direcao.
@@ -105,33 +105,33 @@ end
 $$;
 
 -- A bia treina nos dois mundos. Padrao: 1 dia na semana de 2026-09-13, 1 dia
--- planejado e 3 km. zzt-x: 2 dias, 2 planejados e 5 km.
+-- planejado e 3 km. zztx: 2 dias, 2 planejados e 5 km.
 insert into public.routines (id, user_id, gym_id, name, weekday) values
   (gen_random_uuid(), '00000000-0000-4000-8000-0000000000b1', 'padrao', 'A', 1),
-  (gen_random_uuid(), '00000000-0000-4000-8000-0000000000b1', 'zzt-x', 'A', 2),
-  (gen_random_uuid(), '00000000-0000-4000-8000-0000000000b1', 'zzt-x', 'B', 3);
+  (gen_random_uuid(), '00000000-0000-4000-8000-0000000000b1', 'zztx', 'A', 2),
+  (gen_random_uuid(), '00000000-0000-4000-8000-0000000000b1', 'zztx', 'B', 3);
 
 insert into public.sessions (id, user_id, gym_id, date, started_at) values
   ('00000000-0000-4000-8000-0000000005a1', '00000000-0000-4000-8000-0000000000b1', 'padrao', '2026-09-14', '2026-09-14 10:00+00'),
-  ('00000000-0000-4000-8000-0000000005a2', '00000000-0000-4000-8000-0000000000b1', 'zzt-x', '2026-09-15', '2026-09-15 10:00+00'),
-  ('00000000-0000-4000-8000-0000000005a3', '00000000-0000-4000-8000-0000000000b1', 'zzt-x', '2026-09-16', '2026-09-16 10:00+00');
+  ('00000000-0000-4000-8000-0000000005a2', '00000000-0000-4000-8000-0000000000b1', 'zztx', '2026-09-15', '2026-09-15 10:00+00'),
+  ('00000000-0000-4000-8000-0000000005a3', '00000000-0000-4000-8000-0000000000b1', 'zztx', '2026-09-16', '2026-09-16 10:00+00');
 
 insert into public.session_sets
   (id, user_id, gym_id, session_id, exercise_id, set_index, reps, weight_kg, distance_km, done) values
   (gen_random_uuid(), '00000000-0000-4000-8000-0000000000b1', 'padrao', '00000000-0000-4000-8000-0000000005a1', gen_random_uuid(), 1, 10, 50, 0, true),
   (gen_random_uuid(), '00000000-0000-4000-8000-0000000000b1', 'padrao', '00000000-0000-4000-8000-0000000005a1', gen_random_uuid(), 1, 0, 0, 3, true),
-  (gen_random_uuid(), '00000000-0000-4000-8000-0000000000b1', 'zzt-x', '00000000-0000-4000-8000-0000000005a2', gen_random_uuid(), 1, 10, 50, 0, true),
-  (gen_random_uuid(), '00000000-0000-4000-8000-0000000000b1', 'zzt-x', '00000000-0000-4000-8000-0000000005a2', gen_random_uuid(), 1, 0, 0, 5, true),
-  (gen_random_uuid(), '00000000-0000-4000-8000-0000000000b1', 'zzt-x', '00000000-0000-4000-8000-0000000005a3', gen_random_uuid(), 1, 10, 50, 0, true);
+  (gen_random_uuid(), '00000000-0000-4000-8000-0000000000b1', 'zztx', '00000000-0000-4000-8000-0000000005a2', gen_random_uuid(), 1, 10, 50, 0, true),
+  (gen_random_uuid(), '00000000-0000-4000-8000-0000000000b1', 'zztx', '00000000-0000-4000-8000-0000000005a2', gen_random_uuid(), 1, 0, 0, 5, true),
+  (gen_random_uuid(), '00000000-0000-4000-8000-0000000000b1', 'zztx', '00000000-0000-4000-8000-0000000005a3', gen_random_uuid(), 1, 10, 50, 0, true);
 
--- A dana nao esta no zzt-x, mas subiu um arquivo la (a pasta e dela, entao o
--- Storage deixa). O pedido dela e no padrao: nao pode liberar a foto do zzt-x.
+-- A dana nao esta no zztx, mas subiu um arquivo la (a pasta e dela, entao o
+-- Storage deixa). O pedido dela e no padrao: nao pode liberar a foto do zztx.
 insert into storage.objects (bucket_id, name) values
   ('avatars', '00000000-0000-4000-8000-0000000000b1/1.jpg'),
-  ('avatars', '00000000-0000-4000-8000-0000000000b1/zzt-x/1.jpg'),
-  ('avatars', '00000000-0000-4000-8000-0000000000c1/zzt-x/1.jpg'),
+  ('avatars', '00000000-0000-4000-8000-0000000000b1/zztx/1.jpg'),
+  ('avatars', '00000000-0000-4000-8000-0000000000c1/zztx/1.jpg'),
   ('avatars', '00000000-0000-4000-8000-0000000000d1/1.jpg'),
-  ('avatars', '00000000-0000-4000-8000-0000000000d1/zzt-x/1.jpg');
+  ('avatars', '00000000-0000-4000-8000-0000000000d1/zztx/1.jpg');
 
 -- ------------------------------------------------------------ vendo como eu
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-0000000000e1","role":"authenticated"}', true);
@@ -145,44 +145,44 @@ declare
 begin
   -- Busca por @: so no mundo pedido. Sem `gym`, o padrao (o app instalado).
   assert not exists (select 1 from public.find_profile_by_handle('zzt_caio')),
-    'o caio so existe no zzt-x: nao devia ser achado no padrao';
-  select * into r from public.find_profile_by_handle('zzt_caio', 'zzt-x');
-  assert r.id = '00000000-0000-4000-8000-0000000000c1', 'devia achar o caio no zzt-x';
+    'o caio so existe no zztx: nao devia ser achado no padrao';
+  select * into r from public.find_profile_by_handle('zzt_caio', 'zztx');
+  assert r.id = '00000000-0000-4000-8000-0000000000c1', 'devia achar o caio no zztx';
 
   assert public.request_friendship('zzt_caio') = 'not-found',
     'pedir o caio no padrao devia dar not-found';
-  assert public.request_friendship('zzt_dana', 'zzt-x') = 'not-found',
-    'pedir a dana no zzt-x devia dar not-found';
-  assert public.request_friendship('zzt_caio', 'zzt-x') = 'ok',
-    'pedir o caio no zzt-x devia funcionar';
+  assert public.request_friendship('zzt_dana', 'zztx') = 'not-found',
+    'pedir a dana no zztx devia dar not-found';
+  assert public.request_friendship('zzt_caio', 'zztx') = 'ok',
+    'pedir o caio no zztx devia funcionar';
 
   -- A lista de amigos e do mundo.
   select array_agg(handle order by handle) into nomes from public.list_friends();
   assert nomes = array['zzt_bia', 'zzt_dana'],
     format('no padrao esperava bia e dana; veio %s', nomes);
-  select array_agg(handle order by handle) into nomes from public.list_friends('zzt-x');
+  select array_agg(handle order by handle) into nomes from public.list_friends('zztx');
   assert nomes = array['zzt_bia', 'zzt_caio'],
-    format('no zzt-x esperava bia e caio; veio %s', nomes);
+    format('no zztx esperava bia e caio; veio %s', nomes);
 
   -- O ranking e a corrida so contam os treinos do mundo.
   select * into r from public.friend_weekly_days('2026-09-13', '2026-09-13') where handle = 'zzt_bia';
   assert r.days = 1 and r.planned_days = 1,
     format('bia no padrao: esperava 1 dia de 1 planejado; veio %s de %s', r.days, r.planned_days);
-  select * into r from public.friend_weekly_days('2026-09-13', '2026-09-13', 'zzt-x') where handle = 'zzt_bia';
+  select * into r from public.friend_weekly_days('2026-09-13', '2026-09-13', 'zztx') where handle = 'zzt_bia';
   assert r.days = 2 and r.planned_days = 2,
-    format('bia no zzt-x: esperava 2 dias de 2 planejados; veio %s de %s', r.days, r.planned_days);
+    format('bia no zztx: esperava 2 dias de 2 planejados; veio %s de %s', r.days, r.planned_days);
 
   select * into r from public.friend_monthly_distance('2026-09-01', '2026-09-30') where handle = 'zzt_bia';
   assert r.km = 3, format('bia no padrao: esperava 3 km; veio %s', r.km);
-  select * into r from public.friend_monthly_distance('2026-09-01', '2026-09-30', 'zzt-x') where handle = 'zzt_bia';
-  assert r.km = 5, format('bia no zzt-x: esperava 5 km; veio %s', r.km);
+  select * into r from public.friend_monthly_distance('2026-09-01', '2026-09-30', 'zztx') where handle = 'zzt_bia';
+  assert r.km = 5, format('bia no zztx: esperava 5 km; veio %s', r.km);
 
   -- Fotos: a da bia nos dois mundos (aceita nos dois), a da dana so no padrao
   -- (o pedido dela e de la), e nenhuma do caio (eu pedi, ele nao aceitou).
   select array_agg(name order by name) into nomes from storage.objects where bucket_id = 'avatars';
   assert nomes = array[
     '00000000-0000-4000-8000-0000000000b1/1.jpg',
-    '00000000-0000-4000-8000-0000000000b1/zzt-x/1.jpg',
+    '00000000-0000-4000-8000-0000000000b1/zztx/1.jpg',
     '00000000-0000-4000-8000-0000000000d1/1.jpg'
   ], format('fotos visiveis erradas: %s', nomes);
 
@@ -198,7 +198,7 @@ begin
   end;
 
   begin
-    update public.friendships set gym_id = 'zzt-x'
+    update public.friendships set gym_id = 'zztx'
      where requester_id = '00000000-0000-4000-8000-0000000000d1'
        and addressee_id = '00000000-0000-4000-8000-0000000000e1';
     raise exception 'consegui mudar um pedido de mundo';
@@ -223,14 +223,14 @@ begin
 
   -- ...mas grava no proprio mundo: a FK confere sem precisar ler gyms.
   insert into public.exercises (id, user_id, name, gym_id)
-    values (gen_random_uuid(), '00000000-0000-4000-8000-0000000000e1', 'Remada', 'zzt-x');
+    values (gen_random_uuid(), '00000000-0000-4000-8000-0000000000e1', 'Remada', 'zztx');
 end
 $$;
 
 reset role;
 
 -- ---------------------------------------------------- vendo como o caio
--- O meu pedido foi feito no zzt-x: aparece la, e nao no padrao.
+-- O meu pedido foi feito no zztx: aparece la, e nao no padrao.
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-0000000000c1","role":"authenticated"}', true);
 set local role authenticated;
 
@@ -238,8 +238,8 @@ do $$
 declare
   r record;
 begin
-  select * into r from public.list_friends('zzt-x') where handle = 'zzt_eu';
-  assert found and r.direction = 'incoming', 'caio devia ver meu pedido no zzt-x';
+  select * into r from public.list_friends('zztx') where handle = 'zzt_eu';
+  assert found and r.direction = 'incoming', 'caio devia ver meu pedido no zztx';
   assert not exists (select 1 from public.list_friends()),
     'caio nao tem nada no padrao: a lista devia vir vazia';
 end
