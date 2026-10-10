@@ -10,7 +10,7 @@
 do onboarding
 **Depende de:** [07](07-login-google.md), [11](11-perfil-handle.md),
 [12](12-amigos.md), [15](15-avatar-e-nomes.md)
-**Estado:** **16.1 feita** (v11 no Supabase) e **16.2 feita** (o app sabe o próprio mundo; v12 no Supabase), sem teste no aparelho ainda. 16.3 em diante: planejado
+**Estado:** **16.1, 16.2 e 16.3 feitas** (v11 e v12 no Supabase; o app sabe o próprio mundo; OTA configurado no projeto EAS novo `voluma`), sem teste no aparelho ainda. 16.4 em diante: planejado
 
 ## Contexto da decisão
 
@@ -151,6 +151,32 @@ quando a 16.3 (também nativa) estiver pronta.
   abertura seguinte. Esperar o download na abertura trava sem sinal na academia.
 - Custo: o EAS Update é pago acima da cota gratuita. Conferir a cota antes de
   passar de poucos apps.
+
+Implementado assim:
+
+- **Projeto EAS novo, `@felypehoffmann/voluma`** (`projectId`
+  `4104ee04-db49-4cec-b1d7-9074efdf7fc2`). O antigo se chamava `cleangym`, e o
+  `slug` do `app.json` virou `voluma` na troca de nome (`640c195`). A Expo não
+  deixa trocar o slug de um projeto, então todo comando do EAS estava
+  bloqueado desde então. O `cleangym` só tinha um build de desenvolvimento
+  cancelado, e nada foi publicado com credenciais dele.
+- `expo-updates ~57.0.25` instalado e `eas update:configure` rodado. Ele gravou
+  o `updates.url` e um canal por perfil no `eas.json`.
+- `runtimeVersion` trocado de `appVersion` (o padrão do comando) para
+  `fingerprint`. Com `appVersionSource: remote`, a `version` do `app.json` fica
+  sempre `1.0.0`, e com `appVersion` um OTA que exigisse código nativo novo
+  chegaria a builds antigos e os travaria.
+- **Canal do perfil `production` = `padrao`**, o nome do mundo, para o script
+  de publicação derivar o canal do slug. `preview` e `development` ficaram com
+  o nome do perfil.
+- Abertura no padrão (`ON_LOAD`, `fallbackToCacheTimeout: 0`), sem configuração
+  explícita.
+- Nada publicado: ainda não existe build com `expo-updates`.
+
+**Antes do primeiro build na nuvem do EAS:** as variáveis
+`EXPO_PUBLIC_SUPABASE_URL` e `EXPO_PUBLIC_SUPABASE_ANON_KEY` precisam estar nas
+variáveis de ambiente do projeto `voluma` no EAS. O `.env` local não sobe para
+os builds feitos lá.
 
 ## 16.4 — Variantes: um build por academia
 
