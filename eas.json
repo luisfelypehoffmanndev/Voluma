@@ -23,6 +23,13 @@
     "production": {
       "autoIncrement": true,
       "channel": "padrao"
+    },
+    "teste": {
+      "extends": "preview",
+      "env": {
+        "APP_VARIANT": "teste"
+      },
+      "channel": "teste"
     }
   },
   "submit": {

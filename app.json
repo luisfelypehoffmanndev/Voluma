@@ -4,7 +4,7 @@
     "slug": "voluma",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./gyms/padrao/icon.png",
     "scheme": "voluma",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0A0A0A",
@@ -16,8 +16,8 @@
       "package": "com.luisf.voluma",
       "adaptiveIcon": {
         "backgroundColor": "#0A0A0A",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "foregroundImage": "./gyms/padrao/android-icon-foreground.png",
+        "monochromeImage": "./gyms/padrao/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -29,7 +29,7 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#0A0A0A",
-          "image": "./assets/splash-icon.png",
+          "image": "./gyms/padrao/splash-icon.png",
           "imageWidth": 160
         }
       ],
