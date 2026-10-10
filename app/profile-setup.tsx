@@ -64,7 +64,12 @@ export default function ProfileSetupScreen() {
     <Screen>
       <Header title={editing ? 'Seu perfil' : 'Escolha seu @'} back />
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+      >
         <Meta>
           {editing
             ? 'o que seus amigos veem, idade e anos de treino são opcionais'

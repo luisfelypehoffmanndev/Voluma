@@ -54,6 +54,7 @@ export default function OnboardingScreen() {
   const [start, setStart] = useState<Start | null>(null);
   const [days, setDays] = useState<Weekday[]>([...DEFAULT_TRAINING_DAYS]);
   const [saving, setSaving] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [example, setExample] = useState<VolumeDraft>({ sets: 3, reps: 10, weightKg: 40 });
 
   // Decidido na montagem, nao a cada render: `complete()` vira o status para
@@ -68,6 +69,7 @@ export default function OnboardingScreen() {
   const finish = async (choice: Start) => {
     if (saving) return;
     setSaving(true);
+    setFailed(false);
     try {
       if (choice === 'ppl') await createPushPullLegs(days);
       else await startEmpty();
@@ -77,6 +79,9 @@ export default function OnboardingScreen() {
       // PPL tem treino montado: cai em Hoje. Do zero, a semana esta vazia, e o
       // proximo passo e o Plano.
       router.replace(choice === 'ppl' ? '/' : '/plan');
+    } catch (reason) {
+      console.warn('[Voluma] falha ao montar o plano', reason);
+      setFailed(true);
     } finally {
       setSaving(false);
     }
@@ -166,6 +171,7 @@ export default function OnboardingScreen() {
         ) : (
           <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.xl }]}>
             <Progress step={step} total={total} />
+            {failed ? <Meta>Não foi possível montar o plano. Tente de novo.</Meta> : null}
             {footer}
           </View>
         )

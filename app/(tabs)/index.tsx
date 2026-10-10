@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -93,10 +93,21 @@ export default function HomeScreen() {
   // Um treino por data: abrir de novo cai no mesmo registro, com os numeros que
   // ja foram gravados. "Comecar" e "continuar" abrem a mesma sessao; o que muda
   // e so o rotulo, que diz em que pe o dia esta.
+  //
+  // A trava evita que um toque duplo empilhe a mesma sessao duas vezes.
+  const opening = useRef(false);
   const openWorkout = async () => {
-    const session = await getOrCreateSessionForDate(new Date());
-    bumpData();
-    router.push(`/session/${session.id}`);
+    if (opening.current) return;
+    opening.current = true;
+    try {
+      const session = await getOrCreateSessionForDate(new Date());
+      bumpData();
+      router.push(`/session/${session.id}`);
+    } catch (reason) {
+      console.warn('[Voluma] falha ao abrir o treino de hoje', reason);
+    } finally {
+      opening.current = false;
+    }
   };
 
   if (error) {
