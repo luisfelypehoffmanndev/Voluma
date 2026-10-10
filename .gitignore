@@ -19,3 +19,9 @@ expo-env.d.ts
 
 # macOS
 .DS_Store
+
+# Notas locais do modo aprendizagem (VibeWise)
+.vibe-wise/
+
+# MCP do Supabase com escrita no projeto de producao: config so desta maquina
+.mcp.json
