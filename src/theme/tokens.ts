@@ -7,6 +7,20 @@
  * Fora de dado de grafico, o accent continua em no maximo um elemento por tela.
  */
 
+import Constants from 'expo-constants';
+
+import { HEX_COLOR, hexToRgba } from './color';
+
+/** O laranja da marca: o accent do app padrao, e o de qualquer config sem accent valido. */
+const BRAND_ACCENT = '#FF5C00';
+
+// Cada academia traz o proprio accent em `extra.theme` (gyms/<slug>/config.json).
+const configuredAccent: unknown = Constants.expoConfig?.extra?.theme?.accent;
+const ACCENT =
+  typeof configuredAccent === 'string' && HEX_COLOR.test(configuredAccent)
+    ? configuredAccent.toUpperCase()
+    : BRAND_ACCENT;
+
 export const colors = {
   /** fundo base, quase preto — nunca #000 puro (mata a profundidade) */
   bg: '#0A0A0A',
@@ -39,8 +53,10 @@ export const colors = {
    * o contraste com o preto e 6,8:1 — melhor que os 6,4:1 do original.
    *
    * O que faz ler como neon nao e so a matiz: e o `accentGlow` em volta.
+   *
+   * Num app de academia, e a cor da academia (`ACCENT`, acima).
    */
-  accent: '#FF5C00',
+  accent: ACCENT,
   /** pontos apagados do dot-matrix (dias sem treino) */
   dotEmpty: 'rgba(255,255,255,0.14)',
   /** pontos cheios do dot-matrix (dias com treino) */
@@ -88,8 +104,8 @@ export const chart = {
   baseline: colors.divider,
   tick: colors.dotEmpty,
   cursor: 'rgba(255,255,255,0.28)',
-  area: 'rgba(255,92,0,0.24)',
-  fade: 'rgba(255,92,0,0)',
+  area: hexToRgba(ACCENT, 0.24),
+  fade: hexToRgba(ACCENT, 0),
   track: 'rgba(255,255,255,0.07)',
   ring: '#191919',
 } as const;
