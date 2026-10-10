@@ -10,7 +10,7 @@
 do onboarding
 **Depende de:** [07](07-login-google.md), [11](11-perfil-handle.md),
 [12](12-amigos.md), [15](15-avatar-e-nomes.md)
-**Estado:** **16.1 feita** — v11 aplicada no Supabase em 2026-10-09 (pelo MCP), testes 15 e 16 passando lá. 16.2 em diante: planejado
+**Estado:** **16.1 feita** (v11 no Supabase) e **16.2 feita** (o app sabe o próprio mundo; v12 no Supabase), sem teste no aparelho ainda. 16.3 em diante: planejado
 
 ## Contexto da decisão
 
@@ -67,7 +67,9 @@ O que foi decidido, e por quê:
 
 Na mesma linha do resto do `schema.sql`: idempotente, colado no SQL Editor.
 
-- **Tabela `gyms`:** `id text primary key` (slug, `^[a-z0-9-]{2,30}$`),
+- **Tabela `gyms`:** `id text primary key` (slug, `^[a-z][a-z0-9]{1,29}$`
+  desde a v12: só letras minúsculas e números, porque o slug vira package
+  Android, que não aceita hífen, e scheme, que não aceita underscore),
   `name text`. Uma linha `'padrao'` para o app padrão. `gym_id` nunca é nulo,
   porque `null` não é igual a `null` em índice único nem em `=`.
 - **Tabelas de treino** (`exercises`, `routines`, `routine_exercises`,
@@ -110,18 +112,34 @@ update de `friendships` é liberado de novo.
 ## 16.2 — Cliente: o app sabe o próprio mundo
 
 - **`src/world.ts`:** `gymFromPackage(applicationId)` é uma função pura
-  (`com.luisf.voluma` → `'padrao'`; `com.luisf.voluma.<slug>` → `<slug>`).
-  `currentGym()` lê o package via `expo-application` (a instalar). Compara com
-  `Constants.expoConfig.extra.gymId`; se divergir, **registra o erro e segue**,
-  sem pausar o sync, porque o mundo já veio do package.
-- **`engine.ts`:** o push carimba `gym_id` junto com o `user_id` (linha 140).
-  O pull filtra `.eq('gym_id', gym)`. O `toLocal` descarta o `gym_id` como já
-  faz com o `user_id`. **O SQLite local não muda**: cada instalação é um mundo só.
-- **`profile.ts`, `friends.ts`, `avatar.ts`:** todas as leituras, escritas e
-  RPCs passam o mundo. O caminho da foto ganha a pasta do mundo.
-- **`auth.ts`:** o `redirectTo` do login sai do slug do package
-  (`voluma-<slug>://`), e não do `scheme` da config. Uma publicação OTA errada
-  também levaria um `scheme` errado, e o login deixaria de voltar para o app.
+  (`com.luisf.voluma` → `'padrao'`; `com.luisf.voluma.<slug>` → `<slug>`;
+  `null`, Expo Go ou outro package → `'padrao'`). A constante `GYM` é
+  calculada uma vez, com o package lido pelo `expo-application`. Se
+  `Constants.expoConfig.extra.gymId` divergir, um `console.warn` e o app segue
+  no mundo do package, sem pausar o sync. `schemeFor(gym)` dá `voluma` no
+  padrão e `voluma-<slug>` nos outros.
+- **`engine.ts`:** `toRemote(table, row, userId, gym)` carimba `user_id` e
+  `gym_id`; o pull filtra `.eq('gym_id', GYM)`; o `toLocal` descarta os dois.
+  As duas conversões ficaram exportadas e têm teste. **O SQLite local não
+  muda**: cada instalação é um mundo só.
+- **`profile.ts`:** leitura e update filtram `gym_id`, e o insert o grava. Sem
+  isso, trocar o @ num mundo trocaria em todos.
+- **`friends.ts`:** as 4 RPCs recebem `gym`. Aceitar, recusar e desfazer
+  filtram `gym_id`. Sem isso, desfazer a amizade num mundo apagaria a do outro.
+- **`avatar.ts`:** a foto nova vai para `{user}/{gym}/{ts}.jpg`, inclusive no
+  padrão. As antigas, sem a pasta do mundo, continuam valendo.
+- **`auth.ts`:** `makeRedirectUri({ scheme: schemeFor(GYM) })`. O scheme sai do
+  mundo, e não do `scheme` da config, que um OTA publicado errado trocaria. No
+  app padrão o resultado é o mesmo `voluma://` de antes.
+- **Stores e telas não mudaram:** o mundo é lido dentro de `src/sync/*`.
+- **v12 no Supabase** (aplicada pelo MCP): `gyms.id` só aceita
+  `^[a-z][a-z0-9]{1,29}$`. O teste 16 passou a usar `zztx` e roda de novo
+  verde lá.
+
+Implementado assim. `npm run typecheck` e `npm run lint` limpos, `npm test`
+com 507 testes em 34 suítes. Ainda não rodou no aparelho: o
+`expo-application` é nativo e exige recompilar o dev client, o que fica para
+quando a 16.3 (também nativa) estiver pronta.
 
 ## 16.3 — OTA (EAS Update)
 

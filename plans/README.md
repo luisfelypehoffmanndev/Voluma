@@ -25,7 +25,7 @@ como verificar. A ideia é resolver um de cada vez.
 | [13](13-ranking-amigos.md) | Aba Amigos: ranking de dias treinados na semana | feature | **feito** — v7 rodada; substituído por 14 e 15 |
 | [14](14-amigos-graficos.md) | Aba Amigos: 12 semanas, consistência e corrida | feature | **feito** — v8 rodada; evoluído na tela de amigo no item 15 |
 | [15](15-avatar-e-nomes.md) | Foto de perfil, nome de exibição, cor por amigo e refatoração dos gráficos | feature | **feito** — v9 e v10 rodadas, bucket avatars criado, teste 15-avatar.sql passando |
-| [16](16-multi-academia.md) | Multi-academia: app padrão + um app por academia, mesmo backend | feature | **16.1 feita** — v11 rodada no Supabase, testes 15 e 16 passando; 16.2 em diante planejado |
+| [16](16-multi-academia.md) | Multi-academia: app padrão + um app por academia, mesmo backend | feature | **16.1 e 16.2 feitas** — v11 e v12 no Supabase, app filtra por mundo; falta testar no aparelho junto com a 16.3 |
 
 ## Pendências fora do código
 
