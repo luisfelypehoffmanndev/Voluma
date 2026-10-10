@@ -29,25 +29,29 @@ export default function LoginScreen() {
   const submit = async () => {
     setBusy(true);
     setError(null);
-    const result = await signInWithGoogle();
+    try {
+      const result = await signInWithGoogle();
+      if (result) {
+        setError(result);
+        return;
+      }
 
-    if (result) {
+      // `applySession` ja disparou a carga do perfil, mas pode nao ter chegado:
+      // sem esperar, quem ja tem @ veria a tela de escolher um por um instante.
+      const { userId } = useAuth.getState();
+      if (userId) await useProfile.getState().load(userId);
+      const hasProfile = useProfile.getState().profile !== null;
+
+      // Troca o modal em vez de empilhar: voltar do perfil tem que cair no
+      // Perfil, nao numa tela de login de uma conta em que a pessoa ja entrou.
+      if (hasProfile) goBackOr(router, '/profile');
+      else router.replace('/profile-setup');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Não foi possível entrar');
+    } finally {
+      // No finally: uma excecao no meio deixaria o botao girando para sempre.
       setBusy(false);
-      setError(result);
-      return;
     }
-
-    // `applySession` ja disparou a carga do perfil, mas pode nao ter chegado:
-    // sem esperar, quem ja tem @ veria a tela de escolher um por um instante.
-    const { userId } = useAuth.getState();
-    if (userId) await useProfile.getState().load(userId);
-    const hasProfile = useProfile.getState().profile !== null;
-
-    setBusy(false);
-    // Troca o modal em vez de empilhar: voltar do perfil tem que cair no
-    // Perfil, nao numa tela de login de uma conta em que a pessoa ja entrou.
-    if (hasProfile) goBackOr(router, '/profile');
-    else router.replace('/profile-setup');
   };
 
   return (
