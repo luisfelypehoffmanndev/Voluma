@@ -25,8 +25,31 @@ como verificar. A ideia é resolver um de cada vez.
 | [13](13-ranking-amigos.md) | Aba Amigos: ranking de dias treinados na semana | feature | **feito** — v7 rodada; substituído por 14 e 15 |
 | [14](14-amigos-graficos.md) | Aba Amigos: 12 semanas, consistência e corrida | feature | **feito** — v8 rodada; evoluído na tela de amigo no item 15 |
 | [15](15-avatar-e-nomes.md) | Foto de perfil, nome de exibição, cor por amigo e refatoração dos gráficos | feature | **feito** — v9 e v10 rodadas, bucket avatars criado, teste 15-avatar.sql passando |
+| [16](16-multi-academia.md) | Multi-academia: app padrão + um app por academia, mesmo backend | feature | **16.1 feita** — v11 rodada no Supabase, testes 15 e 16 passando; 16.2 em diante planejado |
 
 ## Pendências fora do código
+
+Concluída em 2026-10-09:
+
+6. **Item 16.1** — a seção `-- v11: multi-academia` foi aplicada no Supabase
+   pelo MCP (`apply_migration`, registrada como `v11_multi_academia`). Todas
+   as linhas existentes caíram no mundo `'padrao'` sem mudar as contagens.
+   `16-multi-academia.sql` e `15-avatar.sql` passaram no banco real, e
+   nenhuma tabela pública ficou sem RLS. O app instalado continua funcionando
+   sem atualização.
+
+### O que travou no caminho (item 16.1)
+
+- **O projeto estava pausado** (plano gratuito, sem uso desde 28/09). O
+  sintoma é o endereço `<ref>.supabase.co` não resolver no DNS. Restaurar pelo
+  painel; a autenticação volta antes do Postgres, que leva mais alguns minutos.
+- **O Supabase passou a barrar `delete` direto em `storage.objects`** com um
+  gatilho POR COMANDO (`protect_objects_delete`, erro `42501`), mesmo sem
+  linha visível. O caso "não consigo apagar a foto da bia" do
+  `15-avatar.sql` agora aceita os dois resultados (0 linhas, ou a recusa).
+- **A regra da foto se chamava `profiles_check`**, e não
+  `profiles_avatar_path_check`: criada inline numa coluna citando outra, ganha
+  nome genérico. A v11 a acha pelo conteúdo.
 
 Concluída em 2026-09-28:
 
