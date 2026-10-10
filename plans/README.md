@@ -25,7 +25,7 @@ como verificar. A ideia é resolver um de cada vez.
 | [13](13-ranking-amigos.md) | Aba Amigos: ranking de dias treinados na semana | feature | **feito** — v7 rodada; substituído por 14 e 15 |
 | [14](14-amigos-graficos.md) | Aba Amigos: 12 semanas, consistência e corrida | feature | **feito** — v8 rodada; evoluído na tela de amigo no item 15 |
 | [15](15-avatar-e-nomes.md) | Foto de perfil, nome de exibição, cor por amigo e refatoração dos gráficos | feature | **feito** — v9 e v10 rodadas, bucket avatars criado, teste 15-avatar.sql passando |
-| [16](16-multi-academia.md) | Multi-academia: app padrão + um app por academia, mesmo backend | feature | **16.1 a 16.3 feitas** — v11 e v12 no Supabase, app filtra por mundo, OTA configurado; falta testar no aparelho |
+| [16](16-multi-academia.md) | Multi-academia: app padrão + um app por academia, mesmo backend | feature | **16.1 a 16.4 feitas** — v11 e v12 no Supabase, app filtra por mundo, OTA configurado, variantes por academia; falta testar no aparelho |
 
 ## Pendências fora do código
 
@@ -47,6 +47,11 @@ Concluída em 2026-10-09:
   gatilho POR COMANDO (`protect_objects_delete`, erro `42501`), mesmo sem
   linha visível. O caso "não consigo apagar a foto da bia" do
   `15-avatar.sql` agora aceita os dois resultados (0 linhas, ou a recusa).
+- **Login de uma academia voltava para o app padrão** (teste da 16.4, em
+  2026-10-10). O Supabase só aceita o `redirectTo` pedido se ele estiver nas
+  Redirect URLs. Sem `voluma-<slug>://**` lá, ele cai na Site URL
+  (`voluma://`), e o Android abre o Voluma padrão. Cadastrar a cada academia
+  nova (passo 4 do `gyms/README.md`).
 - **A regra da foto se chamava `profiles_check`**, e não
   `profiles_avatar_path_check`: criada inline numa coluna citando outra, ganha
   nome genérico. A v11 a acha pelo conteúdo.

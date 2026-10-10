@@ -10,7 +10,7 @@
 do onboarding
 **Depende de:** [07](07-login-google.md), [11](11-perfil-handle.md),
 [12](12-amigos.md), [15](15-avatar-e-nomes.md)
-**Estado:** **16.1, 16.2 e 16.3 feitas** (v11 e v12 no Supabase; o app sabe o próprio mundo; OTA configurado no projeto EAS novo `voluma`), sem teste no aparelho ainda. 16.4 em diante: planejado
+**Estado:** **16.1 a 16.4 feitas** (v11 e v12 no Supabase; o app sabe o próprio mundo; OTA configurado no projeto EAS novo `voluma`; variantes por academia com a `teste` de prova), sem teste no aparelho ainda. Publicação e 16.5 em diante: planejado
 
 ## Contexto da decisão
 
@@ -202,6 +202,34 @@ os builds feitos lá.
 - **Dia a dia no USB:** trocar de academia exige
   `APP_VARIANT=<slug> npx expo prebuild --clean` antes do `expo run:android`
   (e recriar o `android/local.properties`, como no item 07).
+
+Implementado assim:
+
+- **`app.config.ts` por cima do `app.json`.** O `app.json` continua
+  descrevendo o app padrão inteiro, porque é ele que o `eas init` e o
+  `update:configure` editam. O `.ts` troca nome, package, bundle iOS, scheme,
+  ícones, splash, o texto da permissão de fotos (que citava "Voluma") e o
+  `extra.gymId`/`extra.theme`. Ele recusa slug fora da regra da v12 e pasta sem
+  `config.json`, com uma mensagem que diz o que falta.
+- **`gyms/padrao/`** recebeu os quatro ícones de `assets/` (`git mv`) e o
+  `config.json`. Os nomes dos arquivos são fixos. `gyms/README.md` explica
+  como criar uma academia e como rodar uma no USB.
+- **Tema:** o `accent` vem de `extra.theme.accent`, e cai no laranja se faltar
+  ou não for `#RRGGBB`. O `chart.area` e o `chart.fade`, que repetiam o laranja
+  à mão em `rgba`, agora derivam do accent. As funções `hexToRgba` e
+  `contrastRatio` ficam em `src/theme/color.ts`.
+- **Academia `teste`:** os ícones do Voluma, accent ciano `#29B6FF`, perfil
+  `teste` no `eas.json` (internal, canal `teste`) e a linha `teste` em `gyms`
+  no Supabase. Não vai para a loja.
+- **Testes:** `gyms.test.ts` passa por toda pasta de `gyms/` e confere o slug,
+  o nome, o accent com contraste mínimo de 4,5:1, os quatro ícones, e se o
+  `app.config.ts` gera um package que o `world.ts` lê como o mesmo mundo, com
+  o mesmo scheme. Ele reprova um accent escuro. `accent.test.ts` cobre o accent
+  vindo da config e as reservas. `color.test.ts` cobre as funções de cor.
+- **Verificado:** `npx expo config` com e sem `APP_VARIANT`, e com slugs
+  inválidos (dão erro). `eas config --profile teste` resolve
+  `com.luisf.voluma.teste`, `voluma-teste`, canal `teste`. `typecheck` e
+  `lint` limpos, 532 testes em 37 suítes. Nada no aparelho ainda.
 
 ## 16.5 — Feature flags
 
