@@ -51,9 +51,15 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "527dfa56-0018-4bf4-94fc-0e9aba5285d7"
+        "projectId": "4104ee04-db49-4cec-b1d7-9074efdf7fc2"
       }
     },
-    "owner": "felypehoffmann"
+    "owner": "felypehoffmann",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/4104ee04-db49-4cec-b1d7-9074efdf7fc2"
+    }
   }
 }
