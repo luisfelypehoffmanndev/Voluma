@@ -175,62 +175,96 @@ async function pull(userId: string): Promise<number> {
     );
     const since = state?.last_pulled_at ?? '1970-01-01T00:00:00.000Z';
 
-    const { data, error } = await supabase
-      .from(table)
-      .select('*')
-      .eq('user_id', userId)
-      .eq('gym_id', GYM)
-      .gt('updated_at', since)
-      .order('updated_at', { ascending: true });
+    // Em paginas, por cursor (updated_at, id). Uma consulta so parava nas 1000
+    // linhas da API, e as series gravadas em lote compartilham o mesmo
+    // updated_at: o resto de um empate cortado no limite nunca mais descia. O
+    // cursor (e nao offset) porque uma linha atualizada por outro aparelho no
+    // meio da paginacao muda de posicao e faria outra pular de pagina.
+    let cursor: PullCursor | null = null;
 
-    if (error) throw new Error(error.message);
-    if (!data || data.length === 0) continue;
+    for (;;) {
+      const base = supabase.from(table).select('*').eq('user_id', userId).eq('gym_id', GYM);
+      const { data, error } = await (cursor
+        ? base.or(afterCursor(cursor))
+        : base.gt('updated_at', since)
+      )
+        .order('updated_at', { ascending: true })
+        .order('id', { ascending: true })
+        .limit(PULL_PAGE);
 
-    // Trocou de conta enquanto isto descia da rede: escrever agora plantaria
-    // dados da conta anterior no banco que o logout acabou de limpar.
-    if (mine !== generation) return received;
+      if (error) throw new Error(error.message);
+      const page = (data ?? []) as Record<string, unknown>[];
+      if (page.length === 0) break;
 
-    // Normaliza antes de qualquer comparacao: o Postgres devolve
-    // "2026-08-21 12:00:00+00" e o local guarda ISO com milissegundos.
-    // Comparar as duas formas como texto daria resultado errado.
-    const incoming = (data as Record<string, unknown>[]).map((remote) => toLocal(table, remote));
+      // Trocou de conta enquanto isto descia da rede: escrever agora plantaria
+      // dados da conta anterior no banco que o logout acabou de limpar.
+      if (mine !== generation) return received;
 
-    let newest = since;
-    for (const row of incoming) {
-      const stamp = String(row.updated_at);
-      if (stamp > newest) newest = stamp;
+      // O cursor usa o timestamp CRU do servidor (microssegundos): o toLocal
+      // corta para milissegundos, e o empate deixaria de ser exato.
+      const last = page[page.length - 1];
+      cursor = { stamp: String(last.updated_at), id: String(last.id) };
+
+      // Normaliza antes de qualquer comparacao: o Postgres devolve
+      // "2026-08-21 12:00:00+00" e o local guarda ISO com milissegundos.
+      // Comparar as duas formas como texto daria resultado errado.
+      const incoming = page.map((remote) => toLocal(table, remote));
+
+      await db.withTransactionAsync(async () => {
+        for (const row of incoming) {
+          const local = await db.getFirstAsync<{ updated_at: string }>(
+            `SELECT updated_at FROM ${table} WHERE id = ?`,
+            String(row.id),
+          );
+
+          // Last-write-wins: a versao local so e sobrescrita se for mais antiga.
+          // Isso e o que impede o pull de desfazer uma serie que o usuario
+          // acabou de marcar e que ainda esta esperando na outbox.
+          if (local && local.updated_at >= String(row.updated_at)) continue;
+
+          const columns = Object.keys(row);
+          await db.runAsync(
+            `INSERT OR REPLACE INTO ${table} (${columns.join(',')})
+             VALUES (${columns.map(() => '?').join(',')})`,
+            ...(columns.map((column) => row[column]) as never[]),
+          );
+          received += 1;
+        }
+      });
+
+      if (page.length < PULL_PAGE) break;
     }
 
-    await db.withTransactionAsync(async () => {
-      for (const row of incoming) {
-        const local = await db.getFirstAsync<{ updated_at: string }>(
-          `SELECT updated_at FROM ${table} WHERE id = ?`,
-          String(row.id),
-        );
-
-        // Last-write-wins: a versao local so e sobrescrita se for mais antiga.
-        // Isso e o que impede o pull de desfazer uma serie que o usuario acabou
-        // de marcar e que ainda esta esperando na outbox.
-        if (local && local.updated_at >= String(row.updated_at)) continue;
-
-        const columns = Object.keys(row);
-        await db.runAsync(
-          `INSERT OR REPLACE INTO ${table} (${columns.join(',')})
-           VALUES (${columns.map(() => '?').join(',')})`,
-          ...(columns.map((column) => row[column]) as never[]),
-        );
-        received += 1;
-      }
-    });
-
-    await db.runAsync(
-      'INSERT OR REPLACE INTO sync_state (table_name, last_pulled_at) VALUES (?, ?)',
-      table,
-      newest,
-    );
+    // So depois de todas as paginas: uma falha no meio volta ao mesmo `since`
+    // no proximo ciclo, e o last-write-wins torna repetir inofensivo. Grava o
+    // timestamp CRU da ultima linha (a mais nova, pela ordem): o cortado em
+    // milissegundos fazia as linhas logo depois dele descerem de novo em todo
+    // ciclo.
+    if (cursor) {
+      await db.runAsync(
+        'INSERT OR REPLACE INTO sync_state (table_name, last_pulled_at) VALUES (?, ?)',
+        table,
+        cursor.stamp,
+      );
+    }
   }
 
   return received;
+}
+
+/**
+ * Linhas por pagina no pull. Precisa ficar ABAIXO do limite de linhas da API
+ * (1000 no Supabase): com uma pagina do tamanho do limite, uma pagina cortada
+ * pelo servidor pareceria a ultima.
+ */
+export const PULL_PAGE = 500;
+
+export type PullCursor = { stamp: string; id: string };
+
+/** O filtro "depois de (updated_at, id)", no formato `or` do PostgREST. */
+export function afterCursor({ stamp, id }: PullCursor): string {
+  // Aspas no timestamp: ele tem ':' e '+', que o PostgREST le como sintaxe.
+  return `updated_at.gt."${stamp}",and(updated_at.eq."${stamp}",id.gt.${id})`;
 }
 
 // ---------------------------------------------------------------- conversao
