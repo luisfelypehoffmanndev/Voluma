@@ -180,11 +180,9 @@ create table if not exists public.profiles (
 -- colagem deste arquivo abortaria. E o mesmo motivo de v3 e v4 usarem
 -- `add column if not exists`.
 
--- Unicidade sobre lower(handle), nao sobre handle: o cliente ja grava
--- normalizado, mas e o indice que garante que `luis` e `LUIS` nunca coexistam
--- se o cliente algum dia errar.
-create unique index if not exists idx_profiles_handle
-  on public.profiles (lower(handle));
+-- O indice unico do handle (`idx_profiles_handle`, global) morava aqui. A v11
+-- o troca por um unico por mundo, e cria-lo aqui de novo, a cada colagem do
+-- arquivo, voltaria a proibir o mesmo @ em dois mundos.
 
 alter table public.profiles enable row level security;
 
@@ -221,13 +219,8 @@ create table if not exists public.friendships (
   check (requester_id <> addressee_id)
 );
 
--- Um par, uma linha, em qualquer direcao. Sem isto, duas pessoas que se pedem
--- ao mesmo tempo criam A->B e B->A: duas amizades entre as mesmas duas
--- pessoas, e cada uma aparece duas vezes na lista da outra.
-create unique index if not exists idx_friendship_pair on public.friendships (
-  least(requester_id::text, addressee_id::text),
-  greatest(requester_id::text, addressee_id::text)
-);
+-- O indice unico do par (`idx_friendship_pair`, um par = uma linha) morava
+-- aqui. A v11 o troca por um por mundo, pelo mesmo motivo do handle na v5.
 
 create index if not exists idx_friendship_addressee
   on public.friendships (addressee_id, status);
@@ -791,3 +784,438 @@ $$;
 
 revoke all on function public.list_friends() from public, anon;
 grant execute on function public.list_friends() to authenticated;
+
+-- ------------------------------------------------------- v11: multi-academia
+-- O Voluma passa a ter varios apps no mesmo banco: o padrao e um por academia.
+-- Cada app e um MUNDO e, para todos os fins, um app diferente: perfil, @,
+-- amizades e treinos de um mundo nao aparecem em outro. Ver
+-- plans/16-multi-academia.md.
+--
+-- O mundo e uma coluna `gym_id` em cada tabela, e nao um projeto Supabase por
+-- academia: um banco, uma migracao, e a mesma pessoa pode estar em dois mundos
+-- com a mesma conta Google (dois apps instalados).
+--
+-- Compativel com o app ja instalado, que nao conhece mundo nenhum: o default
+-- 'padrao' em toda coluna e em todo parametro de RPC faz ele continuar
+-- funcionando como antes, no mundo padrao.
+--
+-- O `gym_id` vem do app e nao e verificado, de proposito: forjar o mundo so
+-- permite buscar @ e pedir amizade la, porque os numeros continuam atras de
+-- amizade aceita + toggle. Por isso o RLS dos treinos continua so no dono.
+
+create table if not exists public.gyms (
+  id         text primary key check (id ~ '^[a-z0-9-]{2,30}$'),
+  name       text not null check (char_length(btrim(name)) between 1 and 60),
+  created_at timestamptz not null default now()
+);
+
+insert into public.gyms (id, name) values ('padrao', 'Voluma')
+on conflict (id) do nothing;
+
+-- RLS ligado, nenhuma policy e nenhum grant: o app nao le esta tabela. Ele
+-- sabe o proprio mundo pelo package name, e a lista de academias clientes nao
+-- tem por que sair do banco. A FK abaixo confere o `gym_id` mesmo assim: a
+-- checagem de chave estrangeira nao passa pelo RLS nem pelos grants de quem
+-- escreve.
+alter table public.gyms enable row level security;
+revoke all on public.gyms from anon, authenticated;
+
+-- A FK e o que impede um build com slug errado de criar um mundo fantasma: o
+-- banco recusa a linha. Nao contradiz o "sem FK entre as tabelas do app" do
+-- inicio do arquivo: aquilo e sobre a ORDEM de chegada no push, e `gyms` e
+-- cadastrada pela equipe antes de qualquer app daquele mundo existir.
+do $$
+declare
+  target text;
+begin
+  foreach target in array array[
+    'exercises', 'routines', 'routine_exercises', 'week_targets',
+    'sessions', 'session_sets', 'body_weight_logs', 'profiles', 'friendships'
+  ]
+  loop
+    execute format(
+      'alter table public.%I
+         add column if not exists gym_id text not null default %L
+         references public.gyms (id)',
+      target, 'padrao'
+    );
+  end loop;
+end $$;
+
+-- O pull do app novo filtra por dono + mundo + updated_at. Os indices antigos
+-- (dono + updated_at) ficam enquanto houver app instalado que puxa sem mundo, e
+-- saem numa versao futura, depois da trava do plano 16.
+do $$
+declare
+  target text;
+begin
+  foreach target in array array[
+    'exercises', 'routines', 'routine_exercises', 'week_targets',
+    'sessions', 'session_sets', 'body_weight_logs'
+  ]
+  loop
+    execute format(
+      'create index if not exists %I on public.%I (user_id, gym_id, updated_at)',
+      'idx_' || target || '_sync_gym', target
+    );
+  end loop;
+end $$;
+
+-- O ranking busca as sessoes de cada amigo NO MUNDO, por data.
+create index if not exists idx_sessions_user_gym_date
+  on public.sessions (user_id, gym_id, date);
+
+-- ---------------------------------------------------- perfil por mundo
+-- A mesma pessoa tem um perfil em cada mundo em que entrou: outro @, outra
+-- foto, outro nome, outro toggle. A chave passa a ser (id, gym_id).
+do $$
+begin
+  if (select i.indnatts from pg_index i
+       where i.indrelid = 'public.profiles'::regclass and i.indisprimary) <> 2 then
+    alter table public.profiles drop constraint profiles_pkey;
+    alter table public.profiles add constraint profiles_pkey primary key (id, gym_id);
+  end if;
+end $$;
+
+-- O @ e unico dentro do mundo. Sobre lower(handle), como antes: o cliente grava
+-- normalizado, mas e o indice que garante que `luis` e `LUIS` nunca coexistam
+-- se o cliente algum dia errar.
+drop index if exists public.idx_profiles_handle;
+create unique index if not exists idx_profiles_gym_handle
+  on public.profiles (gym_id, lower(handle));
+
+-- A foto ganha a pasta do mundo: `{user_id}/{gym_id}/{instante}.jpg`. O formato
+-- antigo, sem essa pasta, continua valendo no mundo padrao: e o que o app
+-- instalado grava, e sao as fotos que ja estao no bucket.
+--
+-- A regra antiga e achada pelo conteudo, nao pelo nome: criada inline numa
+-- coluna mas citando outra (`id`), ela ganhou o nome generico `profiles_check`.
+do $$
+declare
+  rule text;
+begin
+  for rule in
+    select conname from pg_constraint
+     where conrelid = 'public.profiles'::regclass
+       and contype = 'c'
+       and pg_get_constraintdef(oid) like '%avatar_path%'
+  loop
+    execute format('alter table public.profiles drop constraint %I', rule);
+  end loop;
+end $$;
+
+alter table public.profiles add constraint profiles_avatar_path_check check (
+  avatar_path is null
+  or avatar_path ~ ('^' || id::text || '/' || gym_id || '/[0-9]+\.jpg$')
+  or (gym_id = 'padrao' and avatar_path ~ ('^' || id::text || '/[0-9]+\.jpg$'))
+);
+
+-- --------------------------------------------------- amizade por mundo
+-- A amizade pertence ao mundo onde nasceu: o mesmo par pode ser amigo em dois
+-- mundos, e sao duas amizades independentes.
+do $$
+begin
+  if (select i.indnatts from pg_index i
+       where i.indrelid = 'public.friendships'::regclass and i.indisprimary) <> 3 then
+    alter table public.friendships drop constraint friendships_pkey;
+    alter table public.friendships add constraint friendships_pkey
+      primary key (requester_id, addressee_id, gym_id);
+  end if;
+end $$;
+
+-- Um par, uma linha POR MUNDO, em qualquer direcao. Sem isto, duas pessoas que
+-- se pedem ao mesmo tempo criam A->B e B->A no mesmo mundo, e cada uma aparece
+-- duas vezes na lista da outra.
+drop index if exists public.idx_friendship_pair;
+create unique index if not exists idx_friendship_gym_pair on public.friendships (
+  gym_id,
+  least(requester_id::text, addressee_id::text),
+  greatest(requester_id::text, addressee_id::text)
+);
+
+create index if not exists idx_friendship_addressee_gym
+  on public.friendships (addressee_id, gym_id, status);
+
+-- Quem recebe um pedido so pode mudar o STATUS dele. A policy de update da v6
+-- confere QUEM altera, mas nao O QUE: sem isto, quem recebeu um pedido do Caio
+-- podia trocar o requester_id para a Dana e marcar como aceito, criando uma
+-- amizade que a Dana nunca aceitou, com os numeros dela liberados. Com o
+-- `gym_id`, daria tambem para mudar a amizade de mundo. O app so atualiza estas
+-- duas colunas (`respondFriendship`).
+revoke update on public.friendships from anon, authenticated;
+grant update (status, updated_at) on public.friendships to authenticated;
+
+-- ------------------------------------------------------ foto por mundo
+-- A leitura confere a amizade DO MUNDO DA FOTO, que e a segunda pasta do
+-- caminho; sem ela (o formato antigo), o mundo e o padrao. Insert e delete nao
+-- mudam: continuam conferindo so que a primeira pasta e do dono.
+drop policy if exists avatar_select on storage.objects;
+create policy avatar_select on storage.objects
+  for select
+  to authenticated
+  using (
+    bucket_id = 'avatars'
+    and (
+      (storage.foldername(name))[1] = (select auth.uid())::text
+      or exists (
+        select 1
+        from public.friendships f
+        where f.gym_id = coalesce((storage.foldername(name))[2], 'padrao')
+          and (
+            (
+              f.status = 'accepted'
+              and (select auth.uid()) in (f.requester_id, f.addressee_id)
+              and (storage.foldername(name))[1] in (f.requester_id::text, f.addressee_id::text)
+            )
+            or (
+              f.status = 'pending'
+              and f.addressee_id = (select auth.uid())
+              and f.requester_id::text = (storage.foldername(name))[1]
+            )
+          )
+      )
+    )
+  );
+
+-- ------------------------------------------------------- RPCs com mundo
+-- Todas ganham `gym`, por ultimo e com default 'padrao': o app instalado chama
+-- sem ele e continua no mundo padrao. Mudar a assinatura cria uma funcao NOVA
+-- ao lado da antiga, e com as duas uma chamada sem `gym` seria ambigua. Por
+-- isso as antigas saem antes.
+--
+-- Os rankings filtram pelo mundo tambem as sessoes, series e rotinas, e nao so
+-- a amizade: os dias treinados do Bruno no mundo Y nao entram no ranking do X.
+
+drop function if exists public.find_profile_by_handle(text);
+drop function if exists public.find_profile_by_handle(text, text);
+create function public.find_profile_by_handle(target text, gym text default 'padrao')
+returns table (id uuid, handle text)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select p.id, p.handle
+  from public.profiles p
+  where p.gym_id = gym
+    and lower(p.handle) = lower(target)
+  limit 1;
+$$;
+
+revoke all on function public.find_profile_by_handle(text, text) from public, anon;
+grant execute on function public.find_profile_by_handle(text, text) to authenticated;
+
+drop function if exists public.request_friendship(text);
+drop function if exists public.request_friendship(text, text);
+create function public.request_friendship(target_handle text, gym text default 'padrao')
+returns text
+language plpgsql
+security definer
+volatile
+set search_path = public
+as $$
+declare
+  me uuid := (select auth.uid());
+  target uuid;
+begin
+  if me is null then return 'unauthenticated'; end if;
+
+  -- So acha quem esta NESTE mundo: e a unica coisa que o mundo libera.
+  select p.id into target
+  from public.profiles p
+  where p.gym_id = gym
+    and lower(p.handle) = lower(target_handle)
+  limit 1;
+
+  if target is null then return 'not-found'; end if;
+  if target = me then return 'self'; end if;
+
+  -- O indice do par no mundo decide se ja existe relacao, inclusive na direcao
+  -- contraria (ver v6).
+  begin
+    insert into public.friendships (requester_id, addressee_id, status, gym_id)
+    values (me, target, 'pending', gym);
+  exception
+    when unique_violation then return 'already';
+  end;
+
+  return 'ok';
+end;
+$$;
+
+revoke all on function public.request_friendship(text, text) from public, anon;
+grant execute on function public.request_friendship(text, text) to authenticated;
+
+drop function if exists public.list_friends();
+drop function if exists public.list_friends(text);
+create function public.list_friends(gym text default 'padrao')
+returns table (
+  id             uuid,
+  handle         text,
+  status         text,
+  direction      text,
+  shares_stats   boolean,
+  age            int,
+  training_years int,
+  avatar_path    text,
+  since          timestamptz,
+  display_name   text
+)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select
+    p.id,
+    p.handle,
+    f.status,
+    case when f.requester_id = (select auth.uid()) then 'outgoing' else 'incoming' end,
+    p.shares_stats,
+    -- Idade e anos de treino so saem do servidor com os DOIS consentimentos.
+    case when p.shares_stats and f.status = 'accepted' then p.age end,
+    case when p.shares_stats and f.status = 'accepted' then p.training_years end,
+    case
+      when f.status = 'accepted' or f.requester_id <> (select auth.uid()) then p.avatar_path
+    end,
+    f.created_at,
+    case
+      when f.status = 'accepted' or f.requester_id <> (select auth.uid()) then p.display_name
+    end
+  from public.friendships f
+  join public.profiles p
+    on p.gym_id = f.gym_id
+   and p.id = case
+      when f.requester_id = (select auth.uid()) then f.addressee_id
+      else f.requester_id
+    end
+  where f.gym_id = gym
+    and (select auth.uid()) in (f.requester_id, f.addressee_id);
+$$;
+
+revoke all on function public.list_friends(text) from public, anon;
+grant execute on function public.list_friends(text) to authenticated;
+
+drop function if exists public.friend_weekly_days(date, date);
+drop function if exists public.friend_weekly_days(date, date, text);
+create function public.friend_weekly_days(
+  first_week date,
+  last_week  date,
+  gym        text default 'padrao'
+)
+returns table (
+  id           uuid,
+  handle       text,
+  shares       boolean,
+  planned_days int,
+  week_start   date,
+  days         int
+)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  with amigos as (
+    select p.id, p.handle, p.shares_stats
+    from public.friendships f
+    join public.profiles p
+      on p.gym_id = f.gym_id
+     and p.id = case
+        when f.requester_id = (select auth.uid()) then f.addressee_id
+        else f.requester_id
+      end
+    where f.gym_id = gym
+      and (select auth.uid()) in (f.requester_id, f.addressee_id)
+      and f.status = 'accepted'
+  ),
+  dias as (
+    select distinct a.id, s.date
+    from amigos a
+    join public.sessions s
+      on s.user_id = a.id
+     and s.gym_id = gym
+    join public.session_sets st
+      on st.session_id = s.id
+     and st.user_id = a.id
+     and st.gym_id = gym
+    where a.shares_stats
+      and s.deleted_at is null
+      and st.deleted_at is null
+      and st.done
+      and st.reps * st.weight_kg > 0
+      and s.date between first_week and last_week + 6
+  ),
+  semanas as (
+    select id, date - extract(dow from date)::int as week_start, count(*)::int as days
+    from dias
+    group by 1, 2
+  ),
+  planos as (
+    select r.user_id as id, count(distinct r.weekday)::int as planned
+    from public.routines r
+    join amigos a on a.id = r.user_id
+    where a.shares_stats
+      and r.gym_id = gym
+      and r.deleted_at is null
+    group by r.user_id
+  )
+  select
+    a.id,
+    a.handle,
+    a.shares_stats,
+    case when a.shares_stats then coalesce(pl.planned, 0) end,
+    w.week_start,
+    w.days
+  from amigos a
+  left join planos pl on pl.id = a.id
+  left join semanas w on w.id = a.id;
+$$;
+
+revoke all on function public.friend_weekly_days(date, date, text) from public, anon;
+grant execute on function public.friend_weekly_days(date, date, text) to authenticated;
+
+drop function if exists public.friend_monthly_distance(date, date);
+drop function if exists public.friend_monthly_distance(date, date, text);
+create function public.friend_monthly_distance(
+  month_start date,
+  month_end   date,
+  gym         text default 'padrao'
+)
+returns table (id uuid, handle text, km real)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select
+    p.id,
+    p.handle,
+    case when p.shares_stats then (
+      select round(coalesce(sum(st.distance_km), 0)::numeric, 1)::real
+      from public.sessions s
+      join public.session_sets st
+        on st.session_id = s.id
+       and st.user_id = p.id
+       and st.gym_id = gym
+      where s.user_id = p.id
+        and s.gym_id = gym
+        and s.deleted_at is null
+        and st.deleted_at is null
+        and st.done
+        and s.date between month_start and month_end
+    ) end
+  from public.friendships f
+  join public.profiles p
+    on p.gym_id = f.gym_id
+   and p.id = case
+      when f.requester_id = (select auth.uid()) then f.addressee_id
+      else f.requester_id
+    end
+  where f.gym_id = gym
+    and (select auth.uid()) in (f.requester_id, f.addressee_id)
+    and f.status = 'accepted';
+$$;
+
+revoke all on function public.friend_monthly_distance(date, date, text) from public, anon;
+grant execute on function public.friend_monthly_distance(date, date, text) to authenticated;
