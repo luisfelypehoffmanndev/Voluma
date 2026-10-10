@@ -84,6 +84,7 @@ export default function BodyWeightScreen() {
           <PressableSurface
             hitSlop={hitSlop}
             onPress={() => nudge(-STEP)}
+            accessibilityLabel="Diminuir 0,1 kg"
             pressedOpacity={0.6}
             borderRadius={radius.pill}
             style={styles.nudge}
@@ -96,6 +97,7 @@ export default function BodyWeightScreen() {
           <PressableSurface
             hitSlop={hitSlop}
             onPress={() => nudge(STEP)}
+            accessibilityLabel="Aumentar 0,1 kg"
             pressedOpacity={0.6}
             borderRadius={radius.pill}
             style={styles.nudge}
@@ -139,6 +141,8 @@ export default function BodyWeightScreen() {
             <Pressable
               hitSlop={hitSlop}
               onPress={() => void remove(log.id)}
+              accessibilityRole="button"
+              accessibilityLabel={`Apagar o registro de ${formatWeight(log.weightKg)} kg`}
             >
               <TrashIcon size={16} color={colors.textSecondary} />
             </Pressable>
