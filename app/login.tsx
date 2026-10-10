@@ -7,6 +7,7 @@ import { useAuth } from '@/sync/auth';
 import { colors, fontSize, radius, spacing, surfaces } from '@/theme/tokens';
 import { PressableSurface } from '@/ui/PressableSurface';
 import { GoogleIcon } from '@/ui/icons';
+import { goBackOr } from '@/ui/navigation';
 import { Header, Screen } from '@/ui/Screen';
 import { Body, Meta } from '@/ui/Text';
 
@@ -45,7 +46,7 @@ export default function LoginScreen() {
     setBusy(false);
     // Troca o modal em vez de empilhar: voltar do perfil tem que cair no
     // Perfil, nao numa tela de login de uma conta em que a pessoa ja entrou.
-    if (hasProfile) router.back();
+    if (hasProfile) goBackOr(router, '/profile');
     else router.replace('/profile-setup');
   };
 

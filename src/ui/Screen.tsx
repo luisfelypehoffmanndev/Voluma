@@ -9,6 +9,7 @@ import { BlurTarget } from './blurTarget';
 import { PressableSurface } from './PressableSurface';
 import { Meta, Title } from './Text';
 import { ArrowLeftIcon } from './icons';
+import { goBackOr } from './navigation';
 
 /**
  * Base de toda tela. O `Ambient` fica atras de tudo: e o campo de luz que as
@@ -77,7 +78,7 @@ export function Header({ title, subtitle, back, onBack, action, secondaryAction 
         {back ? (
           <RoundButton
             icon={<ArrowLeftIcon size={20} />}
-            onPress={onBack ?? (() => router.back())}
+            onPress={onBack ?? (() => goBackOr(router, '/'))}
             accessibilityLabel="Voltar"
           />
         ) : null}
