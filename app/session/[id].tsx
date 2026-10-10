@@ -506,6 +506,12 @@ export default function SessionScreen() {
           setPendingPick(null);
           setPicking(false);
         }}
+        // Com a pergunta "so hoje / no plano" aberta, o voltar fecha so ela.
+        onBack={() => {
+          if (pendingPick == null) return false;
+          setPendingPick(null);
+          return true;
+        }}
         onPick={(exerciseId) => {
           const picked = catalog.find((exercise) => exercise.id === exerciseId);
           if (picked) choose(picked);

@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -38,11 +38,40 @@ export default function BodyWeightScreen() {
   const nudge = (delta: number) =>
     setDraft(Math.max(0, Math.round((value + delta) * 10) / 10));
 
+  // Ref, e nao estado: dois toques no mesmo quadro passariam pelo estado antigo
+  // e gravariam o peso duas vezes.
+  const busy = useRef(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
   const save = async () => {
-    confirm();
-    await logBodyWeight(value);
-    bumpData();
-    goBackOr(router, '/');
+    if (busy.current) return;
+    busy.current = true;
+    setActionError(null);
+    try {
+      await logBodyWeight(value);
+      confirm();
+      bumpData();
+      goBackOr(router, '/');
+    } catch {
+      setActionError('Não foi possível registrar o peso');
+    } finally {
+      busy.current = false;
+    }
+  };
+
+  const remove = async (id: string) => {
+    if (busy.current) return;
+    busy.current = true;
+    setActionError(null);
+    try {
+      await deleteBodyWeightLog(id);
+      bumpData();
+      reload();
+    } catch {
+      setActionError('Não foi possível apagar o registro');
+    } finally {
+      busy.current = false;
+    }
   };
 
   return (
@@ -99,6 +128,7 @@ export default function BodyWeightScreen() {
       >
         <Label style={styles.historyTitle}>Registros recentes</Label>
         {error ? <LoadError error={error} onRetry={reload} /> : null}
+        {actionError ? <Meta style={styles.actionError}>{actionError}</Meta> : null}
 
         {logs.map((log) => (
           <View key={log.id} style={styles.logRow}>
@@ -108,11 +138,7 @@ export default function BodyWeightScreen() {
             </View>
             <Pressable
               hitSlop={hitSlop}
-              onPress={async () => {
-                await deleteBodyWeightLog(log.id);
-                bumpData();
-                reload();
-              }}
+              onPress={() => void remove(log.id)}
             >
               <TrashIcon size={16} color={colors.textSecondary} />
             </Pressable>
@@ -188,6 +214,9 @@ const styles = StyleSheet.create({
   },
   empty: {
     paddingVertical: spacing.xxl,
+  },
+  actionError: {
+    marginBottom: spacing.md,
   },
   save: {
     position: 'absolute',

@@ -97,10 +97,14 @@ export default function DayScreen() {
   const reorder = useCallback(
     (ids: string[]) => {
       setLocalOrder(ids);
-      void reorderRoutineExercises(ids).then(() => {
-        bumpData();
-        reload();
-      });
+      reorderRoutineExercises(ids)
+        .then(() => bumpData())
+        .catch((reason) => {
+          // A ordem nova ficou so na tela: volta para a que esta gravada.
+          console.warn('[Voluma] falha ao reordenar o plano', reason);
+          setLocalOrder(null);
+        })
+        .finally(() => reload());
     },
     [reload],
   );

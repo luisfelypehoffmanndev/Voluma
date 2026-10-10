@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -67,11 +67,19 @@ export default function FriendsScreen() {
   const [handle, setHandle] = useState('');
   const [result, setResult] = useState<RequestResult | 'error' | null>(null);
 
+  // O botao so desabilita quando o `loading` do store chega a tela: dois toques
+  // no mesmo quadro mandariam o pedido duas vezes.
+  const sending = useRef(false);
   const submit = useCallback(async () => {
-    if (!isValidHandle(handle)) return;
-    const outcome = await request(handle);
-    setResult(outcome);
-    if (outcome === 'ok') setHandle('');
+    if (!isValidHandle(handle) || sending.current) return;
+    sending.current = true;
+    try {
+      const outcome = await request(handle);
+      setResult(outcome);
+      if (outcome === 'ok') setHandle('');
+    } finally {
+      sending.current = false;
+    }
   }, [handle, request]);
 
   // A mesma cor de cada amigo nos graficos. Pedido pendente ainda nao tem cor:

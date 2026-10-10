@@ -59,6 +59,11 @@ type Props = {
   /** Texto sob o titulo, para dizer o que a escolha vai causar. */
   subtitle?: string;
   onClose: () => void;
+  /**
+   * O voltar do Android, antes de fechar o seletor. Devolve `true` quando
+   * consumiu o voltar (fechou a pergunta de `children`, por exemplo).
+   */
+  onBack?: () => boolean;
   onPick: (exerciseId: string) => void;
   onCreate: (name: string, muscleGroup?: string, kind?: ExerciseKind) => void;
   /**
@@ -89,6 +94,7 @@ export function ExercisePicker({
   usedIds,
   subtitle,
   onClose,
+  onBack,
   onPick,
   onCreate,
   children,
@@ -138,7 +144,12 @@ export function ExercisePicker({
   const modalAnimation = useModalAnimation();
 
   return (
-    <Modal visible={visible} animationType={modalAnimation} onRequestClose={close} transparent>
+    <Modal
+      visible={visible}
+      animationType={modalAnimation}
+      onRequestClose={() => (onBack?.() ? undefined : close())}
+      transparent
+    >
       {/* Um `Modal` do RN e uma janela propria no Android, e o alvo de blur da
           janela principal nao alcanca aqui — o painel fica fosco la, como
           sempre esteve. No iOS o material nativo nao le alvo e nada muda. */}
