@@ -1,4 +1,5 @@
 import type { Profile } from '@/domain/types';
+import { GYM } from '@/world';
 
 import { updateProfile } from './profile';
 import { requireClient } from './requireClient';
@@ -23,11 +24,12 @@ const SIGNED_TTL_S = 60 * 60;
 const REFRESH_MARGIN_MS = 5 * 60 * 1000;
 
 /**
- * `{userId}/{instante}.jpg`. A pasta e o que as policies conferem; o instante
- * troca a URL a cada foto nova, e o cache do aparelho nao mostra a antiga.
+ * `{userId}/{mundo}/{instante}.jpg`. As pastas sao o que as policies conferem
+ * (o dono e o mundo da foto); o instante troca a URL a cada foto nova, e o
+ * cache do aparelho nao mostra a antiga.
  */
-export function avatarPathFor(userId: string, now: number): string {
-  return `${userId}/${now}.jpg`;
+export function avatarPathFor(userId: string, gym: string, now: number): string {
+  return `${userId}/${gym}/${now}.jpg`;
 }
 
 /** O maior quadrado central de uma imagem — o recorte da foto de perfil. */
@@ -53,7 +55,7 @@ export async function uploadAvatar(
   now = Date.now(),
 ): Promise<Profile> {
   const client = requireClient();
-  const path = avatarPathFor(userId, now);
+  const path = avatarPathFor(userId, GYM, now);
 
   const { error } = await client.storage
     .from(BUCKET)

@@ -10,6 +10,7 @@ import { resetDb } from '@/db/client';
 import { bumpData } from '@/store/data';
 import { useFriends } from '@/store/friends';
 import { useProfile } from '@/store/profile';
+import { GYM, schemeFor } from '@/world';
 
 import { clearAvatarCache } from './avatar';
 import {
@@ -93,9 +94,9 @@ export const useAuth = create<AuthState>((set, get) => ({
   signInWithGoogle: async () => {
     if (!supabase) return 'Nuvem não configurada';
 
-    // `voluma://`, o scheme do app.json. E o mesmo redirect no dev client e no
-    // build de producao, e o unico que precisa estar liberado no Supabase.
-    const redirectTo = makeRedirectUri();
+    // Do mundo, e nao do scheme da config, que um OTA errado trocaria. No app
+    // padrao continua `voluma://`, o redirect ja liberado no Supabase.
+    const redirectTo = makeRedirectUri({ scheme: schemeFor(GYM) });
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',

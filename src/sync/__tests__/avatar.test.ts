@@ -60,8 +60,9 @@ jest.mock('../supabase', () => ({
         }),
       },
       from: () => ({
-        update: (changes: { avatar_path: string | null }) => ({
-          eq: () => ({
+        update: (changes: { avatar_path: string | null }) => {
+          const chain = {
+            eq: () => chain,
             select: () => ({
               single: async () => {
                 mockLog.push(`update avatar_path=${changes.avatar_path}`);
@@ -70,13 +71,16 @@ jest.mock('../supabase', () => ({
                   : { data: perfil(changes.avatar_path), error: null };
               },
             }),
-          }),
-        }),
+          };
+          return chain;
+        },
       }),
     };
   },
   isCloudConfigured: true,
 }));
+
+jest.mock('@/world', () => ({ GYM: 'zztx' }));
 
 const bytes = new Uint8Array([0xff, 0xd8, 0xff]);
 
@@ -90,9 +94,9 @@ beforeEach(() => {
 });
 
 describe('avatarPathFor', () => {
-  // A pasta e o id: e o que as policies do Storage conferem.
-  it('fica na pasta do dono, com o instante no nome', () => {
-    expect(avatarPathFor('u1', 1727000000000)).toBe('u1/1727000000000.jpg');
+  // As pastas sao o dono e o mundo: e o que as policies do Storage conferem.
+  it('fica na pasta do dono e do mundo, com o instante no nome', () => {
+    expect(avatarPathFor('u1', 'zztx', 1727000000000)).toBe('u1/zztx/1727000000000.jpg');
   });
 });
 
@@ -115,11 +119,11 @@ describe('uploadAvatar', () => {
     const profile = await uploadAvatar('u1', bytes, 'u1/1.jpg', 1727000000000);
 
     expect(mockLog).toEqual([
-      'upload avatars u1/1727000000000.jpg image/jpeg',
-      'update avatar_path=u1/1727000000000.jpg',
+      'upload avatars u1/zztx/1727000000000.jpg image/jpeg',
+      'update avatar_path=u1/zztx/1727000000000.jpg',
       'remove avatars u1/1.jpg',
     ]);
-    expect(profile.avatarPath).toBe('u1/1727000000000.jpg');
+    expect(profile.avatarPath).toBe('u1/zztx/1727000000000.jpg');
   });
 
   it('sem foto anterior, nao apaga nada', async () => {
@@ -133,7 +137,7 @@ describe('uploadAvatar', () => {
     await expect(uploadAvatar('u1', bytes, 'u1/1.jpg', 1727000000000)).rejects.toThrow(
       'Sem conexão',
     );
-    expect(mockLog).toEqual(['upload avatars u1/1727000000000.jpg image/jpeg']);
+    expect(mockLog).toEqual(['upload avatars u1/zztx/1727000000000.jpg image/jpeg']);
   });
 
   // O arquivo novo subiu mas o perfil nao aponta para ele: sobraria um arquivo
@@ -145,9 +149,9 @@ describe('uploadAvatar', () => {
       'Sem conexão',
     );
     expect(mockLog).toEqual([
-      'upload avatars u1/1727000000000.jpg image/jpeg',
-      'update avatar_path=u1/1727000000000.jpg',
-      'remove avatars u1/1727000000000.jpg',
+      'upload avatars u1/zztx/1727000000000.jpg image/jpeg',
+      'update avatar_path=u1/zztx/1727000000000.jpg',
+      'remove avatars u1/zztx/1727000000000.jpg',
     ]);
   });
 });

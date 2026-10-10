@@ -5,6 +5,7 @@ import type {
   ValueRow,
   WeeklyDaysRow,
 } from '@/domain/friends';
+import { GYM } from '@/world';
 
 import { requireClient } from './requireClient';
 
@@ -39,7 +40,7 @@ type Row = {
 export async function listFriends(): Promise<FriendRow[]> {
   const client = requireClient();
 
-  const { data, error } = await client.rpc('list_friends', {});
+  const { data, error } = await client.rpc('list_friends', { gym: GYM });
   if (error) throw new Error(error.message);
 
   return ((data ?? []) as Row[]).map(toFriend);
@@ -67,6 +68,7 @@ export async function weeklyDays(firstWeek: string, lastWeek: string): Promise<W
   const { data, error } = await client.rpc('friend_weekly_days', {
     first_week: firstWeek,
     last_week: lastWeek,
+    gym: GYM,
   });
   if (error) throw new Error(error.message);
 
@@ -90,6 +92,7 @@ export async function monthlyDistance(
   const { data, error } = await client.rpc('friend_monthly_distance', {
     month_start: monthStart,
     month_end: monthEnd,
+    gym: GYM,
   });
   if (error) throw new Error(error.message);
 
@@ -103,7 +106,10 @@ export async function monthlyDistance(
 export async function requestFriendship(handle: string): Promise<RequestResult> {
   const client = requireClient();
 
-  const { data, error } = await client.rpc('request_friendship', { target_handle: handle });
+  const { data, error } = await client.rpc('request_friendship', {
+    target_handle: handle,
+    gym: GYM,
+  });
   if (error) throw new Error(error.message);
 
   return data as RequestResult;
@@ -129,11 +135,13 @@ export async function respondFriendship(
         .update({ status: 'accepted', updated_at: new Date().toISOString() })
         .eq('requester_id', requesterId)
         .eq('addressee_id', userId)
+        .eq('gym_id', GYM)
     : await client
         .from('friendships')
         .delete()
         .eq('requester_id', requesterId)
-        .eq('addressee_id', userId);
+        .eq('addressee_id', userId)
+        .eq('gym_id', GYM);
 
   if (error) throw new Error(error.message);
 }
@@ -156,7 +164,8 @@ export async function removeFriendship(userId: string, otherId: string): Promise
       .from('friendships')
       .delete()
       .eq('requester_id', requester)
-      .eq('addressee_id', addressee);
+      .eq('addressee_id', addressee)
+      .eq('gym_id', GYM);
 
     if (error) throw new Error(error.message);
   }
