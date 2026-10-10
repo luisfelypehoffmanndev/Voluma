@@ -20,6 +20,12 @@ export function schemeFor(gym: string): string {
 // Do package, e nao da config: o package e nativo, e um OTA publicado errado nao o altera.
 export const GYM = gymFromPackage(Application.applicationId);
 
+const configuredName: unknown = Constants.expoConfig?.name;
+
+/** O nome do app ("Voluma", ou o da academia), da config de cada variante. */
+export const APP_NAME =
+  typeof configuredName === 'string' && configuredName.trim() ? configuredName : 'Voluma';
+
 const declared: unknown = Constants.expoConfig?.extra?.gymId;
 if (typeof declared === 'string' && declared !== GYM) {
   console.warn(`Config da academia "${declared}" no app de "${GYM}": vale o package.`);

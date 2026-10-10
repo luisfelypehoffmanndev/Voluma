@@ -194,6 +194,7 @@ export default function DayScreen() {
             <RoundButton
               icon={<ChevronLeftIcon size={16} />}
               onPress={() => setWeekStart((week) => addWeeks(week, -1))}
+              accessibilityLabel="Semana anterior"
             />
             <View style={styles.weekText}>
               <Body>{weekRangeLabel(weekStart)}</Body>
@@ -202,6 +203,7 @@ export default function DayScreen() {
             <RoundButton
               icon={<ChevronRightIcon size={16} />}
               onPress={() => setWeekStart((week) => addWeeks(week, 1))}
+              accessibilityLabel="Próxima semana"
             />
           </View>
         </Card>

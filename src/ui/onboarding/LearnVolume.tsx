@@ -6,6 +6,7 @@ import { Card } from '@/ui/Card';
 import { CountingStat } from '@/ui/CountingStat';
 import { Stepper } from '@/ui/Stepper';
 import { Body, Meta, Mono } from '@/ui/Text';
+import { APP_NAME } from '@/world';
 
 export type VolumeDraft = { sets: number; reps: number; weightKg: number };
 
@@ -72,7 +73,9 @@ export function LearnVolume({
         />
       </Card>
 
-      <Meta>É esse número que o Voluma acompanha, treino a treino e semana a semana.</Meta>
+      <Meta>
+        {APP_NAME} acompanha esse número, treino a treino e semana a semana.
+      </Meta>
     </View>
   );
 }

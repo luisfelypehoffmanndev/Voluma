@@ -27,7 +27,9 @@ import { LoadError } from '@/ui/LoadError';
 import { Header, Screen } from '@/ui/Screen';
 import { useTabBarClearance } from '@/ui/tabBar';
 import { Body, Label, Meta } from '@/ui/Text';
+import { ConfirmModal } from '@/ui/ConfirmModal';
 import { ChevronRightIcon, SyncIcon } from '@/ui/icons';
+import { APP_NAME } from '@/world';
 
 /**
  * Perfil: o que e seu e nao e treino — peso, preferencias, conta, creditos.
@@ -119,7 +121,7 @@ function HelpCard() {
       >
         <View style={styles.rowText}>
           <Body>Guia rápido</Body>
-          <Meta>como o Voluma funciona, em duas telas</Meta>
+          <Meta>como funciona o app {APP_NAME}, em duas telas</Meta>
         </View>
         <ChevronRightIcon size={16} color={colors.textSecondary} />
       </PressableSurface>
@@ -419,6 +421,7 @@ function SharingCard() {
 function SyncCard() {
   const router = useRouter();
   const { status, email, syncing, pending, lastSync, runSync, signOut } = useAuth();
+  const [confirmingSignOut, setConfirmingSignOut] = useState(false);
 
   if (!isCloudConfigured) {
     return (
@@ -459,12 +462,27 @@ function SyncCard() {
         <SyncIcon size={18} color={colors.textSecondary} />
       </Pressable>
 
-      <Pressable style={styles.row} onPress={() => void signOut()}>
+      <Pressable style={styles.row} onPress={() => setConfirmingSignOut(true)}>
         <View style={styles.rowText}>
           <Body>Sair</Body>
           <Meta>Remove os dados deste aparelho</Meta>
         </View>
       </Pressable>
+
+      <ConfirmModal
+        visible={confirmingSignOut}
+        title="Sair e apagar os dados deste aparelho?"
+        message={
+          // Sair apaga o banco local: o que ainda esta na fila nao volta.
+          pending > 0
+            ? `${pending} ${pending === 1 ? 'mudança ainda não foi sincronizada e vai se perder' : 'mudanças ainda não foram sincronizadas e vão se perder'}.`
+            : 'O que já foi sincronizado volta quando você entrar de novo.'
+        }
+        cancelLabel="Cancelar"
+        confirmLabel="Sair"
+        onClose={() => setConfirmingSignOut(false)}
+        onConfirm={() => void signOut()}
+      />
     </Card>
   );
 }

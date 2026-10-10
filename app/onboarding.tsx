@@ -20,6 +20,7 @@ import { BarsMark, FieldCover, IGNITION, Staged } from '@/ui/onboarding/Ignition
 import { LearnVolume, type VolumeDraft } from '@/ui/onboarding/LearnVolume';
 import { Header, Screen } from '@/ui/Screen';
 import { Body, Label, Meta, Mono } from '@/ui/Text';
+import { APP_NAME } from '@/world';
 
 type Start = 'ppl' | 'empty';
 
@@ -212,7 +213,9 @@ function Welcome() {
     <View style={styles.welcome}>
       <BarsMark />
       <Staged delay={IGNITION.wordmark.delay} duration={IGNITION.wordmark.duration}>
-        <Mono style={styles.wordmark}>Voluma</Mono>
+        <Mono style={styles.wordmark} numberOfLines={1} adjustsFontSizeToFit>
+          {APP_NAME}
+        </Mono>
       </Staged>
       <Staged delay={IGNITION.tagline.delay} duration={IGNITION.tagline.duration}>
         <Body style={styles.lead}>O volume do seu treino, semana a semana.</Body>
