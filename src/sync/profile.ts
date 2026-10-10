@@ -1,4 +1,5 @@
 import type { Profile } from '@/domain/types';
+import { GYM } from '@/world';
 
 import { requireClient } from './requireClient';
 
@@ -52,6 +53,7 @@ export async function fetchProfile(userId: string): Promise<Profile | null> {
     .from('profiles')
     .select(COLUMNS)
     .eq('id', userId)
+    .eq('gym_id', GYM)
     .maybeSingle();
 
   if (error) throw new Error(error.message);
@@ -77,6 +79,7 @@ export async function claimHandle(
       .from('profiles')
       .insert({
         id: userId,
+        gym_id: GYM,
         handle,
         age: extras.age ?? null,
         training_years: extras.trainingYears ?? null,
@@ -114,6 +117,7 @@ export async function updateProfile(
     .from('profiles')
     .update(changes)
     .eq('id', userId)
+    .eq('gym_id', GYM)
     .select(COLUMNS)
     .single();
 

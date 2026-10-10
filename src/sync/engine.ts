@@ -1,5 +1,6 @@
 import { getDb } from '@/db/client';
 import { SYNCED_TABLES, type SyncedTable } from '@/db/schema';
+import { GYM } from '@/world';
 
 import { supabase } from './supabase';
 
@@ -137,7 +138,7 @@ async function push(userId: string): Promise<number> {
         ...chunk,
       );
 
-      const payload = rows.map((row) => ({ ...toRemote(table, row), user_id: userId }));
+      const payload = rows.map((row) => toRemote(table, row, userId, GYM));
       const { error } = await supabase.from(table).upsert(payload, { onConflict: 'id' });
       if (error) throw new Error(error.message);
 
@@ -178,6 +179,7 @@ async function pull(userId: string): Promise<number> {
       .from(table)
       .select('*')
       .eq('user_id', userId)
+      .eq('gym_id', GYM)
       .gt('updated_at', since)
       .order('updated_at', { ascending: true });
 
@@ -233,9 +235,17 @@ async function pull(userId: string): Promise<number> {
 
 // ---------------------------------------------------------------- conversao
 
-/** Remove colunas locais e normaliza tipos que diferem entre SQLite e Postgres. */
-function toRemote(table: SyncedTable, row: Record<string, unknown>): Record<string, unknown> {
-  const out = { ...row };
+/**
+ * A linha local como o servidor espera: com dono e mundo carimbados, e os tipos
+ * que diferem entre SQLite e Postgres normalizados.
+ */
+export function toRemote(
+  table: SyncedTable,
+  row: Record<string, unknown>,
+  userId: string,
+  gym: string,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...row, user_id: userId, gym_id: gym };
   if (table === 'session_sets') {
     // SQLite guarda 0/1; a coluna no Postgres e boolean.
     out.done = row.done === 1 || row.done === true;
@@ -243,9 +253,9 @@ function toRemote(table: SyncedTable, row: Record<string, unknown>): Record<stri
   return out;
 }
 
-/** Caminho inverso, descartando `user_id`, que so existe no servidor. */
-function toLocal(table: SyncedTable, row: Record<string, unknown>): Record<string, unknown> {
-  const { user_id: _ignored, ...rest } = row;
+/** Caminho inverso, descartando `user_id` e `gym_id`, que so existem no servidor. */
+export function toLocal(table: SyncedTable, row: Record<string, unknown>): Record<string, unknown> {
+  const { user_id: _user, gym_id: _gym, ...rest } = row;
   const out: Record<string, unknown> = { ...rest };
 
   if (table === 'session_sets') {

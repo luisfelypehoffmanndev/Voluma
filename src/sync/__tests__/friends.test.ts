@@ -63,6 +63,8 @@ jest.mock('../supabase', () => ({
   isCloudConfigured: true,
 }));
 
+jest.mock('@/world', () => ({ GYM: 'zztx' }));
+
 beforeEach(() => {
   mockRpcResponse = { data: null, error: null };
   mockRpcCalls = [];
@@ -106,6 +108,14 @@ describe('listFriends', () => {
     ]);
   });
 
+  it('pede a lista do mundo do app', async () => {
+    mockRpcResponse = { data: [], error: null };
+
+    await listFriends();
+
+    expect(mockRpcCalls).toEqual([{ fn: 'list_friends', args: { gym: 'zztx' } }]);
+  });
+
   it('devolve lista vazia quando ainda nao ha ninguem', async () => {
     mockRpcResponse = { data: [], error: null };
     expect(await listFriends()).toEqual([]);
@@ -124,7 +134,10 @@ describe('weeklyDays', () => {
     await weeklyDays('2026-07-12', '2026-09-27');
 
     expect(mockRpcCalls).toEqual([
-      { fn: 'friend_weekly_days', args: { first_week: '2026-07-12', last_week: '2026-09-27' } },
+      {
+        fn: 'friend_weekly_days',
+        args: { first_week: '2026-07-12', last_week: '2026-09-27', gym: 'zztx' },
+      },
     ]);
   });
 
@@ -191,7 +204,7 @@ describe('monthlyDistance', () => {
     expect(mockRpcCalls).toEqual([
       {
         fn: 'friend_monthly_distance',
-        args: { month_start: '2026-09-01', month_end: '2026-09-30' },
+        args: { month_start: '2026-09-01', month_end: '2026-09-30', gym: 'zztx' },
       },
     ]);
   });
@@ -225,7 +238,9 @@ describe('requestFriendship', () => {
     mockRpcResponse = { data: 'ok', error: null };
 
     expect(await requestFriendship('bia')).toBe('ok');
-    expect(mockRpcCalls).toEqual([{ fn: 'request_friendship', args: { target_handle: 'bia' } }]);
+    expect(mockRpcCalls).toEqual([
+      { fn: 'request_friendship', args: { target_handle: 'bia', gym: 'zztx' } },
+    ]);
   });
 
   // Os codigos do servidor viram texto na tela, e cada um diz outra coisa:
@@ -242,7 +257,11 @@ describe('respondFriendship', () => {
 
     expect(mockUpdates).toHaveLength(1);
     expect(mockUpdates[0].changes).toMatchObject({ status: 'accepted' });
-    expect(mockUpdates[0].filters).toEqual({ requester_id: 'u2', addressee_id: 'me' });
+    expect(mockUpdates[0].filters).toEqual({
+      requester_id: 'u2',
+      addressee_id: 'me',
+      gym_id: 'zztx',
+    });
     expect(mockDeletes).toHaveLength(0);
   });
 
@@ -252,7 +271,7 @@ describe('respondFriendship', () => {
   it('recusar apaga a linha, em vez de marcar um status', async () => {
     await respondFriendship('me', 'u2', false);
 
-    expect(mockDeletes).toEqual([{ requester_id: 'u2', addressee_id: 'me' }]);
+    expect(mockDeletes).toEqual([{ requester_id: 'u2', addressee_id: 'me', gym_id: 'zztx' }]);
     expect(mockUpdates).toHaveLength(0);
   });
 });
@@ -264,8 +283,8 @@ describe('removeFriendship', () => {
     await removeFriendship('me', 'u2');
 
     expect(mockDeletes).toEqual([
-      { requester_id: 'me', addressee_id: 'u2' },
-      { requester_id: 'u2', addressee_id: 'me' },
+      { requester_id: 'me', addressee_id: 'u2', gym_id: 'zztx' },
+      { requester_id: 'u2', addressee_id: 'me', gym_id: 'zztx' },
     ]);
   });
 });
