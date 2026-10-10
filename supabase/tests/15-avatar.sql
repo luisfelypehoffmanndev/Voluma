@@ -101,10 +101,18 @@ begin
   insert into storage.objects (bucket_id, name)
     values ('avatars', '00000000-0000-4000-8000-0000000000e1/2.jpg');
 
-  -- Apagar a foto de outra pessoa nao apaga nada.
-  delete from storage.objects where name = '00000000-0000-4000-8000-0000000000b1/1.jpg';
-  get diagnostics n = row_count;
-  assert n = 0, 'consegui apagar a foto da bia';
+  -- Apagar a foto de outra pessoa nao apaga nada. Dois jeitos de dar certo: o
+  -- RLS devolve 0 linhas, ou o Supabase recusa o comando antes (42501). A
+  -- segunda e a `protect_objects_delete`, que a plataforma passou a instalar
+  -- depois deste teste ser escrito: um gatilho POR COMANDO que barra todo
+  -- `delete` direto em storage.objects, mesmo sem linha visivel.
+  begin
+    delete from storage.objects where name = '00000000-0000-4000-8000-0000000000b1/1.jpg';
+    get diagnostics n = row_count;
+    assert n = 0, 'consegui apagar a foto da bia';
+  exception
+    when insufficient_privilege then null;
+  end;
 
   -- list_friends: a foto segue a mesma regra do Storage.
   select * into r from public.list_friends() where handle = 'zzt_bia';
