@@ -10,6 +10,7 @@ import { useFriends } from '@/store/friends';
 import { useProfile } from '@/store/profile';
 import { useAuth } from '@/sync/auth';
 import { signedAvatarUrls } from '@/sync/avatar';
+import { syncStatusText } from '@/sync/status';
 import { isCloudConfigured } from '@/sync/supabase';
 import { colors, people, spacing } from '@/theme/tokens';
 import { usePrefs } from '@/store/prefs';
@@ -453,15 +454,7 @@ function SyncCard() {
       <Pressable style={styles.row} onPress={() => void runSync()} disabled={syncing}>
         <View style={styles.rowText}>
           <Body numberOfLines={1}>{email}</Body>
-          <Meta>
-            {syncing
-              ? 'sincronizando…'
-              : pending > 0
-                ? `${pending} ${pending === 1 ? 'mudança pendente' : 'mudanças pendentes'}`
-                : lastSync?.error
-                  ? lastSync.error
-                  : 'tudo sincronizado'}
-          </Meta>
+          <Meta>{syncStatusText(syncing, pending, lastSync?.error ?? null)}</Meta>
         </View>
         <SyncIcon size={18} color={colors.textSecondary} />
       </Pressable>

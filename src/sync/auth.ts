@@ -172,7 +172,13 @@ export const useAuth = create<AuthState>((set, get) => ({
   },
 
   refreshPending: async () => {
-    set({ pending: await pendingCount() });
+    // E so o contador do Perfil: falhar ao contar a fila nao pode derrubar o
+    // sync nem o login, que o aguardam (e o login travaria o botao girando).
+    try {
+      set({ pending: await pendingCount() });
+    } catch (error) {
+      console.warn('[Voluma] falha ao contar as mudanças pendentes', error);
+    }
   },
 }));
 
