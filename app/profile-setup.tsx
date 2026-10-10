@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet } from 'react-native';
 
 import { handleCandidates } from '@/domain/handle';
 import { useProfile } from '@/store/profile';
+import { goBackOr } from '@/ui/navigation';
 import { useAuth } from '@/sync/auth';
 import { spacing } from '@/theme/tokens';
 import { Header, Screen } from '@/ui/Screen';
@@ -56,7 +57,7 @@ export default function ProfileSetupScreen() {
       setTaken(true);
       return;
     }
-    if (result === 'ok') router.back();
+    if (result === 'ok') goBackOr(router, '/profile');
   };
 
   return (
@@ -83,7 +84,7 @@ export default function ProfileSetupScreen() {
         />
 
         {editing ? null : (
-          <Pressable style={styles.skip} onPress={() => router.back()}>
+          <Pressable style={styles.skip} onPress={() => goBackOr(router, '/profile')}>
             <Body>Agora não</Body>
           </Pressable>
         )}

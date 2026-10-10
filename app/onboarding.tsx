@@ -15,6 +15,7 @@ import { Card } from '@/ui/Card';
 import { confirm } from '@/ui/haptics';
 import { PressableSurface } from '@/ui/PressableSurface';
 import { Reveal } from '@/ui/Reveal';
+import { goBackOr } from '@/ui/navigation';
 import { BarsMark, FieldCover, IGNITION, Staged } from '@/ui/onboarding/Ignition';
 import { LearnVolume, type VolumeDraft } from '@/ui/onboarding/LearnVolume';
 import { Header, Screen } from '@/ui/Screen';
@@ -116,7 +117,7 @@ export default function OnboardingScreen() {
         return <Button variant="primary" label="Continuar" onPress={() => setStep(2)} />;
       case 2:
         return replay ? (
-          <Button variant="primary" label="Entendi" onPress={() => router.back()} />
+          <Button variant="primary" label="Entendi" onPress={() => goBackOr(router, '/profile')} />
         ) : (
           <Button variant="primary" label="Continuar" onPress={() => setStep(3)} />
         );
@@ -179,7 +180,7 @@ export default function OnboardingScreen() {
       <Header
         title=""
         back={step > 0 || replay}
-        onBack={() => (step > 0 ? setStep(step - 1) : router.back())}
+        onBack={() => (step > 0 ? setStep(step - 1) : goBackOr(router, '/profile'))}
       />
 
       <ScrollView

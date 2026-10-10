@@ -11,6 +11,7 @@ import { relativeTime } from '@/ui/relative';
 import { confirm } from '@/ui/haptics';
 import { PressableSurface } from '@/ui/PressableSurface';
 import { LoadError } from '@/ui/LoadError';
+import { goBackOr } from '@/ui/navigation';
 import { Header, Screen } from '@/ui/Screen';
 import { StatNumber } from '@/ui/StatNumber';
 import { Body, Label, Meta } from '@/ui/Text';
@@ -41,7 +42,7 @@ export default function BodyWeightScreen() {
     confirm();
     await logBodyWeight(value);
     bumpData();
-    router.back();
+    goBackOr(router, '/');
   };
 
   return (
