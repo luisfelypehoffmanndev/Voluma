@@ -1,3 +1,5 @@
+import { isAuthSessionMissingError } from '@supabase/supabase-js';
+
 import { normalizeName } from '@/db/catalog';
 import { getDb } from '@/db/client';
 import { yieldLocalToAccount } from '@/db/repo';
@@ -90,9 +92,16 @@ async function runCycle(): Promise<SyncOutcome> {
     // como rejeicao, ela deixaria o `syncing` de quem chamou preso em true — e
     // `runSync` comeca com `if (get().syncing) return`, entao todo sync futuro
     // viraria no-op ate o app reiniciar.
-    const { data: auth } = await supabase.auth.getUser();
+    const { data: auth, error: authError } = await supabase.auth.getUser();
     const userId = auth.user?.id;
-    if (!userId) return IDLE;
+    if (!userId) {
+      // Sem sessao e quem nao entrou: nada a sincronizar. Qualquer outro erro e
+      // falha do ciclo. O supabase-js nao lanca sem rede: devolve `user: null`
+      // com o erro, e tomar isso por "ninguem logado" deixava a fila crescendo
+      // calada, sem motivo no Perfil.
+      if (authError && !isAuthSessionMissingError(authError)) throw authError;
+      return IDLE;
+    }
 
     let pulled = await joinAccount(userId, mine);
     if (mine !== generation) return IDLE;
@@ -476,9 +485,15 @@ export function toLocal(table: SyncedTable, row: Record<string, unknown>): Recor
   return out;
 }
 
+/**
+ * A falha em poucas palavras, para o Perfil. Sem rede, o fetch do Android fala
+ * em ingles e em Java ("fetch failed: java.net.UnknownHostException: Unable to
+ * resolve host…"); outras pilhas dizem "Network request failed".
+ */
 function describe(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return 'Falha de sincronização';
+  const message = error instanceof Error ? error.message : '';
+  if (/fetch failed|failed to fetch|network request failed/i.test(message)) return 'Sem conexão';
+  return message || 'Falha de sincronização';
 }
 
 /** Quantas mudancas ainda nao subiram — o indicador discreto dos Ajustes. */

@@ -1,3 +1,5 @@
+import { AuthRetryableFetchError, AuthSessionMissingError } from '@supabase/supabase-js';
+
 import { afterCursor, PULL_OVERLAP_MS, PULL_PAGE, shiftStamp, stampKey, sync } from '../engine';
 
 /**
@@ -30,6 +32,8 @@ let mockTick: number;
 let mockEvents: string[];
 /** Tabela cuja consulta falha, como uma queda de rede no meio do pull. */
 let mockFailingTable: string | null;
+/** O que o `getUser` devolve: o supabase-js nao lanca, devolve o erro. */
+let mockAuth: { data: { user: { id: string } | null }; error: Error | null };
 
 /** As colunas do SQLite falso: `synced_at`, `user_id` e `gym_id` so existem no servidor. */
 const mockLocalColumns = ['id', 'updated_at', 'reps', 'done'];
@@ -105,7 +109,7 @@ jest.mock('@/db/client', () => ({
 jest.mock('../supabase', () => ({
   get supabase() {
     return {
-      auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
+      auth: { getUser: async () => mockAuth },
       from: (table: string) => {
         const filters: ((row: ServerRow) => boolean)[] = [];
         let limit = Infinity;
@@ -171,7 +175,14 @@ jest.mock('../supabase', () => ({
           ) => {
             mockEvents.push(`select:${table}`);
             if (table === mockFailingTable) {
-              return Promise.resolve({ data: null, error: { message: 'Sem conexao' } }).then(resolve);
+              return Promise.resolve({
+                data: null,
+                // O texto que o fetch do Android devolve sem rede, no aparelho.
+                error: {
+                  message:
+                    'fetch failed: java.net.UnknownHostException: Unable to resolve host "x.supabase.co": No address associated with hostname',
+                },
+              }).then(resolve);
             }
             const key = (row: ServerRow) => mockKey(String(row[orderBy]));
             const rows = (mockServer[table] ?? [])
@@ -202,6 +213,7 @@ beforeEach(() => {
   mockTick = 0;
   mockEvents = [];
   mockFailingTable = null;
+  mockAuth = { data: { user: { id: 'u1' } }, error: null };
 });
 
 describe('pull', () => {
@@ -367,7 +379,7 @@ describe('primeiro sync da conta no aparelho', () => {
     mockFailingTable = 'body_weight_logs';
 
     const first = await sync();
-    expect(first.error).toBe('Sem conexao');
+    expect(first.error).toBe('Sem conexão');
     expect(mockSyncState.get('exercises')).toEqual(expect.any(String));
     expect(mockEvents).not.toContain('yield');
     expect(mockEvents.some((event) => event.startsWith('upsert:'))).toBe(false);
@@ -378,6 +390,22 @@ describe('primeiro sync da conta no aparelho', () => {
 
     expect(mockEvents).toContain('yield');
     expect(mockSyncState.get('account_joined')).toEqual(expect.any(String));
+  });
+});
+
+describe('sessao', () => {
+  // Sem rede, o supabase-js devolve `user: null` com o erro, sem lancar. Lido
+  // como "ninguem logado", o ciclo terminava sem erro e a fila crescia calada.
+  it('sem rede, o ciclo falha com o motivo, em vez de dizer que nao ha nada a fazer', async () => {
+    mockAuth = { data: { user: null }, error: new AuthRetryableFetchError('Network request failed', 0) };
+
+    expect(await sync()).toEqual({ pushed: 0, pulled: 0, error: 'Sem conexão' });
+  });
+
+  it('sem sessao, nao ha o que sincronizar, e isso nao e erro', async () => {
+    mockAuth = { data: { user: null }, error: new AuthSessionMissingError() };
+
+    expect(await sync()).toEqual({ pushed: 0, pulled: 0, error: null });
   });
 });
 
