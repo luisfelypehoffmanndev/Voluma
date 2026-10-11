@@ -2,7 +2,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  AppState,
   Pressable,
   StyleSheet,
   View,
@@ -66,6 +65,7 @@ import { COMMIT_DELAY, TargetsEditor } from '@/ui/TargetsEditor';
 import { Body, Label, Meta } from '@/ui/Text';
 import { ActionSheet, type SheetAction } from '@/ui/ActionSheet';
 import { UndoToast, type UndoOffer } from '@/ui/UndoToast';
+import { useWriteBehind } from '@/ui/useWriteBehind';
 import { ChevronRightIcon, MoreIcon, PlusIcon } from '@/ui/icons';
 
 /**
@@ -628,104 +628,6 @@ type ExerciseDraft = {
   totalSets: number;
 };
 
-/**
- * Escrita adiada, coalescida e que nunca desiste.
- *
- * Tres garantias, nessa ordem de importancia:
- *
- * 1. **Coalesce.** Cinco toques seguidos na mesma caixa viram UMA escrita, a do
- *    estado final. Antes cada toque abria sua propria transacao, e duas delas
- *    perto no tempo se sobrepunham na conexao compartilhada — a origem do erro
- *    que fazia a caixa voltar sozinha (ver `serializeTransactions` em
- *    `src/db/client.ts`). Menos escrita e menos chance de colisao, alem de
- *    menos trabalho na JS thread no instante do toque.
- * 2. **Uma em voo por vez.** Se um estado novo chega enquanto a escrita
- *    anterior ainda nao voltou, ele espera e entra depois — nunca em paralelo.
- * 3. **Nao perde.** Flush no unmount e ao mandar o app para segundo plano, para
- *    que sair da tela (ou fechar o app) no meio do debounce grave mesmo assim.
- *
- * O que ele deliberadamente NAO faz e avisar quem chamou sobre falha: o estado
- * da tela e a intencao do usuario, e ela nao se desfaz porque o SQLite
- * engasgou. Falhou, tenta de novo na proxima vez que houver algo pendente.
- */
-function useWriteBehind<T>(perform: (value: T) => Promise<void>) {
-  const pending = useRef<{ value: T } | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const inFlight = useRef(false);
-  const current = useRef<Promise<void> | null>(null);
-  const performRef = useRef(perform);
-  useEffect(() => {
-    performRef.current = perform;
-  });
-
-  const flushRef = useRef<() => void>(() => {});
-
-  const flush = useCallback(() => {
-    if (timer.current) {
-      clearTimeout(timer.current);
-      timer.current = null;
-    }
-    if (inFlight.current) return; // o `finally` abaixo reentra quando voltar
-    const next = pending.current;
-    if (!next) return;
-
-    pending.current = null;
-    inFlight.current = true;
-    current.current = performRef.current(next.value).finally(() => {
-      inFlight.current = false;
-      if (pending.current) flushRef.current();
-    });
-  }, []);
-
-  useEffect(() => {
-    flushRef.current = flush;
-  }, [flush]);
-
-  /**
-   * Grava agora o que estiver pendente e so resolve quando nao sobrar nada —
-   * nem na fila, nem em voo. E o que o "Finalizar treino" espera.
-   */
-  const settle = useCallback(async () => {
-    flush();
-    while (inFlight.current || pending.current) {
-      if (current.current) await current.current;
-      flush();
-    }
-  }, [flush]);
-
-  const schedule = useCallback(
-    (value: T) => {
-      pending.current = { value };
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(flush, COMMIT_DELAY);
-    },
-    [flush],
-  );
-
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state !== 'active') flush();
-    });
-    return () => {
-      subscription.remove();
-      flush();
-    };
-  }, [flush]);
-
-  /**
-   * Joga fora o que ainda nao foi gravado. So para quando o exercicio SAI da
-   * tela (pular, remover): ai a escrita pendente ja nao descreve nada que o
-   * usuario queira, e o flush do unmount a gravaria por cima da remocao.
-   */
-  const discard = useCallback(() => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = null;
-    pending.current = null;
-  }, []);
-
-  return { schedule, flush, discard, settle };
-}
-
 type ItemSource = 'edited' | 'lastActual' | 'plan';
 
 type SessionExercise = {
@@ -1190,7 +1092,7 @@ function StrengthExerciseCard(props: CardProps) {
    * na fila nesse meio tempo — senao sobrescreveria uma edicao mais recente do
    * usuario com o retorno de uma escrita ja velha.
    */
-  const { schedule, discard, settle } = useWriteBehind<{ rows: SetDraft[] }>(
+  const { schedule, amend, discard, settle } = useWriteBehind<{ rows: SetDraft[] }>(
     useCallback(
       (value) =>
         setSessionExerciseSets(
@@ -1288,12 +1190,19 @@ function StrengthExerciseCard(props: CardProps) {
 
   const updateRow = (index: number, patch: Partial<Pick<SetDraft, 'reps' | 'weightKg'>>) => {
     const row = rows[index];
-    setRows((current) => current.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+    const patched = (list: SetDraft[]) =>
+      list.map((r, i) => (i === index ? { ...r, ...patch } : r));
+    setRows(patched);
     // Linha que existe no banco grava o ajuste, marcada ou nao: ela e a serie
     // que o usuario vai fazer, e o numero dela e dado, nao rascunho. A
     // sintetica espera a primeira marcacao, que materializa o exercicio e leva
     // `rows` junto — nada se perde.
+    //
+    // Menos quando essa marcacao ainda esta a caminho do banco: ela leva as
+    // series de ANTES do ajuste, volta divergente, e o rascunho fica sem ids,
+    // com o ajuste so na tela. O ajuste vai junto dela (`amend`).
     if (row?.id) scheduleRowCommit(row.id, patch);
+    else amend({ rows: patched(rows) });
   };
 
   const addRow = () => {
@@ -1313,16 +1222,18 @@ function StrengthExerciseCard(props: CardProps) {
           console.warn('[Voluma] falha ao adicionar série', item.exerciseName, error),
         );
     } else {
-      setRows((current) => [
-        ...current,
+      const added = (list: SetDraft[]): SetDraft[] => [
+        ...list,
         {
           id: null,
-          setIndex: current.length + 1,
+          setIndex: list.length + 1,
           reps: last?.reps ?? 10,
           weightKg: last?.weightKg ?? 0,
           done: false,
         },
-      ]);
+      ];
+      setRows(added);
+      amend({ rows: added(rows) }); // o mesmo caso do `updateRow`
     }
   };
 
@@ -1346,7 +1257,9 @@ function StrengthExerciseCard(props: CardProps) {
         );
     }
 
-    setRows((current) => current.filter((_, i) => i !== index));
+    const removed = (list: SetDraft[]) => list.filter((_, i) => i !== index);
+    setRows(removed);
+    if (!row.id) amend({ rows: removed(rows) }); // o mesmo caso do `updateRow`
   };
 
   const setsMotion = useListMotion();
