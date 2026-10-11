@@ -1293,9 +1293,10 @@ begin
       'create index if not exists %I on public.%I (user_id, gym_id, synced_at, id)',
       'idx_' || target || '_synced', target
     );
-    execute format('drop trigger if exists sync_stamp on public.%I', target);
+    -- `create or replace`, e nao drop + create: sem comando destrutivo, rodar
+    -- de novo nao pede confirmacao no SQL Editor nem no MCP.
     execute format(
-      'create trigger sync_stamp before insert or update on public.%I
+      'create or replace trigger sync_stamp before insert or update on public.%I
          for each row execute function public.sync_stamp()',
       target
     );
