@@ -10,7 +10,7 @@
 do onboarding
 **Depende de:** [07](07-login-google.md), [11](11-perfil-handle.md),
 [12](12-amigos.md), [15](15-avatar-e-nomes.md)
-**Estado:** **16.1 a 16.4 feitas** (v11 e v12 no Supabase; o app sabe o próprio mundo; OTA configurado no projeto EAS novo `voluma`; variantes por academia com a `teste` de prova), sem teste no aparelho ainda. Publicação e 16.5 em diante: planejado
+**Estado:** **16.1 a 16.4 feitas** (v11 e v12 no Supabase; o app sabe o próprio mundo; OTA configurado no projeto EAS novo `voluma`; variantes por academia com a `teste` de prova), testadas no aparelho: o app padrão no mundo `padrao` e o app `teste` isolado. Publicação e 16.5 em diante: planejado
 
 ## Contexto da decisão
 
