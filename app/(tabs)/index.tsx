@@ -557,8 +557,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.lg,
     paddingVertical: spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
   },
   row: {
     flexDirection: 'row',
