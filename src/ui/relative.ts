@@ -1,3 +1,5 @@
+import { toDateKey } from '@/domain/week';
+
 /**
  * Timestamps relativos e objetivos, como manda o brief: "há 31 min",
  * "Ontem · 14 ago". Nunca frase motivacional, nunca data por extenso.
@@ -30,7 +32,7 @@ export function relativeTime(iso: string, now = new Date()): string {
 
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
-  if (then.getDate() === yesterday.getDate() && then.getMonth() === yesterday.getMonth()) {
+  if (toDateKey(then) === toDateKey(yesterday)) {
     return `Ontem · ${shortDate(then)}`;
   }
 

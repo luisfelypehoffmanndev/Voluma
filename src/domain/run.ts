@@ -84,8 +84,10 @@ export function runTargetsFromSets(
     sets: 1,
     reps: 0,
     weightKg: 0,
-    // Arredonda para uma casa: somar 0,1 repetidas vezes rende 5,300000000001.
-    distanceKm: Math.round(done.reduce((sum, set) => sum + set.distanceKm, 0) * 10) / 10,
+    // Duas casas, as mesmas do `formatDistance` e do Stepper: com uma, 5,25 km
+    // virava meta de 5,3. Arredondar ainda e preciso, porque somar 0,1 varias
+    // vezes rende 5,300000000001.
+    distanceKm: Math.round(done.reduce((sum, set) => sum + set.distanceKm, 0) * 100) / 100,
     durationMin: done.reduce((sum, set) => sum + set.durationMin, 0),
   };
 }

@@ -1260,6 +1260,16 @@ export async function setSessionExerciseSets(
 
 // ----------------------------------------------------------- peso corporal
 
+/** Os registros desde a meia-noite local de `fromKey`, do mais novo ao mais velho. */
+export async function listBodyWeightLogsSince(fromKey: string): Promise<BodyWeightLog[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<BodyWeightLogRow>(
+    'SELECT * FROM body_weight_logs WHERE deleted_at IS NULL AND logged_at >= ? ORDER BY logged_at DESC',
+    fromDateKey(fromKey).toISOString(),
+  );
+  return rows.map(toBodyWeightLog);
+}
+
 export async function listBodyWeightLogs(limit = 30): Promise<BodyWeightLog[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<BodyWeightLogRow>(
@@ -1334,11 +1344,22 @@ export async function distanceByDate(
   return new Map(rows.map((row) => [row.date, row.distance]));
 }
 
-/** Datas com treino registrado, para os pontos do calendario. */
+/**
+ * Dias treinados: com pelo menos uma serie FEITA com carga (reps x kg > 0).
+ *
+ * A regra unica do app: calendario, sequencia, dot-matrix (`volume > 0`) e o
+ * ranking dos amigos (`friend_weekly_days`) contam igual. Abrir o treino e sair
+ * sem marcar nao conta, e dia so de corrida tambem nao.
+ */
 export async function trainedDates(fromKey: string, toKey: string): Promise<Set<string>> {
   const db = await getDb();
   const rows = await db.getAllAsync<{ date: string }>(
-    'SELECT DISTINCT date FROM sessions WHERE deleted_at IS NULL AND date BETWEEN ? AND ?',
+    `SELECT DISTINCT s.date AS date
+       FROM sessions s
+       JOIN session_sets ss ON ss.session_id = s.id
+      WHERE s.deleted_at IS NULL AND ss.deleted_at IS NULL
+        AND ss.done = 1 AND ss.reps * ss.weight_kg > 0
+        AND s.date BETWEEN ? AND ?`,
     fromKey,
     toKey,
   );

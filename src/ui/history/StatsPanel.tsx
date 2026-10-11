@@ -7,7 +7,7 @@ import {
   distanceByDate,
   exerciseProgress,
   getOrCreateSessionForDate,
-  listBodyWeightLogs,
+  listBodyWeightLogsSince,
   listExerciseRecords,
   progressCandidates,
   volumeByDate,
@@ -87,15 +87,18 @@ export function StatsPanel() {
       const [volumes, records, logs, distances, groups, candidates] = await Promise.all([
         volumeByDate(since, todayKey),
         listExerciseRecords(),
-        listBodyWeightLogs(WEEKS * 7),
+        // Por data, e nao por quantidade: o limite de 84 registros cortava o
+        // grafico em 42 dias para quem pesa de manha e a noite.
+        listBodyWeightLogsSince(since),
         distanceByDate(since, todayKey),
         volumeByMuscleGroup(lastNDays(now, GROUP_DAYS)[0], todayKey),
         progressCandidates(since),
       ]);
-      // Arredonda a uma casa: somar 0,1 sete vezes rende 0,7000000000000001.
+      // Arredonda a duas casas, as do `formatDistance`: somar 0,1 sete vezes rende
+      // 0,7000000000000001, e com uma casa 5,25 km aparecia como 5,3.
       let weekDistance = 0;
       for (const [key, km] of distances) if (weekKeys.has(key)) weekDistance += km;
-      weekDistance = Math.round(weekDistance * 10) / 10;
+      weekDistance = Math.round(weekDistance * 100) / 100;
       // Quem nao corre nao precisa de um card dizendo "0 km" toda semana: ele so
       // aparece se houve distancia em algum treino da janela.
       const runs = [...distances.values()].some((km) => km > 0);
