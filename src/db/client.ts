@@ -213,18 +213,27 @@ async function hasColumn(
   return columns.some((item) => item.name === column);
 }
 
-/** Apaga tudo — usado ao trocar de conta, para nao misturar dados de usuarios. */
+/**
+ * Apaga tudo — usado ao trocar de conta, para nao misturar dados de usuarios.
+ *
+ * Pela fila de transacoes, e nao com um `execAsync` solto: solto, ele rodava
+ * por cima de uma escrita em andamento (e um ROLLBACK dela desfazia o reset),
+ * e uma escrita ja na fila caia DEPOIS dele, deixando linha e outbox que o
+ * proximo login subiria para a outra conta.
+ */
 export async function resetDb(): Promise<void> {
   const db = await getDb();
-  await db.execAsync(`
-    DELETE FROM session_sets;
-    DELETE FROM sessions;
-    DELETE FROM week_targets;
-    DELETE FROM routine_exercises;
-    DELETE FROM routines;
-    DELETE FROM exercises;
-    DELETE FROM body_weight_logs;
-    DELETE FROM outbox;
-    DELETE FROM sync_state;
-  `);
+  await db.withTransactionAsync(async () => {
+    await db.execAsync(`
+      DELETE FROM session_sets;
+      DELETE FROM sessions;
+      DELETE FROM week_targets;
+      DELETE FROM routine_exercises;
+      DELETE FROM routines;
+      DELETE FROM exercises;
+      DELETE FROM body_weight_logs;
+      DELETE FROM outbox;
+      DELETE FROM sync_state;
+    `);
+  });
 }

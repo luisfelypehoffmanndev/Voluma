@@ -66,6 +66,13 @@ type FriendsState = {
 
 // Fora do estado do zustand: nao e nada que a tela desenhe.
 let timer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Muda a cada `clear` (logout). Uma resposta de rede que chega depois dele e
+ * da conta que saiu: gravar a lista, ou devolver a linha de um commit que
+ * falhou, mostraria os amigos dela para quem entrar em seguida.
+ */
+let epoch = 0;
 let background: NativeEventSubscription | null = null;
 let nextId = 1;
 
@@ -109,19 +116,21 @@ export const useFriends = create<FriendsState>((set, get) => {
     pendingRemoval: null,
 
     load: async () => {
+      const mine = epoch;
       set({ loading: true, error: null });
       try {
         const lists = splitFriends(await listFriends());
+        if (mine !== epoch) return;
         // A linha pendente ainda existe no servidor ate a janela fechar; sem
         // este filtro, qualquer recarga no meio dela a traria de volta.
         const pending = get().pendingRemoval;
         set({ lists: pending ? without(lists, pending.otherId) : lists });
       } catch (error) {
-        set({ error: message(error) });
+        if (mine === epoch) set({ error: message(error) });
       } finally {
         // No finally: `loading` preso em true deixaria a tela girando para sempre
         // depois de uma falha de rede.
-        set({ loading: false });
+        if (mine === epoch) set({ loading: false });
       }
     },
 
@@ -170,6 +179,7 @@ export const useFriends = create<FriendsState>((set, get) => {
       // saida da tela podem pedir o commit quase juntos, e so um deve escrever.
       disarm();
       set({ pendingRemoval: null });
+      const mine = epoch;
 
       try {
         if (pending.kind === 'respond') {
@@ -180,6 +190,7 @@ export const useFriends = create<FriendsState>((set, get) => {
       } catch (error) {
         // Nada mudou no servidor, entao a linha volta: a tela nao pode dizer
         // que alguem saiu da lista quando nao saiu.
+        if (mine !== epoch) return;
         if (pending.row) set({ lists: withRow(get().lists, pending.row) });
         set({ error: message(error) });
       }
@@ -199,6 +210,7 @@ export const useFriends = create<FriendsState>((set, get) => {
     // Descarta a pendencia SEM gravar: no sign-out, a remocao era intencao de
     // quem saiu, nao da proxima pessoa a entrar no aparelho.
     clear: () => {
+      epoch += 1;
       disarm();
       set({ lists: EMPTY, loading: false, error: null, pendingRemoval: null });
     },
