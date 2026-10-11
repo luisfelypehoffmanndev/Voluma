@@ -23,9 +23,13 @@ type ServerRow = {
 
 let mockServer: Record<string, ServerRow[]>;
 let mockLocal: Map<string, Record<string, unknown>>;
-let mockSyncState: Map<string, string>;
+let mockSyncState: Map<string, string | null>;
 let mockOutbox: { seq: number; table_name: string; row_id: string }[];
 let mockTick: number;
+/** A sequencia do ciclo: "select:<tabela>", "upsert:<tabela>" e "yield". */
+let mockEvents: string[];
+/** Tabela cuja consulta falha, como uma queda de rede no meio do pull. */
+let mockFailingTable: string | null;
 
 /** As colunas do SQLite falso: `synced_at`, `user_id` e `gym_id` so existem no servidor. */
 const mockLocalColumns = ['id', 'updated_at', 'reps', 'done'];
@@ -43,6 +47,13 @@ function mockKey(stamp: string): string {
 }
 
 jest.mock('@/world', () => ({ GYM: 'padrao' }));
+
+jest.mock('@/db/repo', () => ({
+  yieldLocalToAccount: jest.fn(async () => {
+    mockEvents.push('yield');
+    return { exercises: 0, routines: 0 };
+  }),
+}));
 
 jest.mock('@/db/client', () => ({
   getDb: async () => ({
@@ -63,16 +74,19 @@ jest.mock('@/db/client', () => ({
       return [];
     },
     getFirstAsync: async (sql: string, key: string) => {
+      if (sql.includes('COUNT(*) AS cursors')) {
+        const cursors = [...mockSyncState].filter(([table, value]) => table !== key && value !== null);
+        return { cursors: cursors.length };
+      }
       if (sql.includes('sync_state')) {
-        const value = mockSyncState.get(key);
-        return value ? { last_pulled_at: value } : null;
+        return mockSyncState.has(key) ? { last_pulled_at: mockSyncState.get(key) ?? null } : null;
       }
       const row = mockLocal.get(key);
       return row ? { updated_at: row.updated_at } : null;
     },
     runAsync: async (sql: string, ...args: unknown[]) => {
       if (sql.includes('sync_state')) {
-        mockSyncState.set(String(args[0]), String(args[1]));
+        mockSyncState.set(String(args[0]), (args[1] as string | null) ?? null);
         return;
       }
       if (sql.startsWith('DELETE FROM outbox')) {
@@ -131,6 +145,7 @@ jest.mock('../supabase', () => ({
           upsert: (payload: Record<string, unknown>[]) => ({
             select: () => ({
               then: (resolve: (value: { data: { id: string }[]; error: null }) => unknown) => {
+                mockEvents.push(`upsert:${table}`);
                 const rows = (mockServer[table] ??= []);
                 const written: { id: string }[] = [];
                 for (const incoming of payload) {
@@ -149,7 +164,15 @@ jest.mock('../supabase', () => ({
               },
             }),
           }),
-          then: (resolve: (value: { data: ServerRow[]; error: null }) => unknown) => {
+          then: (
+            resolve: (
+              value: { data: ServerRow[]; error: null } | { data: null; error: { message: string } },
+            ) => unknown,
+          ) => {
+            mockEvents.push(`select:${table}`);
+            if (table === mockFailingTable) {
+              return Promise.resolve({ data: null, error: { message: 'Sem conexao' } }).then(resolve);
+            }
             const key = (row: ServerRow) => mockKey(String(row[orderBy]));
             const rows = (mockServer[table] ?? [])
               .filter((row) => filters.every((filter) => filter(row)))
@@ -177,6 +200,8 @@ beforeEach(() => {
   mockSyncState = new Map();
   mockOutbox = [];
   mockTick = 0;
+  mockEvents = [];
+  mockFailingTable = null;
 });
 
 describe('pull', () => {
@@ -286,6 +311,73 @@ describe('push', () => {
     expect(mockServer.session_sets[0].reps).toBe(9);
     expect(mockLocal.get('x1')).toMatchObject({ reps: 9, updated_at: '2026-10-10T11:00:00.000Z' });
     expect(mockOutbox).toEqual([]);
+  });
+});
+
+describe('primeiro sync da conta no aparelho', () => {
+  // O onboarding cria catalogo e plano antes do login: subindo primeiro, eles
+  // iriam para o servidor ao lado dos da conta, duplicados.
+  it('a conta desce, o aparelho cede, e so entao o aparelho sobe', async () => {
+    mockServer.session_sets = [serverRow('da-conta', '2026-10-01T08:00:00.000Z')];
+    mockLocal.set('do-aparelho', { id: 'do-aparelho', updated_at: '2026-10-11T08:00:00.000Z', reps: 1, done: 1 });
+    mockOutbox = [{ seq: 1, table_name: 'session_sets', row_id: 'do-aparelho' }];
+
+    await sync();
+
+    const firstPull = mockEvents.indexOf('select:session_sets');
+    expect(firstPull).toBeGreaterThanOrEqual(0);
+    expect(mockEvents.indexOf('yield')).toBeGreaterThan(firstPull);
+    expect(mockEvents.indexOf('upsert:session_sets')).toBeGreaterThan(mockEvents.indexOf('yield'));
+  });
+
+  it('roda uma vez so; nos ciclos seguintes o aparelho sobe antes de baixar', async () => {
+    await sync();
+    mockEvents = [];
+    mockLocal.set('nova', { id: 'nova', updated_at: '2026-10-11T09:00:00.000Z', reps: 1, done: 1 });
+    mockOutbox = [{ seq: 2, table_name: 'session_sets', row_id: 'nova' }];
+
+    await sync();
+
+    expect(mockEvents).not.toContain('yield');
+    expect(mockEvents.indexOf('upsert:session_sets')).toBeLessThan(
+      mockEvents.indexOf('select:session_sets'),
+    );
+  });
+
+  // Quem ja sincronizava antes desta versao tem cursores de pull, e a outbox
+  // dele guarda edicoes de linhas da conta: se cedessem, uma rotina editada
+  // offline sumiria em favor de uma duplicata antiga.
+  it('instalacao que ja sincronizava nao cede nada', async () => {
+    mockSyncState.set('session_sets', '2026-10-01T08:00:00.000000+00:00');
+    mockLocal.set('editada', { id: 'editada', updated_at: '2026-10-11T08:00:00.000Z', reps: 1, done: 1 });
+    mockOutbox = [{ seq: 1, table_name: 'session_sets', row_id: 'editada' }];
+
+    await sync();
+
+    expect(mockEvents).not.toContain('yield');
+    expect(mockEvents.indexOf('upsert:session_sets')).toBeLessThan(
+      mockEvents.indexOf('select:session_sets'),
+    );
+    expect(mockSyncState.get('account_joined')).toEqual(expect.any(String));
+  });
+
+  it('se o primeiro pull cair no meio, o proximo ciclo ainda entra na conta', async () => {
+    // A primeira tabela desce e grava o cursor; a ultima falha.
+    mockServer.exercises = [serverRow('da-conta', '2026-10-01T08:00:00.000Z')];
+    mockFailingTable = 'body_weight_logs';
+
+    const first = await sync();
+    expect(first.error).toBe('Sem conexao');
+    expect(mockSyncState.get('exercises')).toEqual(expect.any(String));
+    expect(mockEvents).not.toContain('yield');
+    expect(mockEvents.some((event) => event.startsWith('upsert:'))).toBe(false);
+
+    mockFailingTable = null;
+    mockEvents = [];
+    await sync();
+
+    expect(mockEvents).toContain('yield');
+    expect(mockSyncState.get('account_joined')).toEqual(expect.any(String));
   });
 });
 

@@ -1,4 +1,6 @@
+import { normalizeName } from '@/db/catalog';
 import { getDb } from '@/db/client';
+import { yieldLocalToAccount } from '@/db/repo';
 import { SYNCED_TABLES, type SyncedTable } from '@/db/schema';
 import { GYM } from '@/world';
 
@@ -92,14 +94,73 @@ async function runCycle(): Promise<SyncOutcome> {
     const userId = auth.user?.id;
     if (!userId) return IDLE;
 
+    let pulled = await joinAccount(userId, mine);
+    if (mine !== generation) return IDLE;
+
     const pushed = await push(userId, mine);
-    const pulled = await pull(userId, mine);
+    pulled += await pull(userId, mine);
     return { pushed, pulled, error: null };
   } catch (error) {
     // Falha de rede e o caso normal, nao excecao: o app segue funcionando
     // local e tenta de novo no proximo ciclo. A outbox nao e limpa.
     return { pushed: 0, pulled: 0, error: describe(error) };
   }
+}
+
+/**
+ * A entrada deste aparelho na conta, no `sync_state` (ver `joinAccount`). Sem
+ * a linha: ainda nao se sabe. Com `last_pulled_at` nulo: entrando. Preenchido:
+ * entrou. O logout limpa o `sync_state` inteiro, entao a proxima conta entra
+ * de novo.
+ */
+const ACCOUNT_JOINED = 'account_joined';
+
+/**
+ * O primeiro sync de uma conta neste aparelho, antes de qualquer push. Devolve
+ * quantas linhas desceram.
+ *
+ * A conta desce ANTES de o aparelho subir, e o que o onboarding criou aqui
+ * cede ao que ela ja tinha. Subindo primeiro, o catalogo e o plano do aparelho
+ * iriam para o servidor ao lado dos da conta, duplicados.
+ *
+ * Instalacao que ja sincronizava antes de este marcador existir nao entra de
+ * novo: tudo nela ja e da conta, e a outbox dela guarda edicoes de linhas da
+ * conta, que nao podem ceder a nada. Ela se reconhece pelos cursores de pull,
+ * que uma entrada de verdade nao tem (o logout apaga todos). Por isso o
+ * "entrando" e gravado antes do pull: se ele cair no meio, ja tera deixado
+ * cursores, e o proximo ciclo confundiria a entrada com uma instalacao antiga.
+ */
+async function joinAccount(userId: string, mine: number): Promise<number> {
+  const db = await getDb();
+  const marker = await db.getFirstAsync<{ last_pulled_at: string | null }>(
+    'SELECT last_pulled_at FROM sync_state WHERE table_name = ?',
+    ACCOUNT_JOINED,
+  );
+  if (marker?.last_pulled_at) return 0;
+
+  if (!marker) {
+    const synced = await db.getFirstAsync<{ cursors: number }>(
+      'SELECT COUNT(*) AS cursors FROM sync_state WHERE table_name <> ? AND last_pulled_at IS NOT NULL',
+      ACCOUNT_JOINED,
+    );
+    const alreadyIn = (synced?.cursors ?? 0) > 0;
+    await markJoin(db, alreadyIn ? new Date().toISOString() : null);
+    if (alreadyIn) return 0;
+  }
+
+  const pulled = await pull(userId, mine);
+  if (mine !== generation) return pulled;
+  await yieldLocalToAccount(normalizeName);
+  await markJoin(db, new Date().toISOString());
+  return pulled;
+}
+
+function markJoin(db: Db, joinedAt: string | null): Promise<unknown> {
+  return db.runAsync(
+    'INSERT OR REPLACE INTO sync_state (table_name, last_pulled_at) VALUES (?, ?)',
+    ACCOUNT_JOINED,
+    joinedAt,
+  );
 }
 
 // --------------------------------------------------------------------- push
