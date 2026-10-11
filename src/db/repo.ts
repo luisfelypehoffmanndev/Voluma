@@ -335,6 +335,16 @@ export async function addExerciseToRoutine(
   const id = newId();
 
   await db.withTransactionAsync(async () => {
+    // Um exercicio aparece uma vez por dia. Dois `routine_exercises` com o mesmo
+    // `exercise_id` viravam dois cards gravando nas mesmas series: marcar num
+    // apagava as do outro (`setSessionExerciseSets` reescreve o exercicio).
+    const existing = await db.getFirstAsync<{ id: string }>(
+      'SELECT id FROM routine_exercises WHERE routine_id = ? AND exercise_id = ? AND deleted_at IS NULL',
+      routineId,
+      exerciseId,
+    );
+    if (existing) return;
+
     const last = await db.getFirstAsync<{ next: number }>(
       'SELECT COALESCE(MAX(position) + 1, 0) AS next FROM routine_exercises WHERE routine_id = ? AND deleted_at IS NULL',
       routineId,
@@ -749,13 +759,28 @@ export async function getOrCreateSessionForDate(when = new Date()): Promise<Sess
  * nesta sessao (adicionado "so hoje"): sem series e fora do plano, ele nao
  * teria de onde voltar.
  */
-export async function skipSessionExercise(sessionId: string, exerciseId: string): Promise<void> {
-  await updateSkipped(sessionId, (ids) => (ids.includes(exerciseId) ? ids : [...ids, exerciseId]));
-
+export async function skipSessionExercise(
+  sessionId: string,
+  exerciseId: string,
+): Promise<string[]> {
   const db = await getDb();
   const timestamp = now();
+  let unmarked: string[] = [];
+
+  // Uma transacao so: em duas, uma falha na segunda deixava o exercicio
+  // pulado com as series ainda marcadas.
   await db.withTransactionAsync(async () => {
+    await writeSkipped(db, sessionId, timestamp, (ids) =>
+      ids.includes(exerciseId) ? ids : [...ids, exerciseId],
+    );
+
     const where = 'session_id = ? AND exercise_id = ? AND done = 1 AND deleted_at IS NULL';
+    const rows = await db.getAllAsync<{ id: string }>(
+      `SELECT id FROM session_sets WHERE ${where}`,
+      sessionId,
+      exerciseId,
+    );
+    unmarked = rows.map((row) => row.id);
     await enqueueWhere(db, 'session_sets', where, [sessionId, exerciseId], timestamp);
     await db.runAsync(
       `UPDATE session_sets SET done = 0, updated_at = ? WHERE ${where}`,
@@ -764,11 +789,37 @@ export async function skipSessionExercise(sessionId: string, exerciseId: string)
       exerciseId,
     );
   });
+
+  return unmarked;
 }
 
-/** O "Desfazer" de `skipSessionExercise`. */
-export async function unskipSessionExercise(sessionId: string, exerciseId: string): Promise<void> {
-  await updateSkipped(sessionId, (ids) => ids.filter((id) => id !== exerciseId));
+/**
+ * O "Desfazer" de `skipSessionExercise`, ou escolher de novo um exercicio
+ * pulado.
+ *
+ * `remark` sao as series que o pulo desmarcou (o que `skipSessionExercise`
+ * devolve): o "Desfazer" as marca de volta. Sem isso, desfazer um pulo por
+ * engano devolvia o exercicio com tudo desmarcado, e o volume caia.
+ */
+export async function unskipSessionExercise(
+  sessionId: string,
+  exerciseId: string,
+  remark: readonly string[] = [],
+): Promise<void> {
+  const db = await getDb();
+  const timestamp = now();
+  await db.withTransactionAsync(async () => {
+    await writeSkipped(db, sessionId, timestamp, (ids) => ids.filter((id) => id !== exerciseId));
+
+    for (const setId of remark) {
+      await db.runAsync(
+        'UPDATE session_sets SET done = 1, updated_at = ? WHERE id = ? AND deleted_at IS NULL',
+        timestamp,
+        setId,
+      );
+      await enqueue(db, 'session_sets', setId);
+    }
+  });
 }
 
 /** A ordem arrastada na tela do treino. Vale so para esta sessao; o plano nao muda. */
@@ -788,23 +839,22 @@ export async function setSessionExerciseOrder(
   });
 }
 
-async function updateSkipped(
+/** Reescreve a lista de pulados da sessao. Roda dentro da transacao de quem chama. */
+async function writeSkipped(
+  db: SQLiteDatabase,
   sessionId: string,
+  timestamp: string,
   change: (ids: string[]) => string[],
 ): Promise<void> {
-  const db = await getDb();
-  await db.withTransactionAsync(async () => {
-    const row = await db.getFirstAsync<SessionRow>('SELECT * FROM sessions WHERE id = ?', sessionId);
-    if (!row) return;
-    const timestamp = now();
-    await db.runAsync(
-      'UPDATE sessions SET skipped_exercise_ids = ?, updated_at = ? WHERE id = ?',
-      JSON.stringify(change(toSession(row).skippedExerciseIds)),
-      timestamp,
-      sessionId,
-    );
-    await enqueue(db, 'sessions', sessionId);
-  });
+  const row = await db.getFirstAsync<SessionRow>('SELECT * FROM sessions WHERE id = ?', sessionId);
+  if (!row) return;
+  await db.runAsync(
+    'UPDATE sessions SET skipped_exercise_ids = ?, updated_at = ? WHERE id = ?',
+    JSON.stringify(change(toSession(row).skippedExerciseIds)),
+    timestamp,
+    sessionId,
+  );
+  await enqueue(db, 'sessions', sessionId);
 }
 
 /**

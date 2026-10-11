@@ -195,14 +195,15 @@ export default function SessionScreen() {
   // podem recebe-lo direto sem derrubar o `memo`.
   const skipToday = useCallback(
     async (sessionId: string, item: SessionExercise) => {
-      await skipSessionExercise(sessionId, item.exerciseId);
+      const unmarked = await skipSessionExercise(sessionId, item.exerciseId);
       bumpData();
       reload();
       setUndo({
         id: Date.now(),
         message: `${item.exerciseName} · pulado hoje`,
         onUndo: () => {
-          void unskipSessionExercise(sessionId, item.exerciseId).then(() => {
+          // Devolve tambem as series que o pulo desmarcou.
+          void unskipSessionExercise(sessionId, item.exerciseId, unmarked).then(() => {
             bumpData();
             reload();
           });
@@ -352,10 +353,24 @@ export default function SessionScreen() {
     reload();
   };
 
-  /** Sem rotina (sessao sem dia da semana) nao ha "toda segunda": adiciona direto. */
+  /**
+   * Sem rotina (sessao sem dia da semana) nao ha "toda segunda": adiciona direto.
+   *
+   * Um exercicio pulado hoje continua no seletor, e escolhe-lo o traz de volta
+   * (com as series que ja tinha), sem perguntar o alcance: adiciona-lo de novo
+   * criaria uma segunda linha do mesmo exercicio, escondida pelo pulo.
+   */
   const choose = (pick: { id: string; name: string; kind: ExerciseKind }) => {
-    if (routineId) setPendingPick(pick);
+    if (session.skippedExerciseIds.includes(pick.id)) void restoreSkipped(pick.id);
+    else if (routineId) setPendingPick(pick);
     else void addExercise(pick, 'today');
+  };
+
+  const restoreSkipped = async (exerciseId: string) => {
+    await unskipSessionExercise(session.id, exerciseId);
+    bumpData();
+    setPicking(false);
+    reload();
   };
 
   const finish = async () => {
