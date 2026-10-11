@@ -79,11 +79,12 @@ export default function OnboardingScreen() {
       useOnboarding.getState().complete();
       // PPL tem treino montado: cai em Hoje. Do zero, a semana esta vazia, e o
       // proximo passo e o Plano.
+      // `saving` fica true: a tela esta saindo, e o botao voltando a "Criar
+      // plano" durante a transicao so convidaria um segundo toque.
       router.replace(choice === 'ppl' ? '/' : '/plan');
     } catch (reason) {
       console.warn('[Voluma] falha ao montar o plano', reason);
       setFailed(true);
-    } finally {
       setSaving(false);
     }
   };
