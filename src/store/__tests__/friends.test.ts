@@ -54,6 +54,22 @@ describe('load', () => {
     expect(lists.incoming.map((row) => row.handle)).toEqual(['bia']);
   });
 
+  // O load e disparado no login sem esperar; se a pessoa sai antes da resposta,
+  // a lista da conta anterior nao pode voltar para a tela.
+  it('resposta que chega depois do logout e descartada', async () => {
+    let resolve: (rows: FriendRow[]) => void = () => undefined;
+    sync.listFriends.mockReturnValue(new Promise((done) => (resolve = done)));
+
+    const load = useFriends.getState().load();
+    useFriends.getState().clear();
+    resolve([makeRow()]);
+    await load;
+
+    const { lists, loading } = useFriends.getState();
+    expect([...lists.accepted, ...lists.incoming, ...lists.outgoing]).toEqual([]);
+    expect(loading).toBe(false);
+  });
+
   it('guarda o erro e sai de loading quando a rede falha', async () => {
     sync.listFriends.mockRejectedValue(new Error('Sem conexão'));
 
@@ -226,6 +242,22 @@ describe('remocao adiada', () => {
 
     expect(useFriends.getState().lists.accepted).toEqual([ana]);
     expect(useFriends.getState().error).toBe('Sem conexão');
+  });
+
+  // O commit pode estar na rede quando a pessoa sai (o segundo plano dispara
+  // ele). A falha nao pode devolver a linha da conta que saiu.
+  it('falha de um commit que voltou depois do logout nao devolve a linha', async () => {
+    let fail: (error: Error) => void = () => undefined;
+    sync.removeFriendship.mockReturnValue(new Promise((_, reject) => (fail = reject)));
+    useFriends.getState().remove('me', 'u2');
+
+    const commit = useFriends.getState().commitPending();
+    useFriends.getState().clear();
+    fail(new Error('JWT expired'));
+    await commit;
+
+    expect(handles()).toEqual([]);
+    expect(useFriends.getState().error).toBeNull();
   });
 
   // No sign-out a remocao era intencao de quem saiu, nao da proxima pessoa.
