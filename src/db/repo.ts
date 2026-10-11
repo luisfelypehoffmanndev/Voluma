@@ -17,7 +17,12 @@ import { runTargetsFromSets } from '@/domain/run';
 import { resolveTargets, targetsFromSets } from '@/domain/targets';
 import { fromDateKey, toDateKey, weekdayOf } from '@/domain/week';
 
-import { pickCanonicalRun, RUN_EXERCISE_NAME } from './canonical';
+import {
+  exercisesYieldingToAccount,
+  pickCanonicalRun,
+  routinesYieldingToAccount,
+  RUN_EXERCISE_NAME,
+} from './canonical';
 import { getDb } from './client';
 import type { SyncedTable } from './schema';
 import {
@@ -1552,4 +1557,150 @@ async function softDelete(table: SyncedTable, id: string): Promise<void> {
     );
     await enqueue(db, table, id);
   });
+}
+
+// --------------------------------------------------- entrar numa conta com dados
+
+/**
+ * Faz o que so existe neste aparelho ceder ao que a conta ja tinha (as regras
+ * estao em `routinesYieldingToAccount` e `exercisesYieldingToAccount`).
+ *
+ * Roda uma vez por conta no aparelho, no primeiro sync, DEPOIS de a conta
+ * descer e ANTES de o aparelho subir: e a outbox que diz o que nunca subiu.
+ * `nameKey` e o `normalizeName` do catalogo, passado por quem chama porque o
+ * catalogo importa este arquivo.
+ *
+ * Exercicio que cede: o plano e as series do aparelho passam a apontar para o
+ * da conta, e o historico continua num exercicio so. Rotina que cede: as
+ * sessoes do aparelho passam para a rotina da conta do mesmo dia, e ela sai
+ * com seus exercicios e ajustes de semana.
+ */
+export async function yieldLocalToAccount(
+  nameKey: (name: string) => string,
+): Promise<{ exercises: number; routines: number }> {
+  const db = await getDb();
+  const timestamp = now();
+  const result = { exercises: 0, routines: 0 };
+
+  await db.withTransactionAsync(async () => {
+    const localOnly = async (table: SyncedTable) =>
+      new Set(
+        (
+          await db.getAllAsync<{ row_id: string }>(
+            'SELECT DISTINCT row_id FROM outbox WHERE table_name = ?',
+            table,
+          )
+        ).map((row) => row.row_id),
+      );
+
+    const exercises = await db.getAllAsync<{ id: string; name: string; updated_at: string }>(
+      'SELECT id, name, updated_at FROM exercises WHERE deleted_at IS NULL',
+    );
+    const exerciseMap = exercisesYieldingToAccount(
+      exercises.map((row) => ({ id: row.id, key: nameKey(row.name), updatedAt: row.updated_at })),
+      await localOnly('exercises'),
+    );
+    for (const [from, to] of exerciseMap) {
+      await repoint(db, 'routine_exercises', 'exercise_id', from, to, timestamp);
+      await repoint(db, 'session_sets', 'exercise_id', from, to, timestamp);
+      await softDeleteIn(db, 'exercises', 'id = ?', [from], timestamp);
+    }
+    if (exerciseMap.size > 0) {
+      // As listas de pulados e de ordem das sessoes guardam ids de exercicio.
+      const sessions = await db.getAllAsync<{
+        id: string;
+        skipped_exercise_ids: string;
+        exercise_order: string;
+      }>('SELECT id, skipped_exercise_ids, exercise_order FROM sessions');
+      for (const session of sessions) {
+        const skipped = remapIdList(session.skipped_exercise_ids, exerciseMap);
+        const order = remapIdList(session.exercise_order, exerciseMap);
+        if (skipped === session.skipped_exercise_ids && order === session.exercise_order) continue;
+        await db.runAsync(
+          'UPDATE sessions SET skipped_exercise_ids = ?, exercise_order = ?, updated_at = ? WHERE id = ?',
+          skipped,
+          order,
+          timestamp,
+          session.id,
+        );
+        await enqueue(db, 'sessions', session.id);
+      }
+    }
+    result.exercises = exerciseMap.size;
+
+    const routines = await db.getAllAsync<RoutineRow>('SELECT * FROM routines WHERE deleted_at IS NULL');
+    const routineMap = routinesYieldingToAccount(
+      routines.map((row) => ({
+        id: row.id,
+        weekday: row.weekday,
+        position: row.position,
+        updatedAt: row.updated_at,
+      })),
+      await localOnly('routines'),
+    );
+    for (const [from, to] of routineMap) {
+      await repoint(db, 'sessions', 'routine_id', from, to, timestamp);
+      await softDeleteIn(
+        db,
+        'week_targets',
+        'routine_exercise_id IN (SELECT id FROM routine_exercises WHERE routine_id = ?)',
+        [from],
+        timestamp,
+      );
+      await softDeleteIn(db, 'routine_exercises', 'routine_id = ?', [from], timestamp);
+      await softDeleteIn(db, 'routines', 'id = ?', [from], timestamp);
+    }
+    result.routines = routineMap.size;
+  });
+
+  return result;
+}
+
+/** Troca uma referencia (`column` = from → to) nas linhas vivas, enfileirando cada uma. */
+async function repoint(
+  db: SQLiteDatabase,
+  table: SyncedTable,
+  column: string,
+  from: string,
+  to: string,
+  timestamp: string,
+): Promise<void> {
+  const where = `${column} = ? AND deleted_at IS NULL`;
+  await enqueueWhere(db, table, where, [from], timestamp);
+  await db.runAsync(
+    `UPDATE ${table} SET ${column} = ?, updated_at = ? WHERE ${where}`,
+    to,
+    timestamp,
+    from,
+  );
+}
+
+/** Soft delete dentro da transacao de quem chama, enfileirando cada linha. */
+async function softDeleteIn(
+  db: SQLiteDatabase,
+  table: SyncedTable,
+  where: string,
+  params: readonly string[],
+  timestamp: string,
+): Promise<void> {
+  const alive = `(${where}) AND deleted_at IS NULL`;
+  await enqueueWhere(db, table, alive, params, timestamp);
+  await db.runAsync(
+    `UPDATE ${table} SET deleted_at = ?, updated_at = ? WHERE ${alive}`,
+    timestamp,
+    timestamp,
+    ...params,
+  );
+}
+
+/** Uma lista JSON de ids com os ids trocados; o mesmo texto quando nada muda. */
+function remapIdList(json: string, map: ReadonlyMap<string, string>): string {
+  let ids: unknown;
+  try {
+    ids = JSON.parse(json);
+  } catch {
+    return json;
+  }
+  if (!Array.isArray(ids) || !ids.some((id) => map.has(String(id)))) return json;
+  return JSON.stringify([...new Set(ids.map((id) => map.get(String(id)) ?? String(id)))]);
 }
