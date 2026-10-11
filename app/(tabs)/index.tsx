@@ -16,6 +16,7 @@ import {
   listSessionSets,
   routineExerciseCounts,
   targetsForWeek,
+  trainedDates,
   volumeByDate,
   type WeekExercise,
 } from '@/db/repo';
@@ -61,6 +62,9 @@ import { Body, Label, Meta, Mono, Section } from '@/ui/Text';
  * naturalmente numa faixa baixa — que e a proporcao da referencia.
  */
 const MATRIX_MONTHS = 5;
+
+/** Desde quando a sequencia conta: antes disso o app nem existia. */
+const STREAK_SINCE = '2020-01-01';
 
 /**
  * Home — "Foco Unico": um trabalho so, te colocar no treino de hoje em um toque.
@@ -360,12 +364,15 @@ async function loadHome() {
   const matrixDays = daysSinceMonthStart(now, MATRIX_MONTHS);
   const window = lastNDays(now, matrixDays);
 
-  const [routines, volumes, counts, weights, session] = await Promise.all([
+  const [routines, volumes, counts, weights, session, trained] = await Promise.all([
     listRoutines(),
     volumeByDate(window[0], todayKey),
     routineExerciseCounts(),
     listBodyWeightLogs(1),
     getSessionByDate(todayKey),
+    // A sequencia nao para na janela do dot-matrix: quem treina todo dia ha
+    // mais de cinco meses veria um teto.
+    trainedDates(STREAK_SINCE, todayKey),
   ]);
 
   const weekStart = weekStartKey(now);
@@ -416,9 +423,9 @@ async function loadHome() {
     weekVolume,
     bodyWeight: weights[0] ?? null,
     dots: buildDotMatrix(volumes, now, matrixDays),
-    // `volumeByDate` ja devolve toda data com sessao (o LEFT JOIN mantem as de
-    // volume zero), que e exatamente o conjunto de dias treinados.
-    streak: currentStreak(new Set(volumes.keys()), now),
+    // A mesma regra de "dia treinado" do calendario e do dot-matrix: serie
+    // feita com carga. Abrir o treino e sair sem marcar nao conta.
+    streak: currentStreak(trained, now),
   };
 }
 

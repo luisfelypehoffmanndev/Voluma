@@ -72,6 +72,17 @@ describe('runTargetsFromSets', () => {
     });
   });
 
+  // Com uma casa, 5,25 km virava meta de 5,3 e 10,04 km virava 10.
+  it('mantem as duas casas que o Stepper aceita', () => {
+    expect(runTargetsFromSets([makeSet({ distanceKm: 5.25 })])?.distanceKm).toBe(5.25);
+    expect(runTargetsFromSets([makeSet({ distanceKm: 10.04 })])?.distanceKm).toBe(10.04);
+  });
+
+  it('nao deixa o ruido de ponto flutuante passar', () => {
+    const sets = Array.from({ length: 3 }, () => makeSet({ distanceKm: 0.1 }));
+    expect(runTargetsFromSets(sets)?.distanceKm).toBe(0.3);
+  });
+
   it('zera carga, para nao poluir o volume levantado', () => {
     const targets = runTargetsFromSets([makeSet({ distanceKm: 5, durationMin: 28 })]);
     expect(targets?.reps).toBe(0);
