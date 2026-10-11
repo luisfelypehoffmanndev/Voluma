@@ -52,6 +52,11 @@ describe('toLocal', () => {
     expect(local).toEqual({ id: 'e1', name: 'Supino', updated_at: '2026-10-09T12:00:00.000Z' });
   });
 
+  it('normaliza o completed_at como os outros carimbos', () => {
+    const local = toLocal('sessions', { id: 'x1', completed_at: '2026-10-10 22:40:22.495+00' });
+    expect(local.completed_at).toBe('2026-10-10T22:40:22.495Z');
+  });
+
   it('volta o done para 0/1', () => {
     const remota = { ...serie, done: true, user_id: 'u1', gym_id: 'padrao' };
     expect(toLocal('session_sets', remota)).toMatchObject({ done: 1 });

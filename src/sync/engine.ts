@@ -8,13 +8,18 @@ import { supabase } from './supabase';
  * Sync bidirecional entre o SQLite local e o Supabase.
  *
  * push: drena a `outbox` — as linhas que o app escreveu offline — e faz upsert
- *       delas no Postgres, carimbando `user_id`.
- * pull: baixa tudo que mudou no servidor desde o ultimo pull daquela tabela.
+ *       delas no Postgres, carimbando `user_id` e `gym_id`.
+ * pull: baixa tudo que chegou ao servidor desde o ultimo pull daquela tabela.
  *
- * Conflito resolve por last-write-wins comparando `updated_at`. Para um app de
- * um usuario so, com no maximo dois aparelhos, isso e suficiente: o unico jeito
- * de gerar conflito real e editar a mesma rotina nos dois offline ao mesmo
- * tempo, e ai "a ultima edicao vence" e exatamente o esperado.
+ * Conflito resolve por last-write-wins comparando `updated_at`, o relogio do
+ * APARELHO que editou: dos dois lados. Aqui, o pull nao sobrescreve uma versao
+ * local mais nova; no servidor, o gatilho `sync_stamp` (v13) recusa gravar uma
+ * versao mais velha por cima de uma mais nova.
+ *
+ * Mas "o que ainda nao baixei" e medido pelo relogio do SERVIDOR (`synced_at`,
+ * a hora em que a linha chegou). Medido pelo `updated_at`, uma edicao offline
+ * antiga que subisse depois de o outro aparelho ja ter baixado coisa mais nova
+ * nunca chegaria nele.
  *
  * A ordem de `SYNCED_TABLES` importa no push: rotinas antes de
  * routine_exercises, sessoes antes de series. Sem isso, um pull no outro
@@ -73,6 +78,10 @@ export function invalidateSync(): void {
 async function runCycle(): Promise<SyncOutcome> {
   if (!supabase) return IDLE;
 
+  // A geracao no inicio do ciclo. Se ela mudar no meio, houve logout: o
+  // `userId` abaixo virou lixo e nada do que descer pode ser gravado.
+  const mine = generation;
+
   try {
     // `getUser` fica DENTRO do try junto com o resto: ela tambem vai na rede, e
     // uma falha dela precisa virar SyncOutcome como qualquer outra. Escapando
@@ -83,8 +92,8 @@ async function runCycle(): Promise<SyncOutcome> {
     const userId = auth.user?.id;
     if (!userId) return IDLE;
 
-    const pushed = await push(userId);
-    const pulled = await pull(userId);
+    const pushed = await push(userId, mine);
+    const pulled = await pull(userId, mine);
     return { pushed, pulled, error: null };
   } catch (error) {
     // Falha de rede e o caso normal, nao excecao: o app segue funcionando
@@ -105,7 +114,7 @@ async function runCycle(): Promise<SyncOutcome> {
  */
 const PUSH_CHUNK = 500;
 
-async function push(userId: string): Promise<number> {
+async function push(userId: string, mine: number): Promise<number> {
   if (!supabase) return 0;
   const db = await getDb();
 
@@ -139,10 +148,22 @@ async function push(userId: string): Promise<number> {
       );
 
       const payload = rows.map((row) => toRemote(table, row, userId, GYM));
-      const { error } = await supabase.from(table).upsert(payload, { onConflict: 'id' });
+      // `select('id')` devolve so as linhas que o servidor GRAVOU: o gatilho
+      // `sync_stamp` recusa uma versao mais velha que a que ele ja tem.
+      const { data: written, error } = await supabase
+        .from(table)
+        .upsert(payload, { onConflict: 'id' })
+        .select('id');
       if (error) throw new Error(error.message);
 
       sent += payload.length;
+
+      // Quem mandou a versao recusada (uma edicao offline que perdeu para a de
+      // outro aparelho, ou um relogio atrasado) passa a ter a do servidor. Sem
+      // isto, cada aparelho ficaria com a sua para sempre.
+      const writtenIds = new Set((written ?? []).map((row) => String(row.id)));
+      const refused = payload.map((row) => String(row.id)).filter((id) => !writtenIds.has(id));
+      if (refused.length > 0) await adoptServerRows(db, table, refused, mine);
     }
 
     // A limpeza fica FORA do laco de lotes, de proposito: a marca de agua e a
@@ -159,14 +180,10 @@ async function push(userId: string): Promise<number> {
 
 // --------------------------------------------------------------------- pull
 
-async function pull(userId: string): Promise<number> {
+async function pull(userId: string, mine: number): Promise<number> {
   if (!supabase) return 0;
   const db = await getDb();
   let received = 0;
-
-  // A geracao no inicio do ciclo. Se ela mudar no meio, houve logout: o
-  // `userId` acima virou lixo e nada do que desceu pode ser gravado.
-  const mine = generation;
 
   for (const table of SYNCED_TABLES) {
     const state = await db.getFirstAsync<{ last_pulled_at: string | null }>(
@@ -175,20 +192,26 @@ async function pull(userId: string): Promise<number> {
     );
     const since = state?.last_pulled_at ?? '1970-01-01T00:00:00.000Z';
 
-    // Em paginas, por cursor (updated_at, id). Uma consulta so parava nas 1000
-    // linhas da API, e as series gravadas em lote compartilham o mesmo
-    // updated_at: o resto de um empate cortado no limite nunca mais descia. O
-    // cursor (e nao offset) porque uma linha atualizada por outro aparelho no
-    // meio da paginacao muda de posicao e faria outra pular de pagina.
+    // Em paginas, por cursor (synced_at, id). Uma consulta so parava nas 1000
+    // linhas da API, e linhas gravadas no mesmo lote empatam no carimbo: o
+    // resto de um empate cortado no limite nunca mais descia. Cursor, e nao
+    // offset: uma linha atualizada no meio da paginacao muda de posicao e
+    // faria outra pular de pagina.
+    //
+    // A primeira pagina comeca um pouco ANTES do marcador. O carimbo e a hora
+    // em que a escrita comecou, e uma escrita lenta pode ficar visivel depois
+    // de outra carimbada mais tarde; quem baixou entre as duas ja teria passado
+    // dela. Baixar de novo essa margem e inofensivo (last-write-wins).
     let cursor: PullCursor | null = null;
+    const from = shiftStamp(since, -PULL_OVERLAP_MS);
 
     for (;;) {
       const base = supabase.from(table).select('*').eq('user_id', userId).eq('gym_id', GYM);
       const { data, error } = await (cursor
         ? base.or(afterCursor(cursor))
-        : base.gt('updated_at', since)
+        : base.gt('synced_at', from)
       )
-        .order('updated_at', { ascending: true })
+        .order('synced_at', { ascending: true })
         .order('id', { ascending: true })
         .limit(PULL_PAGE);
 
@@ -200,47 +223,20 @@ async function pull(userId: string): Promise<number> {
       // dados da conta anterior no banco que o logout acabou de limpar.
       if (mine !== generation) return received;
 
-      // O cursor usa o timestamp CRU do servidor (microssegundos): o toLocal
-      // corta para milissegundos, e o empate deixaria de ser exato.
+      // O cursor usa o carimbo CRU do servidor (microssegundos): cortado em
+      // milissegundos, o empate deixaria de ser exato.
       const last = page[page.length - 1];
-      cursor = { stamp: String(last.updated_at), id: String(last.id) };
+      cursor = { stamp: String(last.synced_at), id: String(last.id) };
 
-      // Normaliza antes de qualquer comparacao: o Postgres devolve
-      // "2026-08-21 12:00:00+00" e o local guarda ISO com milissegundos.
-      // Comparar as duas formas como texto daria resultado errado.
-      const incoming = page.map((remote) => toLocal(table, remote));
-
-      await db.withTransactionAsync(async () => {
-        for (const row of incoming) {
-          const local = await db.getFirstAsync<{ updated_at: string }>(
-            `SELECT updated_at FROM ${table} WHERE id = ?`,
-            String(row.id),
-          );
-
-          // Last-write-wins: a versao local so e sobrescrita se for mais antiga.
-          // Isso e o que impede o pull de desfazer uma serie que o usuario
-          // acabou de marcar e que ainda esta esperando na outbox.
-          if (local && local.updated_at >= String(row.updated_at)) continue;
-
-          const columns = Object.keys(row);
-          await db.runAsync(
-            `INSERT OR REPLACE INTO ${table} (${columns.join(',')})
-             VALUES (${columns.map(() => '?').join(',')})`,
-            ...(columns.map((column) => row[column]) as never[]),
-          );
-          received += 1;
-        }
-      });
+      received += await applyRemoteRows(db, table, page);
 
       if (page.length < PULL_PAGE) break;
     }
 
     // So depois de todas as paginas: uma falha no meio volta ao mesmo `since`
-    // no proximo ciclo, e o last-write-wins torna repetir inofensivo. Grava o
-    // timestamp CRU da ultima linha (a mais nova, pela ordem): o cortado em
-    // milissegundos fazia as linhas logo depois dele descerem de novo em todo
-    // ciclo.
-    if (cursor) {
+    // no proximo ciclo, e o last-write-wins torna repetir inofensivo. O marcador
+    // nunca anda para tras (a margem traz linhas anteriores a ele).
+    if (cursor && stampKey(cursor.stamp) > stampKey(since)) {
       await db.runAsync(
         'INSERT OR REPLACE INTO sync_state (table_name, last_pulled_at) VALUES (?, ?)',
         table,
@@ -252,6 +248,99 @@ async function pull(userId: string): Promise<number> {
   return received;
 }
 
+type Db = Awaited<ReturnType<typeof getDb>>;
+
+/**
+ * Grava as linhas que vieram do servidor, respeitando o last-write-wins.
+ * Devolve quantas foram de fato gravadas.
+ */
+async function applyRemoteRows(
+  db: Db,
+  table: SyncedTable,
+  remote: readonly Record<string, unknown>[],
+): Promise<number> {
+  if (remote.length === 0) return 0;
+  const columns = await localColumns(db, table);
+  let written = 0;
+
+  await db.withTransactionAsync(async () => {
+    for (const raw of remote) {
+      // Normaliza antes de qualquer comparacao: o Postgres devolve
+      // "2026-08-21 12:00:00+00" e o local guarda ISO com milissegundos.
+      // Comparar as duas formas como texto daria resultado errado.
+      const row = keepColumns(toLocal(table, raw), columns);
+      const local = await db.getFirstAsync<{ updated_at: string }>(
+        `SELECT updated_at FROM ${table} WHERE id = ?`,
+        String(row.id),
+      );
+
+      // Last-write-wins: a versao local so e sobrescrita se for mais antiga.
+      // Isso e o que impede o pull de desfazer uma serie que o usuario acabou
+      // de marcar e que ainda esta esperando na outbox.
+      if (local && local.updated_at >= String(row.updated_at)) continue;
+
+      const names = Object.keys(row);
+      await db.runAsync(
+        `INSERT OR REPLACE INTO ${table} (${names.join(',')})
+         VALUES (${names.map(() => '?').join(',')})`,
+        ...(names.map((name) => row[name]) as never[]),
+      );
+      written += 1;
+    }
+  });
+
+  return written;
+}
+
+/** Ids por consulta ao buscar as versoes do servidor: cabem na URL com folga. */
+const ADOPT_CHUNK = 100;
+
+/** Troca as versoes locais recusadas pelo servidor pelas que ele tem. */
+async function adoptServerRows(
+  db: Db,
+  table: SyncedTable,
+  ids: readonly string[],
+  mine: number,
+): Promise<void> {
+  if (!supabase) return;
+  for (let start = 0; start < ids.length; start += ADOPT_CHUNK) {
+    const { data, error } = await supabase
+      .from(table)
+      .select('*')
+      .in('id', ids.slice(start, start + ADOPT_CHUNK));
+    if (error) throw new Error(error.message);
+    if (mine !== generation) return;
+    await applyRemoteRows(db, table, (data ?? []) as Record<string, unknown>[]);
+  }
+}
+
+const columnCache = new Map<SyncedTable, Set<string>>();
+
+/** As colunas que o SQLite local tem, lidas uma vez por tabela. */
+async function localColumns(db: Db, table: SyncedTable): Promise<Set<string>> {
+  let columns = columnCache.get(table);
+  if (!columns) {
+    const rows = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`);
+    columns = new Set(rows.map((row) => row.name));
+    columnCache.set(table, columns);
+  }
+  return columns;
+}
+
+/**
+ * So as colunas que o SQLite local tem.
+ *
+ * O pull pede `select('*')`: uma coluna nova no servidor (o `gym_id` da v11, o
+ * `synced_at` da v13) quebrava o INSERT de todo app instalado que ainda nao a
+ * conhecia ("no such column"), e o sync dele parava de baixar.
+ */
+export function keepColumns(
+  row: Record<string, unknown>,
+  columns: ReadonlySet<string>,
+): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(row).filter(([name]) => columns.has(name)));
+}
+
 /**
  * Linhas por pagina no pull. Precisa ficar ABAIXO do limite de linhas da API
  * (1000 no Supabase): com uma pagina do tamanho do limite, uma pagina cortada
@@ -259,12 +348,33 @@ async function pull(userId: string): Promise<number> {
  */
 export const PULL_PAGE = 500;
 
+/** Quanto antes do marcador o pull recomeca (ver `pull`). */
+export const PULL_OVERLAP_MS = 60_000;
+
 export type PullCursor = { stamp: string; id: string };
 
-/** O filtro "depois de (updated_at, id)", no formato `or` do PostgREST. */
+/** O filtro "depois de (synced_at, id)", no formato `or` do PostgREST. */
 export function afterCursor({ stamp, id }: PullCursor): string {
   // Aspas no timestamp: ele tem ':' e '+', que o PostgREST le como sintaxe.
-  return `updated_at.gt."${stamp}",and(updated_at.eq."${stamp}",id.gt.${id})`;
+  return `synced_at.gt."${stamp}",and(synced_at.eq."${stamp}",id.gt.${id})`;
+}
+
+/**
+ * Um timestamp do servidor ("…33.394964+00:00") ou ISO ("…33.394Z") como texto
+ * comparavel, em microssegundos UTC.
+ */
+export function stampKey(stamp: string): string {
+  const utc = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})(?:\.(\d{1,6}))?(?:Z|\+00(?::?00)?)$/.exec(
+    stamp,
+  );
+  if (utc) return `${utc[1]}T${utc[2]}.${(utc[3] ?? '').padEnd(6, '0')}`;
+  // Outro fuso: perde os microssegundos, mas compara certo.
+  return `${new Date(stamp).toISOString().slice(0, 23)}000`;
+}
+
+/** `stamp` deslocado em `ms`, em ISO. */
+export function shiftStamp(stamp: string, ms: number): string {
+  return new Date(new Date(stamp).getTime() + ms).toISOString();
 }
 
 // ---------------------------------------------------------------- conversao
@@ -297,7 +407,7 @@ export function toLocal(table: SyncedTable, row: Record<string, unknown>): Recor
   }
   // Timestamps do Postgres vem como "2026-08-21 12:00:00+00"; o resto do app
   // compara essas strings com ISO, entao normaliza aqui.
-  for (const key of ['updated_at', 'deleted_at', 'started_at', 'finished_at', 'logged_at']) {
+  for (const key of ['updated_at', 'deleted_at', 'started_at', 'finished_at', 'completed_at', 'logged_at']) {
     const value = out[key];
     if (typeof value === 'string') out[key] = new Date(value).toISOString();
   }
