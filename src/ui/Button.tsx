@@ -76,7 +76,13 @@ export function Button({
   );
 
   return (
-    <View style={[primary && !disabled ? styles.glow : null, style]}>
+    // `collapsable={false}`: sem o brilho (botao desabilitado ou nao primario)
+    // esta View so tem layout, e o Fabric a tira do nativo; quando o brilho
+    // volta, ela volta, e o `Pressable` muda de pai. Essa troca no mesmo
+    // commit em que a tela sai derrubava o app ("The specified child already
+    // has a parent"): era o "Criar plano" do onboarding, com o `saving`
+    // voltando a false junto do `router.replace`.
+    <View collapsable={false} style={[primary && !disabled ? styles.glow : null, style]}>
       <PressableSurface
         onPress={onPress}
         disabled={disabled}
