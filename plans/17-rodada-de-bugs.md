@@ -9,8 +9,9 @@
 peso, Hoje, amigos, onboarding, dia e treino
 **Depende de:** [16](16-multi-academia.md) (o teste da 16.4 no aparelho
 mostrou os primeiros)
-**Estado:** **feito no código** (2026-10-10 e 11), v13 no Supabase. Falta o
-teste no aparelho, que exige recompilar o dev client
+**Estado:** **feito e verificado no aparelho** (2026-10-10 e 11), v13 no
+Supabase. O teste no aparelho achou mais três, já corrigidos (fim da segunda
+tabela)
 
 ## Contexto
 
@@ -47,6 +48,9 @@ aviso.
 | O `resetDb` do logout rodava fora da fila de transações, e uma escrita já na fila caía depois dele. Respostas de amigos chegando depois do logout reapareciam. | O reset entra na fila. O store de amigos descarta o que chega depois. | `3385860` |
 | O primeiro sync subia antes de baixar: o plano e o catálogo do onboarding iam para a conta ao lado dos dela, duplicados. | A conta desce primeiro, e o que só existe no aparelho cede. | `38c0038` |
 | Um ajuste de série feito enquanto a marcação ainda gravava ficava só na tela. | A edição segue a escrita em curso (`amend`). | `8cb55ee` |
+| **Achado no aparelho:** "Criar plano" no onboarding derrubava o app ("The specified child already has a parent"). O botão primário só tem view nativa enquanto brilha; habilitar de novo no mesmo commit do `router.replace` mudava o `Pressable` de pai com a tela saindo. | A raiz do `Button` é sempre nativa (`collapsable={false}`), e o onboarding não reabilita o botão ao sair. | `d0896d3` |
+| **Achado no aparelho:** sem rede, o Perfil continuava só com "N mudanças pendentes". O supabase-js não lança sem rede (o `getUser` devolve `user: null` com o erro), e o ciclo lia isso como "ninguém logado". A `eca9201` só tinha mexido na tela. | Só a falta de sessão é "nada a fazer"; o resto é falha do ciclo. O texto cru do fetch do Android vira "Sem conexão". | `d9be0f3` |
+| **Achado no aparelho:** o cartão "Próximos" da Hoje abria com uma linha divisória solta. | A borda fica só entre as linhas. | `c366751` |
 
 ## Decisões tomadas no caminho
 
@@ -65,30 +69,32 @@ aviso.
 
 ## Não confirmado ou fora do escopo
 
-- **Avisos do Reanimated** ("Unable to find SurfaceMountingManager", 176 vezes
-  no onboarding): falta reproduzir antes de mexer. É só log.
+- **Avisos do Reanimated** ("synchronouslyUpdateUIProps failed … Unable to find
+  SurfaceMountingManager"): 12 a 18 por onboarding no teste do aparelho, quando
+  se sai da abertura antes de a animação terminar. É só log; fica para depois.
 - A engrenagem por cima da seta de voltar é o botão "Tools" do dev client. Não
   existe no build de produção.
 
-## Como verificar no aparelho
+## Verificação no aparelho (2026-10-11, Galaxy S24, app `teste`)
 
-Exige recompilar (dependências novas e fingerprint nova).
+Recompilado só para arm64 (`./gradlew app:installDebug
+-PreactNativeArchitectures=arm64-v8a --max-workers=8`): o `assembleDebug` das
+quatro arquiteturas tinha estourado a memória.
 
-1. **App `teste` do zero** (`pm clear com.luisf.voluma.teste`):
-   - a abertura mostra "Voluma Teste";
-   - o login volta para o app;
-   - salvar o perfil leva para Hoje sem "GO_BACK", e "Agora não" também.
-2. **Primeiro sync com conta que já tem dados:** no onboarding, montar um plano
-   num dia que a conta já tem e entrar. O dia mostra o plano da conta, e o
-   catálogo não tem exercício repetido.
-3. **App padrão:**
-   - Sair pede confirmação;
-   - dois toques em Salvar no peso gravam uma linha;
-   - com a pergunta "só hoje / no plano" aberta, o voltar fecha só ela.
-4. **Treino:**
-   - marcar a primeira série de um exercício intocado e mudar o peso dela logo
-     em seguida; finalizar, e o histórico mostra o peso novo;
-   - pular um exercício com séries feitas e desfazer: elas voltam marcadas.
-5. **Modo avião:** marcar uma série. O Perfil mostra "1 mudança pendente · Sem
-   conexão".
-6. `npx expo-doctor`: 21/21.
+| Item | Resultado |
+|---|---|
+| Abertura e textos com "Voluma Teste" | ok |
+| Onboarding "Montar do zero" e Push/Pull/Legs → "Criar plano" | ok, depois da `d0896d3` (antes, o PPL quebrava) |
+| Login volta para o app | ok |
+| Sair pede confirmação | ok |
+| Primeiro sync, conta com 59 exercícios e sem rotinas | servidor ficou com 59 vivos (antes seriam 118); o plano do aparelho subiu, com os exercícios remapeados |
+| Primeiro sync, conta já com seg Push, qua Pull, sex Legs; aparelho com seg Push, ter Pull, qua Legs | seg e qua do aparelho cederam; a ter subiu; o Plano mostra seg Push, ter Pull, qua Pull, sex Legs |
+| Voltar com a pergunta "Só hoje / Todo domingo" aberta | fecha só a pergunta |
+| Ajuste de peso logo depois de marcar uma série do plano | o banco do aparelho ficou com o peso novo, numa escrita só |
+| Pular com série feita e desfazer | a série volta marcada; escolher o pulado no seletor o traz de volta sem duplicar (sem remarcar) |
+| Dois toques em "Registrar" no peso | uma linha, e volta uma tela só |
+| Modo avião (e Wi-Fi desligado) | "1 mudança pendente · Sem conexão", depois da `d9be0f3` |
+| `npx expo-doctor` | 20/21; a checagem do schema precisa de `exp.host`, que não resolvia no ambiente do teste |
+
+Ficaram dados de teste na conta do mundo `teste`: um treino de domingo, a
+rotina de domingo com o Afundo e cinco pesagens (75 a 79 kg).

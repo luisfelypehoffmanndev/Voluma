@@ -26,7 +26,7 @@ como verificar. A ideia é resolver um de cada vez.
 | [14](14-amigos-graficos.md) | Aba Amigos: 12 semanas, consistência e corrida | feature | **feito** — v8 rodada; evoluído na tela de amigo no item 15 |
 | [15](15-avatar-e-nomes.md) | Foto de perfil, nome de exibição, cor por amigo e refatoração dos gráficos | feature | **feito** — v9 e v10 rodadas, bucket avatars criado, teste 15-avatar.sql passando |
 | [16](16-multi-academia.md) | Multi-academia: app padrão + um app por academia, mesmo backend | feature | **16.1 a 16.4 feitas** — v11 e v12 no Supabase, app filtra por mundo, OTA configurado, variantes por academia; testado no aparelho (mundo padrão e app `teste` isolado) |
-| [17](17-rodada-de-bugs.md) | Rodada de bugs: instalação nova, sync e dados do treino | bugs | **feito no código** — v13 no Supabase; falta o teste no aparelho (exige recompilar) |
+| [17](17-rodada-de-bugs.md) | Rodada de bugs: instalação nova, sync e dados do treino | bugs | **feito e verificado no aparelho** — v13 no Supabase; o teste no aparelho achou e corrigiu mais três (crash no "Criar plano", erro de sync escondido sem rede, divisor solto) |
 
 ## Pendências fora do código
 
