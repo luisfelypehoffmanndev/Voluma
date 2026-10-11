@@ -1243,3 +1243,61 @@ begin
 end $$;
 
 alter table public.gyms add constraint gyms_slug_check check (id ~ '^[a-z][a-z0-9]{1,29}$');
+
+-- ------------------------------------------------ v13: relogio do servidor
+-- O `updated_at` e gerado no APARELHO, e era tambem o marcador do pull. Dois
+-- problemas:
+--   1. O aparelho B edita offline as 10h; o A edita as 11h e sincroniza, e o
+--      marcador dele fica em 11h. Quando o B sobe a edicao das 10h, o A pede
+--      "depois das 11h" e nunca a recebe. O mesmo com um relogio atrasado.
+--   2. O upsert do push gravava qualquer versao por cima, mesmo a mais velha.
+--
+-- `synced_at` e o relogio do SERVIDOR: a hora em que a linha chegou. O pull
+-- passa a usa-lo como marcador. E o gatilho recusa gravar uma versao mais
+-- velha (pelo `updated_at` do aparelho, que continua sendo o last-write-wins)
+-- por cima de uma mais nova; o aparelho que mandou a velha busca a do servidor.
+--
+-- `clock_timestamp()`, e nao `now()`: `now()` e o inicio da transacao, igual
+-- para todas as linhas de um lote. O pull ainda olha 60 s para tras do
+-- marcador, porque uma transacao lenta pode ficar visivel depois de outra que
+-- foi carimbada mais tarde.
+
+create or replace function public.sync_stamp()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if tg_op = 'UPDATE' and new.updated_at < old.updated_at then
+    return null; -- versao mais velha: o servidor fica com a que ja tem
+  end if;
+  new.synced_at := clock_timestamp();
+  return new;
+end;
+$$;
+
+do $$
+declare
+  target text;
+begin
+  foreach target in array array[
+    'exercises', 'routines', 'routine_exercises', 'week_targets',
+    'sessions', 'session_sets', 'body_weight_logs'
+  ]
+  loop
+    execute format(
+      'alter table public.%I add column if not exists synced_at timestamptz not null default now()',
+      target
+    );
+    execute format(
+      'create index if not exists %I on public.%I (user_id, gym_id, synced_at, id)',
+      'idx_' || target || '_synced', target
+    );
+    execute format('drop trigger if exists sync_stamp on public.%I', target);
+    execute format(
+      'create trigger sync_stamp before insert or update on public.%I
+         for each row execute function public.sync_stamp()',
+      target
+    );
+  end loop;
+end $$;
