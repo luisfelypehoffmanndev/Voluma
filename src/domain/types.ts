@@ -36,6 +36,7 @@ export type Routine = Syncable & {
   name: string;
   weekday: Weekday;
   position: number;
+  presetId?: string | null;
 };
 
 export type RoutineExercise = Syncable & {
@@ -45,6 +46,30 @@ export type RoutineExercise = Syncable & {
   targetSets: number;
   targetReps: number;
   targetWeightKg: number;
+  targetDistanceKm: number;
+  targetDurationMin: number;
+  presetExerciseId?: string | null;
+};
+
+/** Ficha padrão sugerida pela academia. */
+export type GymPreset = Syncable & {
+  gymId: string;
+  name: string;
+  position: number;
+};
+
+/** Exercício da ficha padrão sugerida pela academia. */
+export type GymPresetExercise = Syncable & {
+  presetId: string;
+  gymId: string;
+  movementSlug: string;
+  /** Nome que a equipe deu ao exercicio; o mesmo que o gatilho do servidor usa. */
+  name: string;
+  muscleGroup: string | null;
+  kind: ExerciseKind;
+  position: number;
+  targetSets: number;
+  targetReps: number;
   targetDistanceKm: number;
   targetDurationMin: number;
 };

@@ -10,7 +10,7 @@
  * last-write-wins do sync. Nada e apagado de verdade: delete e soft delete.
  */
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export const MIGRATIONS: readonly string[] = [
   // v1 — schema inicial
@@ -223,6 +223,42 @@ export const MIGRATIONS: readonly string[] = [
   -- Vazia = ordem do plano. Arrastar no editor do dia muda o plano
   -- (routine_exercises.position), e nao passa por aqui.
   ALTER TABLE sessions ADD COLUMN exercise_order TEXT NOT NULL DEFAULT '[]';
+  `,
+
+  // v6 — treinos sugeridos: vinculo nas rotinas e tabelas de cache local
+  `
+  ALTER TABLE routines ADD COLUMN preset_id TEXT;
+  ALTER TABLE routine_exercises ADD COLUMN preset_exercise_id TEXT;
+
+  CREATE TABLE IF NOT EXISTS local_gym_presets (
+    id         TEXT PRIMARY KEY NOT NULL,
+    gym_id     TEXT NOT NULL,
+    name       TEXT NOT NULL,
+    position   INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL,
+    deleted_at TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS local_gym_preset_exercises (
+    id                  TEXT PRIMARY KEY NOT NULL,
+    preset_id           TEXT NOT NULL,
+    gym_id              TEXT NOT NULL,
+    movement_slug       TEXT NOT NULL,
+    name                TEXT NOT NULL,
+    muscle_group        TEXT,
+    kind                TEXT NOT NULL DEFAULT 'strength',
+    position            INTEGER NOT NULL DEFAULT 0,
+    target_sets         INTEGER NOT NULL DEFAULT 3,
+    target_reps         INTEGER NOT NULL DEFAULT 10,
+    target_distance_km  REAL NOT NULL DEFAULT 0,
+    target_duration_min INTEGER NOT NULL DEFAULT 0,
+    updated_at          TEXT NOT NULL,
+    deleted_at          TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_routines_preset ON routines (preset_id);
+  CREATE INDEX IF NOT EXISTS idx_local_presets_gym ON local_gym_presets (gym_id);
+  CREATE INDEX IF NOT EXISTS idx_local_preset_exercises_preset ON local_gym_preset_exercises (preset_id);
   `,
 ];
 

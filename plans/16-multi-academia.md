@@ -10,7 +10,7 @@
 do onboarding
 **Depende de:** [07](07-login-google.md), [11](11-perfil-handle.md),
 [12](12-amigos.md), [15](15-avatar-e-nomes.md)
-**Estado:** **16.1 a 16.4 feitas** (v11 e v12 no Supabase; o app sabe o próprio mundo; OTA configurado no projeto EAS novo `voluma`; variantes por academia com a `teste` de prova), testadas no aparelho: o app padrão no mundo `padrao` e o app `teste` isolado. Publicação e 16.5 em diante: planejado
+**Estado:** **16.1 a 16.4 feitas** (v11 e v12 no Supabase; o app sabe o próprio mundo; OTA configurado no projeto EAS novo `voluma`; variantes por academia com a `teste` de prova), testadas no aparelho: o app padrão no mundo `padrao` e o app `teste` isolado. **16.5 feita** (v14 no Supabase, `16.5-flags.sql` passando; flags com AsyncStorage e `useFlag`, suíte Jest passando); falta testar no aparelho. **16.6 feita** (v15 no Supabase, `16.6-presets.sql` passando; dados, regras, gatilhos e pull das sugestões, Jest passando). **16.7 feita no código** (telas de fichas em `app/presets.tsx`, card no Plano, opção no onboarding com catálogo comum, origem "da academia" nos números, avisos de desvincular na tela do dia e na do treino, tudo atrás da flag `suggested_workouts`; Jest com 643 testes passando); falta testar no aparelho junto com a 16.6. Publicação e 16.8 em diante: planejado.
 
 ## Contexto da decisão
 
@@ -236,61 +236,111 @@ Implementado assim:
 - **Servidor:** `gym_flags (gym_id, key, enabled, updated_at)`, primary key
   `(gym_id, key)`. Leitura liberada para `anon` e `authenticated`, porque o app
   funciona sem login e flags não são segredo. Escrita só pela equipe, no SQL
-  Editor.
-- **Cliente:** `src/store/flags.ts` baixa as flags do mundo no boot e no sync,
+  Editor. Adicionado como **v14** no `supabase/schema.sql`, e teste idempotente
+  em `supabase/tests/16.5-flags.sql`.
+- **Cliente:** `src/store/flags.ts` baixa as flags do mundo ao abrir o app e quando ele volta para a frente,
   guarda no AsyncStorage (mesmo motivo do tour: é configuração do aparelho,
-  não dado do usuário) e expõe `useFlag(key)`. Uma flag que nunca foi baixada
-  vale **desligada**.
+  não dado do usuário) e expõe `useFlag(key)` e `getFlag(key)`. Uma flag que
+  nunca foi baixada vale **desligada**.
+- **Testes:** `src/store/__tests__/flags.test.ts` cobrindo default desligado,
+  leitura de cache, resiliência a falhas de rede/disco e isolamento de chave
+  por `gym_id`. Suíte passando.
 
 ## 16.6 — Treinos sugeridos: dados e regras
 
-- **Servidor:** `gym_presets (id, gym_id, name, position, updated_at,
-  deleted_at)` e `gym_preset_exercises (id, preset_id, gym_id, movement_slug,
-  position, target_sets, target_reps, target_distance_km,
-  target_duration_min, updated_at, deleted_at)`. Leitura para `anon` e
-  `authenticated`, escrita só pela equipe. O exercício aponta para o
-  `slug` da biblioteca (`src/movements/library.ts`), que existe igual em todo
-  aparelho. Na adoção, o app acha o exercício do usuário pelo nome normalizado
-  (`findMovement` / `normalizeName`) ou cria.
+- **Servidor (v15 no `supabase/schema.sql`):** `gym_presets (id, gym_id, name,
+  position, updated_at, deleted_at)` e `gym_preset_exercises (id, preset_id,
+  gym_id, movement_slug, name, muscle_group, kind, position, target_sets,
+  target_reps, target_distance_km, target_duration_min, updated_at,
+  deleted_at)`. Leitura para `anon` e `authenticated`, escrita só pela equipe
+  (sem grant de escrita). O exercício aponta para o `slug` da biblioteca
+  (`src/movements/library.ts`) e leva também `name`, `muscle_group` e `kind`,
+  porque o servidor não conhece a biblioteca e o gatilho precisa do nome para
+  achar ou criar o exercício do aluno. A equipe usa o mesmo nome da
+  biblioteca.
 - **Ligação com o plano:** `routines.preset_id` e
   `routine_exercises.preset_exercise_id` (migration v6 no SQLite e colunas no
   Postgres; os dois sincronizam pelo engine como qualquer coluna).
-- **Cache local:** as sugestões do mundo ficam em tabelas locais só de
-  leitura, fora da outbox, para funcionar offline.
-- **A sugestão não tem dia.** A pessoa coloca a sugestão no dia que quiser.
-  Colocar em um dia, ou trocar o dia (`routines.weekday`), **não desvincula**.
-  A mesma sugestão pode ir para mais de um dia: cada dia vira uma rotina
-  vinculada ao mesmo `preset_id`.
-- **Desvincular:** toda função do `repo.ts` que edita os **exercícios** do
-  plano (adicionar, remover, trocar ou reordenar exercício, mudar a semente)
-  limpa o `preset_id` da rotina. Trocar o dia, as funções da semana
-  (`setWeekTarget`) e as da sessão não limpam.
-- **Quem reaplica é o servidor.** Um trigger em `gym_preset_exercises`
-  (`security definer`) regrava os `routine_exercises` das rotinas que ainda têm
-  aquele `preset_id`: atualiza séries, reps e posição, insere os exercícios
-  novos e faz soft delete dos que saíram. Ele carimba `updated_at`, e o pull
-  normal entrega a mudança em todos os aparelhos. Os ids existentes não mudam,
-  porque `week_targets` aponta para eles. Um exercício novo da sugestão precisa
-  de um `exercise_id` do usuário: o trigger reaproveita o exercício do usuário
-  com o mesmo nome no mundo, ou cria um.
+- **Cache local:** `local_gym_presets` e `local_gym_preset_exercises`, só de
+  leitura e fora da outbox. `src/sync/presets.ts` (`pullPresets`) troca o
+  cache inteiro do mundo ao abrir o app e quando ele volta para a frente; sem
+  rede, o cache fica como estava.
+- **A sugestão não tem dia.** A pessoa coloca a sugestão no dia que quiser
+  (`adoptPresetIntoDay`). Colocar em um dia, ou trocar o dia
+  (`routines.weekday`), **não desvincula**. A mesma sugestão pode ir para mais
+  de um dia: cada dia vira uma rotina vinculada ao mesmo `preset_id`.
+- **Achar o exercício do aluno:** pelo nome normalizado, primeiro o `name` da
+  ficha (o mesmo que o gatilho usa), depois o nome da biblioteca. No servidor,
+  `exercise_name_key` reproduz o `normalizeName` (sem caixa, sem acento).
+  `normalizeName` mudou para `src/domain/names.ts` (o catálogo reexporta), para
+  o repo usar sem o ciclo repo → catálogo → repo.
+- **Desvincular:** `addExerciseToRoutine`, `removeRoutineExercise` e
+  `reorderRoutineExercises` limpam o `preset_id` da rotina
+  (`unlinkRoutineIfLinked`). Trocar o dia, as funções da semana
+  (`setWeekTarget`) e as da sessão não limpam. Não existe função que mude a
+  semente ou troque o exercício de um dia; quando existir, desvincula também.
+- **Quem reaplica é o servidor.** Os gatilhos em `gym_preset_exercises`
+  (`security definer`) só tocam rotinas que **ainda** têm aquele `preset_id`:
+  - INSERT (ou restaurar um soft delete): põe o exercício em cada rotina
+    vinculada, reaproveitando o exercício do aluno com o mesmo nome no mundo
+    ou criando um. Não duplica um exercício que o dia já tem.
+  - UPDATE: séries, reps, distância, tempo, posição e soft delete.
+  - DELETE: soft delete nas rotinas. É `BEFORE DELETE`, porque o `on delete set
+    null` da FK roda antes de qualquer gatilho `AFTER` e apagaria o vínculo.
+  Os gatilhos carimbam `updated_at`, e o pull normal entrega a mudança. Os ids
+  existentes não mudam, porque `week_targets` aponta para eles.
 - **Cascata (`resolveTargets`):** no treino vinculado, combina campo a campo:
   séries e reps da semente (a sugestão), carga do histórico. O ajuste da semana
   continua vencendo inteiro naquela semana. Fora do vínculo, nada muda.
-- **Corrida conhecida (aceitar ou tratar na 16.6):** a Ana edita o plano
-  offline (desvincula) e, antes de ela sincronizar, o instrutor **adiciona** um
-  exercício. O trigger insere esse exercício porque, no servidor, a rotina
-  ainda está vinculada. Quando a Ana sincroniza, o push dela não apaga a linha
-  nova, e o plano que já era dela ganha o exercício do instrutor. É raro e
-  dá para a Ana remover o exercício, mas precisa ser uma escolha consciente.
+- **Corrida conhecida (aceita):** a Ana edita o plano offline (desvincula) e,
+  antes de ela sincronizar, o instrutor **adiciona** ou muda um exercício. O
+  gatilho aplica a mudança porque, no servidor, a rotina ainda está vinculada.
+  Quando a Ana sincroniza, o push dela não apaga a linha nova, e o plano que já
+  era dela ganha o exercício do instrutor. É raro e dá para a Ana remover o
+  exercício.
+- **Ordem de publicação:** o push manda a linha inteira, então todo app com a
+  v6 do SQLite envia `preset_id` e `preset_exercise_id`. **A v15 tem que estar
+  no Supabase antes de qualquer build ou OTA com a 16.6**, senão o push de
+  `routines` e `routine_exercises` falha para todo mundo.
+- **Testes:** `src/domain/__tests__/targets.test.ts` (cascata vinculada e
+  desvinculada), `src/domain/__tests__/presets.test.ts` (casamento por nome da
+  ficha e da biblioteca), `src/db/__tests__/presets.test.ts` (SQLite real:
+  adoção, desvinculação, troca de dia, cascata), `src/sync/__tests__/presets.test.ts`
+  (pull, troca do cache, erro de rede) e `supabase/tests/16.6-presets.sql`
+  (gatilhos, incluindo rotina desvinculada, exercício novo, restaurar e delete
+  de verdade, e RLS).
+- **Estado:** typecheck, lint e Jest limpos (630 testes em 49 suítes). v15
+  rodada no Supabase e `16.6-presets.sql` passando.
 
 ## 16.7 — Treinos sugeridos: telas
 
-- Escolher uma sugestão e o dia (ou os dias) em que ela entra, no onboarding
-  do app da academia e no Plano.
-- Marca de "sugerido pela academia" no treino vinculado.
-- Ao editar os exercícios de um treino vinculado, avisar que ele passa a ser da
-  pessoa e para de receber as mudanças do instrutor. Trocar o dia não avisa,
-  porque não desvincula.
+- **Flag:** tudo depende de `suggested_workouts` (`FLAG_SUGGESTED_WORKOUTS` em
+  `src/store/flags.ts`). Desligada, que é o padrão, as fichas não aparecem no
+  Plano, no onboarding nem em `/presets`, mesmo com o cache cheio. **Para lançar
+  uma academia, inserir em `gym_flags` a linha `(gym_id, 'suggested_workouts',
+  true)`.** Treinos já vinculados continuam vinculados com a flag desligada.
+- **Escolher a ficha e o dia** em `app/presets.tsx` (a partir do card
+  "ACADEMIA" do Plano), uma ficha por vez, quantas vezes quiser. Mostra o
+  `name` da ficha (o mesmo que a adoção grava). Falha na adoção aparece na
+  folha de escolha do dia; um segundo toque durante a adoção é ignorado.
+- **Onboarding:** opção "Fichas da academia" quando há fichas e a flag está
+  ligada; as fichas ciclam pelos dias marcados (`assignPresetCycle`) e
+  `adoptPresetsForDays` (`src/db/onboarding.ts`) traz o catálogo comum antes,
+  como os outros começos. A lista é uma consulta viva: numa instalação nova o
+  cache chega depois da tela abrir, e o `pullPresets` avisa com `bumpData`
+  quando o cache muda.
+- **Marca de "sugerido":** tag `SUGERIDO` no dia do Plano e legenda sob o nome
+  do treino em `app/day/[weekday].tsx`. Os números do treino vinculado mostram
+  "da academia" (`source: 'preset'` em `targetsForWeek`), no dia e no treino.
+- **Avisos de desvincular:** na tela do dia (adicionar, remover, reordenar) e na
+  tela do treino ("Adicionar ao plano" e "Remover do plano"). Trocar o dia,
+  ajustar a semana e o que é "só hoje" não avisam, porque não desvinculam.
+- **Testes:** `app/__tests__/presets.test.tsx` (inclui flag desligada e nome da
+  ficha), `app/__tests__/day.test.tsx`, `src/sync/__tests__/presets.test.ts`
+  (inclui só avisar quando muda) e `src/db/__tests__/presets.test.ts` (inclui o
+  onboarding pelas fichas com catálogo comum).
+- **Estado:** typecheck, lint e Jest limpos (643 testes em 51 suítes). Falta
+  testar no aparelho, junto com a 16.6.
 
 ## 16.8 — Lançar a primeira academia
 

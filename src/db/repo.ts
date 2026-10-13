@@ -4,15 +4,19 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import type {
   BodyWeightLog,
   Exercise,
+  ExerciseKind,
+  GymPreset,
+  GymPresetExercise,
   Routine,
   RoutineExercise,
-  ExerciseKind,
   Session,
   SessionSet,
   Targets,
   Weekday,
   WeekTarget,
 } from '@/domain/types';
+import { normalizeName } from '@/domain/names';
+import { preparePresetAdoption } from '@/domain/presets';
 import { runTargetsFromSets } from '@/domain/run';
 import { resolveTargets, targetsFromSets } from '@/domain/targets';
 import { fromDateKey, toDateKey, weekdayOf } from '@/domain/week';
@@ -28,6 +32,8 @@ import type { SyncedTable } from './schema';
 import {
   toBodyWeightLog,
   toExercise,
+  toGymPreset,
+  toGymPresetExercise,
   toRoutine,
   toRoutineExercise,
   toSession,
@@ -35,6 +41,8 @@ import {
   toWeekTarget,
   type BodyWeightLogRow,
   type ExerciseRow,
+  type GymPresetExerciseRow,
+  type GymPresetRow,
   type RoutineExerciseRow,
   type RoutineRow,
   type SessionRow,
@@ -331,6 +339,30 @@ async function listRoutineExercises(
   }));
 }
 
+/**
+ * Desvincula uma rotina da ficha sugerida se ela estiver vinculada.
+ * A regra de negocio quebra o vinculo automaticamente quando a composicao
+ * de exercicios do dia e alterada pelo aluno (adicionar, remover ou reordenar).
+ */
+async function unlinkRoutineIfLinked(
+  db: SQLiteDatabase,
+  routineId: string,
+  timestamp: string,
+): Promise<void> {
+  const routine = await db.getFirstAsync<{ preset_id: string | null }>(
+    'SELECT preset_id FROM routines WHERE id = ? AND deleted_at IS NULL',
+    routineId,
+  );
+  if (routine?.preset_id) {
+    await db.runAsync(
+      'UPDATE routines SET preset_id = NULL, updated_at = ? WHERE id = ?',
+      timestamp,
+      routineId,
+    );
+    await enqueue(db, 'routines', routineId);
+  }
+}
+
 export async function addExerciseToRoutine(
   routineId: string,
   exerciseId: string,
@@ -338,6 +370,7 @@ export async function addExerciseToRoutine(
 ): Promise<void> {
   const db = await getDb();
   const id = newId();
+  const timestamp = now();
 
   await db.withTransactionAsync(async () => {
     // Um exercicio aparece uma vez por dia. Dois `routine_exercises` com o mesmo
@@ -349,6 +382,8 @@ export async function addExerciseToRoutine(
       exerciseId,
     );
     if (existing) return;
+
+    await unlinkRoutineIfLinked(db, routineId, timestamp);
 
     const last = await db.getFirstAsync<{ next: number }>(
       'SELECT COALESCE(MAX(position) + 1, 0) AS next FROM routine_exercises WHERE routine_id = ? AND deleted_at IS NULL',
@@ -368,7 +403,7 @@ export async function addExerciseToRoutine(
       targets.weightKg,
       targets.distanceKm,
       targets.durationMin,
-      now(),
+      timestamp,
     );
     await enqueue(db, 'routine_exercises', id);
   });
@@ -395,7 +430,24 @@ export async function routineExerciseCounts(): Promise<Map<string, number>> {
 }
 
 export async function removeRoutineExercise(id: string): Promise<void> {
-  await softDelete('routine_exercises', id);
+  const db = await getDb();
+  const timestamp = now();
+  await db.withTransactionAsync(async () => {
+    const existing = await db.getFirstAsync<{ routine_id: string }>(
+      'SELECT routine_id FROM routine_exercises WHERE id = ? AND deleted_at IS NULL',
+      id,
+    );
+    await db.runAsync(
+      'UPDATE routine_exercises SET deleted_at = ?, updated_at = ? WHERE id = ?',
+      timestamp,
+      timestamp,
+      id,
+    );
+    await enqueue(db, 'routine_exercises', id);
+    if (existing?.routine_id) {
+      await unlinkRoutineIfLinked(db, existing.routine_id, timestamp);
+    }
+  });
 }
 
 /**
@@ -415,6 +467,14 @@ export async function reorderRoutineExercises(orderedIds: readonly string[]): Pr
   const inList = orderedIds.map(() => '?').join(', ');
 
   await db.withTransactionAsync(async () => {
+    const first = await db.getFirstAsync<{ routine_id: string }>(
+      'SELECT routine_id FROM routine_exercises WHERE id = ?',
+      orderedIds[0],
+    );
+    if (first?.routine_id) {
+      await unlinkRoutineIfLinked(db, first.routine_id, timestamp);
+    }
+
     await db.runAsync(
       `UPDATE routine_exercises
           SET position = CASE id ${cases} END, updated_at = ?
@@ -429,8 +489,12 @@ export async function reorderRoutineExercises(orderedIds: readonly string[]): Pr
 
 // ------------------------------------------------------- alvos de uma semana
 
-/** De qual degrau da cascata sairam os numeros — a tela mostra isso ao usuario. */
-export type TargetSource = 'override' | 'lastActual' | 'plan';
+/**
+ * De qual degrau da cascata sairam os numeros — a tela mostra isso ao usuario.
+ * `preset`: treino vinculado a ficha da academia, com series e reps dela (a
+ * carga continua vindo do historico, ver `resolveTargets`).
+ */
+export type TargetSource = 'override' | 'preset' | 'lastActual' | 'plan';
 
 /** Um exercicio do dia com os numeros ja resolvidos para uma semana. */
 export type WeekExercise = RoutineExerciseWithName & {
@@ -565,7 +629,8 @@ export async function targetsForWeek(
   // ORDER BY + Map: sem indice unico, o sync pode deixar duas linhas para o
   // mesmo slot. A ultima gravacao vence, e o `set` sobrescreve o que veio antes
   // porque a ordem crescente coloca a mais nova no fim.
-  const [planned, overrides] = await Promise.all([
+  const [routineRow, planned, overrides] = await Promise.all([
+    db.getFirstAsync<RoutineRow>('SELECT * FROM routines WHERE id = ?', routineId),
     listRoutineExercises(routineId),
     db.getAllAsync<WeekTargetRow>(
       `SELECT * FROM week_targets
@@ -574,6 +639,7 @@ export async function targetsForWeek(
       weekStart,
     ),
   ]);
+  const isLinked = Boolean(routineRow?.preset_id);
   const bySlot = new Map<string, WeekTarget>();
   for (const row of overrides) bySlot.set(row.routine_exercise_id, toWeekTarget(row));
 
@@ -601,14 +667,25 @@ export async function targetsForWeek(
 
     return {
       ...item,
-      source: overrideTargets ? 'override' : performed ? 'lastActual' : 'plan',
-      targets: resolveTargets(overrideTargets, performed, {
-        sets: item.targetSets,
-        reps: item.targetReps,
-        weightKg: item.targetWeightKg,
-        distanceKm: item.targetDistanceKm,
-        durationMin: item.targetDurationMin,
-      }),
+      source: overrideTargets
+        ? 'override'
+        : isLinked
+          ? 'preset'
+          : performed
+            ? 'lastActual'
+            : 'plan',
+      targets: resolveTargets(
+        overrideTargets,
+        performed,
+        {
+          sets: item.targetSets,
+          reps: item.targetReps,
+          weightKg: item.targetWeightKg,
+          distanceKm: item.targetDistanceKm,
+          durationMin: item.targetDurationMin,
+        },
+        isLinked,
+      ),
     };
   });
 }
@@ -678,6 +755,139 @@ export async function setWeekTarget(
     }
     await enqueue(db, 'week_targets', id);
   });
+}
+
+// ---------------------------------------------------- treinos sugeridos (presets)
+
+export async function listLocalPresets(gymId: string): Promise<GymPreset[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<GymPresetRow>(
+    'SELECT * FROM local_gym_presets WHERE gym_id = ? AND deleted_at IS NULL ORDER BY position, name COLLATE NOCASE',
+    gymId,
+  );
+  return rows.map(toGymPreset);
+}
+
+export async function listLocalPresetExercises(presetId: string): Promise<GymPresetExercise[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<GymPresetExerciseRow>(
+    'SELECT * FROM local_gym_preset_exercises WHERE preset_id = ? AND deleted_at IS NULL ORDER BY position, id',
+    presetId,
+  );
+  return rows.map(toGymPresetExercise);
+}
+
+/**
+ * Adota uma ficha sugerida em um determinado dia da semana.
+ * Cria a rotina vinculada ao preset_id, mapeia/cria exercicios no catalogo pessoal,
+ * substitui os exercicios anteriores daquele dia e preserva o vinculo dinâmico.
+ */
+export async function adoptPresetIntoDay(
+  presetId: string,
+  weekday: Weekday,
+): Promise<Routine> {
+  const db = await getDb();
+  const timestamp = now();
+
+  const presetRow = await db.getFirstAsync<GymPresetRow>(
+    'SELECT * FROM local_gym_presets WHERE id = ? AND deleted_at IS NULL',
+    presetId,
+  );
+  if (!presetRow) {
+    throw new Error(`Treino sugerido nao encontrado: ${presetId}`);
+  }
+  const preset = toGymPreset(presetRow);
+
+  const presetExerciseRows = await db.getAllAsync<GymPresetExerciseRow>(
+    'SELECT * FROM local_gym_preset_exercises WHERE preset_id = ? AND deleted_at IS NULL ORDER BY position, id',
+    presetId,
+  );
+  const presetExercises = presetExerciseRows.map(toGymPresetExercise);
+
+  const existingExercises = await listExercises();
+  const drafts = preparePresetAdoption(presetExercises, existingExercises);
+
+  // ensureDayRoutine abre sua propria transacao se precisar criar o dia.
+  // Por isso e chamada fora da transacao abaixo.
+  const routine = await ensureDayRoutine(weekday);
+
+  await db.withTransactionAsync(async () => {
+    const createdMap = new Map<string, string>();
+
+    for (const draft of drafts) {
+      if (!draft.exerciseId) {
+        const nameKey = normalizeName(draft.exerciseName);
+        let exerciseId = createdMap.get(nameKey);
+        if (!exerciseId) {
+          exerciseId = newId();
+          await db.runAsync(
+            'INSERT INTO exercises (id, name, muscle_group, kind, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, NULL)',
+            exerciseId,
+            draft.exerciseName.trim(),
+            draft.muscleGroup,
+            draft.kind,
+            timestamp,
+          );
+          await enqueue(db, 'exercises', exerciseId);
+          createdMap.set(nameKey, exerciseId);
+        }
+        draft.exerciseId = exerciseId;
+      }
+    }
+
+    await db.runAsync(
+      'UPDATE routines SET preset_id = ?, name = ?, updated_at = ? WHERE id = ?',
+      preset.id,
+      preset.name,
+      timestamp,
+      routine.id,
+    );
+    await enqueue(db, 'routines', routine.id);
+
+    await softDeleteIn(
+      db,
+      'week_targets',
+      'routine_exercise_id IN (SELECT id FROM routine_exercises WHERE routine_id = ?)',
+      [routine.id],
+      timestamp,
+    );
+    await softDeleteIn(
+      db,
+      'routine_exercises',
+      'routine_id = ?',
+      [routine.id],
+      timestamp,
+    );
+
+    for (let pos = 0; pos < drafts.length; pos++) {
+      const d = drafts[pos];
+      const reId = newId();
+      await db.runAsync(
+        `INSERT INTO routine_exercises
+           (id, routine_id, exercise_id, preset_exercise_id, position, target_sets, target_reps, target_weight_kg,
+            target_distance_km, target_duration_min, updated_at, deleted_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+        reId,
+        routine.id,
+        d.exerciseId!,
+        d.presetExerciseId,
+        pos,
+        d.targetSets,
+        d.targetReps,
+        0,
+        d.targetDistanceKm,
+        d.targetDurationMin,
+        timestamp,
+      );
+      await enqueue(db, 'routine_exercises', reId);
+    }
+  });
+
+  const updatedRoutineRow = await db.getFirstAsync<RoutineRow>(
+    'SELECT * FROM routines WHERE id = ?',
+    routine.id,
+  );
+  return updatedRoutineRow ? toRoutine(updatedRoutineRow) : routine;
 }
 
 // ------------------------------------------------------------------ treinos

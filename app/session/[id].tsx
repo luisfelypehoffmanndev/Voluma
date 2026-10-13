@@ -21,6 +21,7 @@ import {
   createExercise,
   getSession,
   listExercises,
+  listRoutines,
   listSessionSets,
   removeRoutineExercise,
   removeSet,
@@ -318,7 +319,7 @@ export default function SessionScreen() {
     );
   }
 
-  const { session, catalog, routineId } = data;
+  const { session, catalog, routineId, linked } = data;
   // `items` ja saiu de `data` la em cima, para a soma do volume — aqui so o
   // estreitamento de tipo, que o `if` de carregamento acima ja garantiu.
   const exercises = items ?? [];
@@ -481,6 +482,7 @@ export default function SessionScreen() {
                 item={item}
                 sessionId={session.id}
                 everyDay={everyDay}
+                linked={linked}
                 onDraft={reportDraft}
                 onStructuralChange={reload}
                 onSkip={skipToday}
@@ -543,7 +545,11 @@ export default function SessionScreen() {
         <ConfirmOverlay
           visible={pendingPick != null}
           title={`Adicionar ${pendingPick?.name ?? ''}`}
-          message={`Só neste treino, ou no plano de ${everyDay} a partir de agora?`}
+          message={
+            linked
+              ? `Só neste treino, ou no plano de ${everyDay} a partir de agora? No plano, o dia deixa de seguir a ficha da academia e não recebe mais as mudanças do instrutor.`
+              : `Só neste treino, ou no plano de ${everyDay} a partir de agora?`
+          }
           cancelLabel="Só hoje"
           confirmLabel={everyDay.charAt(0).toUpperCase() + everyDay.slice(1)}
           onCancel={() => pendingPick && void addExercise(pendingPick, 'today')}
@@ -580,6 +586,7 @@ export default function SessionScreen() {
  */
 const SOURCE_LABEL: Record<ItemSource, string> = {
   edited: 'editado por você',
+  preset: 'da academia',
   lastActual: 'igual à última vez',
   plan: 'do seu plano',
 };
@@ -628,7 +635,7 @@ type ExerciseDraft = {
   totalSets: number;
 };
 
-type ItemSource = 'edited' | 'lastActual' | 'plan';
+type ItemSource = 'edited' | 'preset' | 'lastActual' | 'plan';
 
 type SessionExercise = {
   /** O id do `routine_exercise`, ou o do exercicio quando ele nao esta na rotina. */
@@ -699,6 +706,8 @@ type CardProps = {
   onStructuralChange: () => void;
   /** "toda segunda" — para o menu dizer de qual dia o exercicio sai. */
   everyDay: string;
+  /** O dia segue a ficha da academia: remover do plano desvincula, e o menu avisa. */
+  linked: boolean;
   /** "Pular hoje". Quem cuida do "Desfazer" e a tela, nao o card que some. */
   onSkip: (sessionId: string, item: SessionExercise) => void;
   /** Entrega a tela um jeito de esperar as escritas pendentes deste card. */
@@ -729,6 +738,7 @@ const ExerciseCard = memo(
   (prev, next) =>
     prev.sessionId === next.sessionId &&
     prev.everyDay === next.everyDay &&
+    prev.linked === next.linked &&
     prev.onDraft === next.onDraft &&
     prev.onStructuralChange === next.onStructuralChange &&
     prev.onSkip === next.onSkip &&
@@ -781,11 +791,15 @@ function ExerciseMenu({
   item,
   sessionId,
   everyDay,
+  linked,
   onSkip,
   onStructuralChange,
   beforeLeave,
   extraActions = [],
-}: Pick<CardProps, 'item' | 'sessionId' | 'everyDay' | 'onSkip' | 'onStructuralChange'> & {
+}: Pick<
+  CardProps,
+  'item' | 'sessionId' | 'everyDay' | 'linked' | 'onSkip' | 'onStructuralChange'
+> & {
   beforeLeave: () => void;
   /**
    * Acoes do card que nao existem para todo tipo de exercicio — hoje, remover
@@ -831,7 +845,9 @@ function ExerciseMenu({
                   detail: `sai de ${everyDay} a partir de agora`,
                   confirm: {
                     title: `Remover ${item.exerciseName} do plano?`,
-                    message: `Sai de ${everyDay} a partir de agora. O que já foi registrado continua no histórico.`,
+                    message: linked
+                      ? `Sai de ${everyDay} a partir de agora. O dia deixa de seguir a ficha da academia e não recebe mais as mudanças do instrutor.`
+                      : `Sai de ${everyDay} a partir de agora. O que já foi registrado continua no histórico.`,
                     confirmLabel: 'Remover',
                   },
                   onPress: () => {
@@ -1412,13 +1428,15 @@ async function loadSession(id: string) {
   const session = await getSession(id);
   if (!session) return { session: null } as const;
 
-  const [sets, catalog, planned] = await Promise.all([
+  const [sets, catalog, planned, routines] = await Promise.all([
     listSessionSets(id),
     listExercises(),
     session.routineId
       ? targetsForWeek(weekStartKey(fromDateKey(session.date)), session.routineId)
       : Promise.resolve<WeekExercise[]>([]),
+    session.routineId ? listRoutines() : Promise.resolve([]),
   ]);
+  const linked = Boolean(routines.find((routine) => routine.id === session.routineId)?.presetId);
 
   const buckets = groupSetsByExercise(sets);
   const recorded = recordedByExercise(buckets, catalog);
@@ -1442,7 +1460,11 @@ async function loadSession(id: string) {
       targets,
       rows: rowsForExercise(buckets.get(item.exerciseId), targets, item.exerciseKind),
       done: entry?.done ?? false,
-      source: entry ? 'edited' : item.source === 'plan' ? 'plan' : 'lastActual',
+      source: entry
+        ? 'edited'
+        : item.source === 'plan' || item.source === 'preset'
+          ? item.source
+          : 'lastActual',
       routineExerciseId: item.id,
     });
   }
@@ -1470,6 +1492,7 @@ async function loadSession(id: string) {
     items: applyOrder(items, session.exerciseOrder, exerciseKey),
     catalog,
     routineId: session.routineId,
+    linked,
   };
 }
 

@@ -1,10 +1,11 @@
 import type { Weekday } from '@/domain/types';
-import { assignCycle } from '@/domain/templates';
+import { assignCycle, assignPresetCycle } from '@/domain/templates';
 
 import { addMissingCommonExercises, normalizeName } from './catalog';
 import { getDb } from './client';
 import {
   addExerciseToRoutine,
+  adoptPresetIntoDay,
   createExercise,
   ensureDayRoutine,
   listExercises,
@@ -74,5 +75,21 @@ export async function createPushPullLegs(days: readonly Weekday[]): Promise<void
         durationMin: 0,
       });
     }
+  }
+}
+
+/**
+ * Fichas da academia nos dias escolhidos (ver `assignPresetCycle`), em cima do
+ * catalogo comum, como os outros comecos: montar outro dia depois nao pode
+ * exigir digitar nome. O catalogo vem antes, para a adocao reaproveitar os
+ * mesmos registros em vez de criar duplicatas.
+ */
+export async function adoptPresetsForDays(
+  days: readonly Weekday[],
+  presets: readonly { id: string }[],
+): Promise<void> {
+  await addMissingCommonExercises();
+  for (const { weekday, preset } of assignPresetCycle(days, presets)) {
+    await adoptPresetIntoDay(preset.id, weekday);
   }
 }

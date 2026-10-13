@@ -1302,3 +1302,219 @@ begin
     );
   end loop;
 end $$;
+
+-- ---------------------------------------------------- v14: feature flags
+-- Permite ligar/desligar funcionalidades por academia sem novo build.
+-- Chave composta (gym_id, key): cada academia tem uma configuracao por flag.
+
+create table if not exists public.gym_flags (
+  gym_id     text not null references public.gyms (id) on delete cascade,
+  key        text not null,
+  enabled    boolean not null default false,
+  updated_at timestamptz not null default now(),
+  primary key (gym_id, key)
+);
+
+alter table public.gym_flags enable row level security;
+
+-- Leitura publica: flags nao sao segredo e o app precisa delas mesmo sem login
+drop policy if exists "flags_readable_by_all" on public.gym_flags;
+create policy "flags_readable_by_all"
+  on public.gym_flags
+  for select
+  to anon, authenticated
+  using (true);
+
+-- Sem policies de INSERT, UPDATE ou DELETE e sem grant de escrita para
+-- anon/authenticated: so a equipe (SQL Editor / service_role) altera flags. O
+-- revoke importa porque, so com RLS, UPDATE e DELETE sem policy nao dao erro:
+-- passam em silencio afetando 0 linhas.
+revoke insert, update, delete on public.gym_flags from anon, authenticated;
+
+-- ---------------------------------------- v15: treinos sugeridos por academia
+-- Fichas padrao cadastradas pela equipe, no SQL Editor. Para tirar um exercicio
+-- da ficha, prefira `deleted_at`; o delete de verdade tambem propaga (gatilho
+-- BEFORE DELETE, que roda antes do `on delete set null` da FK).
+--
+-- `name`, `muscle_group` e `kind` vao junto do `movement_slug` porque o servidor
+-- nao conhece a biblioteca de movimentos do app: o gatilho precisa do nome para
+-- achar (ou criar) o exercicio do aluno quando a ficha ganha um exercicio novo.
+-- Use o mesmo nome da biblioteca (`src/movements/library.ts`).
+
+create table if not exists public.gym_presets (
+  id         uuid primary key default gen_random_uuid(),
+  gym_id     text not null references public.gyms (id) on delete cascade,
+  name       text not null,
+  position   integer not null default 0,
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+
+create table if not exists public.gym_preset_exercises (
+  id                  uuid primary key default gen_random_uuid(),
+  preset_id           uuid not null references public.gym_presets (id) on delete cascade,
+  gym_id              text not null references public.gyms (id) on delete cascade,
+  movement_slug       text not null,
+  name                text not null check (char_length(btrim(name)) between 1 and 80),
+  muscle_group        text,
+  kind                text not null default 'strength',
+  position            integer not null default 0,
+  target_sets         integer not null default 3,
+  target_reps         integer not null default 10,
+  target_distance_km  real not null default 0,
+  target_duration_min integer not null default 0,
+  updated_at          timestamptz not null default now(),
+  deleted_at          timestamptz
+);
+
+create index if not exists idx_gym_presets_gym on public.gym_presets (gym_id);
+create index if not exists idx_gym_preset_exercises_gym on public.gym_preset_exercises (gym_id);
+
+-- Colunas de vinculo no plano do aluno
+alter table public.routines add column if not exists preset_id uuid references public.gym_presets (id) on delete set null;
+alter table public.routine_exercises add column if not exists preset_exercise_id uuid references public.gym_preset_exercises (id) on delete set null;
+create index if not exists idx_routines_preset on public.routines (preset_id);
+create index if not exists idx_routine_exercises_preset on public.routine_exercises (preset_exercise_id);
+
+-- RLS
+alter table public.gym_presets enable row level security;
+alter table public.gym_preset_exercises enable row level security;
+
+drop policy if exists "gym_presets_readable_by_all" on public.gym_presets;
+create policy "gym_presets_readable_by_all"
+  on public.gym_presets for select to anon, authenticated using (true);
+
+drop policy if exists "gym_preset_exercises_readable_by_all" on public.gym_preset_exercises;
+create policy "gym_preset_exercises_readable_by_all"
+  on public.gym_preset_exercises for select to anon, authenticated using (true);
+
+revoke insert, update, delete on public.gym_presets from anon, authenticated;
+revoke insert, update, delete on public.gym_preset_exercises from anon, authenticated;
+
+-- Mesma chave do `normalizeName` do app (sem caixa, sem acento, sem espaco
+-- nas pontas), para o gatilho e a adocao no aparelho acharem o mesmo exercicio.
+create or replace function public.exercise_name_key(raw text)
+returns text
+language sql
+immutable
+set search_path = ''
+as $$
+  select translate(
+    lower(btrim(raw)),
+    'áàâãäéèêëíìîïóòôõöúùûüç',
+    'aaaaaeeeeiiiiooooouuuuc'
+  );
+$$;
+
+-- Gatilho: a ficha mudou, as rotinas AINDA vinculadas (routines.preset_id)
+-- acompanham. Rotina desvinculada pelo aluno nao e tocada, mesmo que os
+-- exercicios dela ainda guardem o `preset_exercise_id`.
+--   INSERT (ou restaurar um soft delete): poe o exercicio em cada rotina
+--     vinculada, reaproveitando o exercicio do aluno com o mesmo nome no mundo
+--     ou criando um.
+--   UPDATE: series, reps, distancia, tempo, posicao e soft delete.
+--   DELETE: soft delete nas rotinas (BEFORE, antes da FK zerar o vinculo).
+-- Os ids existentes nao mudam, porque `week_targets` aponta para eles.
+create or replace function public.propagate_preset_exercise_changes()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  r       record;
+  ex      uuid;
+  name_key text;
+begin
+  if tg_op = 'DELETE' then
+    update public.routine_exercises re
+       set deleted_at = clock_timestamp(),
+           updated_at = clock_timestamp()
+      from public.routines ro
+     where re.preset_exercise_id = old.id
+       and re.deleted_at is null
+       and ro.id = re.routine_id
+       and ro.preset_id = old.preset_id
+       and ro.deleted_at is null;
+    return old;
+  end if;
+
+  if tg_op = 'UPDATE' and not (old.deleted_at is not null and new.deleted_at is null) then
+    update public.routine_exercises re
+       set target_sets = new.target_sets,
+           target_reps = new.target_reps,
+           target_distance_km = new.target_distance_km,
+           target_duration_min = new.target_duration_min,
+           position = new.position,
+           deleted_at = new.deleted_at,
+           updated_at = clock_timestamp()
+      from public.routines ro
+     where re.preset_exercise_id = new.id
+       and re.deleted_at is null
+       and ro.id = re.routine_id
+       and ro.preset_id = new.preset_id
+       and ro.deleted_at is null;
+    return new;
+  end if;
+
+  -- INSERT, ou UPDATE que restaurou um exercicio apagado
+  if new.deleted_at is not null then
+    return new;
+  end if;
+  name_key := public.exercise_name_key(new.name);
+
+  for r in
+    select ro.id, ro.user_id, ro.gym_id
+      from public.routines ro
+     where ro.preset_id = new.preset_id
+       and ro.deleted_at is null
+       and not exists (
+         select 1 from public.routine_exercises re
+          where re.routine_id = ro.id
+            and re.preset_exercise_id = new.id
+            and re.deleted_at is null
+       )
+  loop
+    select e.id into ex
+      from public.exercises e
+     where e.user_id = r.user_id
+       and e.gym_id = r.gym_id
+       and e.deleted_at is null
+       and public.exercise_name_key(e.name) = name_key
+     order by e.updated_at, e.id
+     limit 1;
+
+    if ex is null then
+      ex := gen_random_uuid();
+      insert into public.exercises (id, user_id, gym_id, name, muscle_group, kind, updated_at)
+      values (ex, r.user_id, r.gym_id, btrim(new.name), new.muscle_group, new.kind, clock_timestamp());
+    end if;
+
+    -- Um exercicio aparece uma vez por dia (mesma regra do app)
+    if not exists (
+      select 1 from public.routine_exercises re
+       where re.routine_id = r.id and re.exercise_id = ex and re.deleted_at is null
+    ) then
+      insert into public.routine_exercises
+        (id, user_id, gym_id, routine_id, exercise_id, preset_exercise_id, position,
+         target_sets, target_reps, target_weight_kg, target_distance_km, target_duration_min, updated_at)
+      values
+        (gen_random_uuid(), r.user_id, r.gym_id, r.id, ex, new.id, new.position,
+         new.target_sets, new.target_reps, 0, new.target_distance_km, new.target_duration_min,
+         clock_timestamp());
+    end if;
+  end loop;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.propagate_preset_exercise_changes() from public, anon, authenticated;
+
+create or replace trigger trg_propagate_preset_exercise
+  after insert or update on public.gym_preset_exercises
+  for each row execute function public.propagate_preset_exercise_changes();
+
+create or replace trigger trg_propagate_preset_exercise_delete
+  before delete on public.gym_preset_exercises
+  for each row execute function public.propagate_preset_exercise_changes();

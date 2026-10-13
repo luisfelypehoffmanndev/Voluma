@@ -83,4 +83,33 @@ describe('resolveTargets', () => {
     const zeroed: Targets = { sets: 3, reps: 15, weightKg: 0, distanceKm: 0, durationMin: 0 };
     expect(resolveTargets(zeroed, performed, SEED)).toEqual(zeroed);
   });
+
+  describe('treino vinculado (isLinked = true)', () => {
+    it('combina series e reps da semente (ficha) com carga do historico', () => {
+      // Instrutor manda 4x8; aluno fez 3x10 a 60 kg semana passada
+      const seedInstrutor: Targets = { sets: 4, reps: 8, weightKg: 0, distanceKm: 0, durationMin: 0 };
+      const historicoAluno: Targets = { sets: 3, reps: 10, weightKg: 60, distanceKm: 0, durationMin: 0 };
+
+      expect(resolveTargets(null, historicoAluno, seedInstrutor, true)).toEqual({
+        sets: 4,
+        reps: 8,
+        weightKg: 60,
+        distanceKm: 0,
+        durationMin: 0,
+      });
+    });
+
+    it('sem historico nenhum, adota a semente por inteiro', () => {
+      const seedInstrutor: Targets = { sets: 4, reps: 8, weightKg: 0, distanceKm: 0, durationMin: 0 };
+      expect(resolveTargets(null, null, seedInstrutor, true)).toEqual(seedInstrutor);
+    });
+
+    it('ajuste da semana (override) continua vencendo mesmo em treino vinculado', () => {
+      const seedInstrutor: Targets = { sets: 4, reps: 8, weightKg: 0, distanceKm: 0, durationMin: 0 };
+      const historicoAluno: Targets = { sets: 3, reps: 10, weightKg: 60, distanceKm: 0, durationMin: 0 };
+      const ajusteSemana: Targets = { sets: 4, reps: 9, weightKg: 62.5, distanceKm: 0, durationMin: 0 };
+
+      expect(resolveTargets(ajusteSemana, historicoAluno, seedInstrutor, true)).toEqual(ajusteSemana);
+    });
+  });
 });
