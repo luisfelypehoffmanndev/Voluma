@@ -81,6 +81,12 @@ export const MOVEMENT_LIBRARY: readonly Movement[] = MOVEMENT_DATA.map(
 );
 
 const BY_NAME = new Map(MOVEMENT_LIBRARY.map((movement) => [normalizeName(movement.name), movement]));
+const BY_SLUG = new Map(MOVEMENT_LIBRARY.map((movement) => [movement.slug, movement]));
+
+/** O movimento com este slug, ou null. */
+export function findMovementBySlug(slug: string): Movement | null {
+  return BY_SLUG.get(slug) ?? null;
+}
 
 /**
  * O texto contra o qual a busca casa: nome, grupo e equipamento.

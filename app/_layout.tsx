@@ -14,10 +14,12 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { useFlags } from '@/store/flags';
 import { useOnboarding } from '@/store/onboarding';
 import { usePrefs } from '@/store/prefs';
 import { useTour } from '@/store/tour';
 import { useSyncLifecycle } from '@/sync/auth';
+import { pullPresets } from '@/sync/presets';
 import { colors } from '@/theme/tokens';
 import { BlurTargetProvider } from '@/ui/blurTarget';
 
@@ -37,11 +39,19 @@ export default function RootLayout() {
 
   useSyncLifecycle();
 
-  // Le a preferencia de vibracao uma vez, na raiz. Ate o disco responder o
-  // padrao vale, entao nada aqui bloqueia a montagem.
+  // Le preferencias, tour e flags uma vez, na raiz, e atualiza flags e
+  // treinos sugeridos do mundo. Ate o disco responder o padrao vale, entao
+  // nada aqui bloqueia a montagem.
   useEffect(() => {
     void usePrefs.getState().load();
     void useTour.getState().load();
+    void useFlags
+      .getState()
+      .load()
+      .then(() => {
+        void useFlags.getState().fetchRemote();
+      });
+    void pullPresets();
   }, []);
 
   // Primeira abertura ou nao — decidido antes de qualquer tela aparecer, para a
@@ -83,6 +93,7 @@ export default function RootLayout() {
             <Stack.Screen name="day/[weekday]" />
             <Stack.Screen name="catalog" />
             <Stack.Screen name="library" />
+            <Stack.Screen name="presets" />
             <Stack.Screen name="bodyweight" options={{ presentation: 'modal' }} />
             <Stack.Screen name="login" options={{ presentation: 'modal' }} />
             <Stack.Screen name="profile-setup" options={{ presentation: 'modal' }} />

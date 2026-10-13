@@ -2,11 +2,12 @@ import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { listExercises, listRoutines, routineExerciseCounts } from '@/db/repo';
+import { listExercises, listLocalPresets, listRoutines, routineExerciseCounts } from '@/db/repo';
 import type { Weekday } from '@/domain/types';
 import { weekPlan, weekdayName, weekdayOf } from '@/domain/week';
 import { useQuery } from '@/store/data';
-import { colors, spacing } from '@/theme/tokens';
+import { FLAG_SUGGESTED_WORKOUTS, useFlag } from '@/store/flags';
+import { colors, fontSize, spacing } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
 import { PressableSurface } from '@/ui/PressableSurface';
 import { LoadError } from '@/ui/LoadError';
@@ -16,6 +17,7 @@ import { TourTarget } from '@/ui/tour/TourTarget';
 import { useTabBarClearance } from '@/ui/tabBar';
 import { Label, Meta, Section } from '@/ui/Text';
 import { ChevronRightIcon } from '@/ui/icons';
+import { GYM } from '@/world';
 
 /**
  * Plano: a semana inteira e o catalogo de movimentos.
@@ -31,21 +33,24 @@ export default function PlanScreen() {
 
   const { data, error, reload } = useQuery(
     useCallback(async () => {
-      const [routines, exercises, perRoutine] = await Promise.all([
+      const [routines, exercises, perRoutine, presets] = await Promise.all([
         listRoutines(),
         listExercises(),
         routineExerciseCounts(),
+        listLocalPresets(GYM),
       ]);
       // Os sete dias sao sintetizados aqui; no banco so existe linha para os
       // dias que ja receberam nome ou exercicio.
       const days = weekPlan(routines);
       const counts = days.map((day) => (day ? (perRoutine.get(day.id) ?? 0) : 0));
-      return { days, counts, exercises };
+      return { days, counts, exercises, presets };
     }, []),
   );
 
   const days = data?.days ?? [];
   const counts = data?.counts ?? [];
+  const suggestedOn = useFlag(FLAG_SUGGESTED_WORKOUTS);
+  const presets = suggestedOn ? (data?.presets ?? []) : [];
   const today = weekdayOf(new Date());
 
   return (
@@ -95,6 +100,7 @@ export default function PlanScreen() {
                 <View style={styles.rowText}>
                   <View style={styles.dayLine}>
                     <Section numberOfLines={1}>{weekdayName(weekday as Weekday)}</Section>
+                    {day?.presetId ? <Label style={styles.presetTag}>SUGERIDO</Label> : null}
                     {isToday ? <Label style={styles.todayTag}>HOJE</Label> : null}
                   </View>
                   <Meta>{daySummary(day?.name ?? '', count)}</Meta>
@@ -112,6 +118,21 @@ export default function PlanScreen() {
             );
           })}
         </Card>
+
+        {presets.length > 0 ? (
+          <>
+            <Label style={styles.sectionLabel}>ACADEMIA</Label>
+            <Card onPress={() => router.push('/presets')}>
+              <View style={styles.row}>
+                <View style={styles.rowText}>
+                  <Section>{`${presets.length} ${presets.length === 1 ? 'ficha sugerida' : 'fichas sugeridas'}`}</Section>
+                  <Meta>treinos montados pelos instrutores</Meta>
+                </View>
+                <ChevronRightIcon size={16} color={colors.textSecondary} />
+              </View>
+            </Card>
+          </>
+        ) : null}
 
         <Label style={styles.sectionLabel}>MOVIMENTOS</Label>
 
@@ -172,6 +193,10 @@ const styles = StyleSheet.create({
   /** O unico accent da tela: onde o usuario esta na semana. */
   todayTag: {
     color: colors.accent,
+  },
+  presetTag: {
+    color: colors.textSecondary,
+    fontSize: fontSize.label,
   },
   rowText: {
     flex: 1,

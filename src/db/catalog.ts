@@ -1,6 +1,11 @@
+import { normalizeName } from '@/domain/names';
 import type { ExerciseKind } from '@/domain/types';
 
 import { createExercise, listExercises } from './repo';
+
+// Mora em `@/domain/names` para o repo usar sem importar este arquivo, que
+// importa o repo.
+export { normalizeName };
 
 /**
  * Os movimentos comuns de academia, com o nome que se usa no Brasil.
@@ -128,20 +133,6 @@ export const COMMON_EXERCISES: readonly CommonExercise[] = [
   { name: 'Abdominal na polia', muscleGroup: 'Abdômen' },
 ];
 
-/**
- * Como dois nomes de exercicio sao comparados.
- *
- * Sem acento e sem caixa: quem digitou "triceps corda" na pressa nao pode
- * acabar com uma segunda linha ao lado de "Tríceps corda" — sao o mesmo
- * movimento, e duplicata no catalogo quebra o historico, que e por exercicio.
- */
-export function normalizeName(name: string): string {
-  return name
-    .trim()
-    .toLocaleLowerCase('pt-BR')
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '');
-}
 
 /** Os comuns que ainda nao existem no catalogo, na ordem da lista. */
 export async function missingCommonExercises(): Promise<CommonExercise[]> {

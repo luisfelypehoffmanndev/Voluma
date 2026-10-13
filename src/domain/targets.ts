@@ -59,10 +59,13 @@ export function targetsFromSets(sets: readonly PerformedSet[]): Targets | null {
  *
  * 1. `override` — o usuario mexeu no stepper nesta semana. Decisao explicita,
  *    ganha de tudo.
- * 2. `lastPerformed` — o que ele levantou da ultima vez que treinou este
- *    exercicio. E o "vem como semana passada" do brief.
- * 3. `seed` — os alvos gravados quando o exercicio entrou no dia. So aparece
- *    em exercicio que nunca foi treinado.
+ * 2. Em treino VINCULADO (`isLinked: true`): combina campo a campo — series e
+ *    reps da semente (a ficha do instrutor) com a carga do historico (`lastPerformed`).
+ * 3. Em treino comum / desvinculado:
+ *    - `lastPerformed` — o que ele levantou da ultima vez que treinou este
+ *      exercicio. E o "vem como semana passada" do brief.
+ *    - `seed` — os alvos gravados quando o exercicio entrou no dia. So aparece
+ *      em exercicio que nunca foi treinado.
  *
  * O degrau 3 e a razao de `routine_exercises.target_*` continuar existindo: ele
  * deixou de ser o plano vivo e virou a semente inicial.
@@ -71,8 +74,19 @@ export function resolveTargets(
   override: Targets | null,
   lastPerformed: Targets | null,
   seed: Targets,
+  isLinked = false,
 ): Targets {
-  return override ?? lastPerformed ?? seed;
+  if (override) return override;
+  if (isLinked && lastPerformed) {
+    return {
+      sets: seed.sets,
+      reps: seed.reps,
+      weightKg: lastPerformed.weightKg,
+      distanceKm: seed.distanceKm || lastPerformed.distanceKm,
+      durationMin: seed.durationMin || lastPerformed.durationMin,
+    };
+  }
+  return lastPerformed ?? seed;
 }
 
 /**

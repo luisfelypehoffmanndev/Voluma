@@ -8,6 +8,7 @@ import { create } from 'zustand';
 
 import { resetDb } from '@/db/client';
 import { bumpData } from '@/store/data';
+import { useFlags } from '@/store/flags';
 import { useFriends } from '@/store/friends';
 import { useProfile } from '@/store/profile';
 import { GYM, schemeFor } from '@/world';
@@ -20,6 +21,7 @@ import {
   sync,
   type SyncOutcome,
 } from './engine';
+import { pullPresets } from './presets';
 import { isCloudConfigured, supabase } from './supabase';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -229,7 +231,11 @@ export function useSyncLifecycle(): void {
     if (!isCloudConfigured) return;
 
     const subscription = AppState.addEventListener('change', (next) => {
-      if (next === 'active') void runSync();
+      if (next === 'active') {
+        void runSync();
+        void useFlags.getState().fetchRemote();
+        void pullPresets();
+      }
     });
     return () => subscription.remove();
   }, [runSync]);

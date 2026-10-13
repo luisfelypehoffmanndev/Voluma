@@ -1,5 +1,5 @@
 import { COMMON_EXERCISES, normalizeName } from '../../db/catalog';
-import { PUSH_PULL_LEGS, assignCycle } from '../templates';
+import { PUSH_PULL_LEGS, assignCycle, assignPresetCycle } from '../templates';
 
 describe('assignCycle', () => {
   it('tres dias viram push, pull, legs', () => {
@@ -22,6 +22,22 @@ describe('assignCycle', () => {
   it('ignora dia repetido e lista vazia', () => {
     expect(assignCycle([1, 1, 3])).toHaveLength(2);
     expect(assignCycle([])).toEqual([]);
+  });
+});
+
+describe('assignPresetCycle', () => {
+  it('distribui fichas pelos dias da semana ciclicamente', () => {
+    const presets = [{ id: 'p1', name: 'Ficha A' }, { id: 'p2', name: 'Ficha B' }];
+    const plan = assignPresetCycle([1, 3, 5], presets);
+    expect(plan).toEqual([
+      { weekday: 1, preset: presets[0] },
+      { weekday: 3, preset: presets[1] },
+      { weekday: 5, preset: presets[0] },
+    ]);
+  });
+
+  it('retorna vazio quando nao ha fichas', () => {
+    expect(assignPresetCycle([1, 3], [])).toEqual([]);
   });
 });
 

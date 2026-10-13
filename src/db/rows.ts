@@ -1,6 +1,8 @@
 import type {
   BodyWeightLog,
   Exercise,
+  GymPreset,
+  GymPresetExercise,
   Routine,
   RoutineExercise,
   Session,
@@ -30,6 +32,7 @@ export type RoutineRow = {
   name: string;
   weekday: number;
   position: number;
+  preset_id?: string | null;
   updated_at: string;
   deleted_at: string | null;
 };
@@ -42,6 +45,33 @@ export type RoutineExerciseRow = {
   target_sets: number;
   target_reps: number;
   target_weight_kg: number;
+  target_distance_km: number;
+  target_duration_min: number;
+  preset_exercise_id?: string | null;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+export type GymPresetRow = {
+  id: string;
+  gym_id: string;
+  name: string;
+  position: number;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+export type GymPresetExerciseRow = {
+  id: string;
+  preset_id: string;
+  gym_id: string;
+  movement_slug: string;
+  name: string;
+  muscle_group: string | null;
+  kind: string;
+  position: number;
+  target_sets: number;
+  target_reps: number;
   target_distance_km: number;
   target_duration_min: number;
   updated_at: string;
@@ -112,6 +142,7 @@ export const toRoutine = (row: RoutineRow): Routine => ({
   name: row.name,
   weekday: row.weekday as Weekday,
   position: row.position,
+  presetId: row.preset_id ?? null,
   updatedAt: row.updated_at,
   deletedAt: row.deleted_at,
 });
@@ -124,6 +155,33 @@ export const toRoutineExercise = (row: RoutineExerciseRow): RoutineExercise => (
   targetSets: row.target_sets,
   targetReps: row.target_reps,
   targetWeightKg: row.target_weight_kg,
+  targetDistanceKm: row.target_distance_km,
+  targetDurationMin: row.target_duration_min,
+  presetExerciseId: row.preset_exercise_id ?? null,
+  updatedAt: row.updated_at,
+  deletedAt: row.deleted_at,
+});
+
+export const toGymPreset = (row: GymPresetRow): GymPreset => ({
+  id: row.id,
+  gymId: row.gym_id,
+  name: row.name,
+  position: row.position,
+  updatedAt: row.updated_at,
+  deletedAt: row.deleted_at,
+});
+
+export const toGymPresetExercise = (row: GymPresetExerciseRow): GymPresetExercise => ({
+  id: row.id,
+  presetId: row.preset_id,
+  gymId: row.gym_id,
+  movementSlug: row.movement_slug,
+  name: row.name,
+  muscleGroup: row.muscle_group,
+  kind: row.kind === 'run' ? 'run' : 'strength',
+  position: row.position,
+  targetSets: row.target_sets,
+  targetReps: row.target_reps,
   targetDistanceKm: row.target_distance_km,
   targetDurationMin: row.target_duration_min,
   updatedAt: row.updated_at,

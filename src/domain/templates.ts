@@ -70,3 +70,16 @@ export function assignCycle(
   const mondayFirst = [...new Set(days)].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7));
   return mondayFirst.map((weekday, index) => ({ weekday, day: cycle[index % cycle.length] }));
 }
+
+/**
+ * Distribui fichas sugeridas de academia pelos dias escolhidos, ciclando se houver
+ * mais dias marcados que fichas cadastradas.
+ */
+export function assignPresetCycle<T>(
+  days: readonly Weekday[],
+  presets: readonly T[],
+): { weekday: Weekday; preset: T }[] {
+  if (presets.length === 0) return [];
+  const mondayFirst = [...new Set(days)].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7));
+  return mondayFirst.map((weekday, index) => ({ weekday, preset: presets[index % presets.length] }));
+}

@@ -51,6 +51,7 @@ const NAME_COMMIT_DELAY = 400;
  */
 const SOURCE_LABEL: Record<TargetSource, string> = {
   override: 'editado por você',
+  preset: 'da academia',
   lastActual: 'igual à última vez',
   plan: 'do seu plano',
 };
@@ -75,6 +76,8 @@ export default function DayScreen() {
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const [picking, setPicking] = useState(false);
   const [removing, setRemoving] = useState<WeekExercise | null>(null);
+  const [confirmUnlinkAction, setConfirmUnlinkAction] = useState<null | (() => void)>(null);
+  const [pendingReorder, setPendingReorder] = useState<string[] | null>(null);
 
   const { data, loading, error, reload } = useQuery(
     useCallback(async () => {
@@ -90,11 +93,13 @@ export default function DayScreen() {
     }, [weekday, weekStart]),
   );
 
+  const isLinked = Boolean(data?.routine.presetId);
+
   // O que acabou de ser arrastado, na frente do banco ate a recarga chegar —
   // sem isso o card voltaria ao lugar antigo por um quadro depois do drop.
   const [localOrder, setLocalOrder] = useState<string[] | null>(null);
 
-  const reorder = useCallback(
+  const executeReorder = useCallback(
     (ids: string[]) => {
       setLocalOrder(ids);
       reorderRoutineExercises(ids)
@@ -108,6 +113,25 @@ export default function DayScreen() {
     },
     [reload],
   );
+
+  const reorder = useCallback(
+    (ids: string[]) => {
+      if (isLinked) {
+        setPendingReorder(ids);
+        return;
+      }
+      executeReorder(ids);
+    },
+    [isLinked, executeReorder],
+  );
+
+  const handlePressAdd = () => {
+    if (isLinked) {
+      setConfirmUnlinkAction(() => () => setPicking(true));
+    } else {
+      setPicking(true);
+    }
+  };
 
   const loaded = data?.items;
   const ordered = useMemo(
@@ -157,7 +181,7 @@ export default function DayScreen() {
         items.length > 0 ? (
           <FloatingGlassButton
             label="Adicionar exercício"
-            onPress={() => setPicking(true)}
+            onPress={handlePressAdd}
             bottom={insets.bottom + spacing.xl}
           />
         ) : null
@@ -186,6 +210,11 @@ export default function DayScreen() {
         <Card>
           <Label>Nome do dia</Label>
           <DayNameInput routineId={routine.id} value={routine.name} />
+          {isLinked ? (
+            <Meta style={styles.linkedNotice}>
+              Ficha sugerida pela academia · Recebe atualizações do instrutor
+            </Meta>
+          ) : null}
         </Card>
 
         <Card>
@@ -225,7 +254,7 @@ export default function DayScreen() {
           <EmptyState
             title="Dia de descanso"
             message={`Nenhum exercício ${everyWeekday(weekday)}. Adicione um para montar o treino.`}
-            action={{ label: 'Adicionar exercício', onPress: () => setPicking(true) }}
+            action={{ label: 'Adicionar exercício', onPress: handlePressAdd }}
           />
         ) : null}
       </Animated.ScrollView>
@@ -235,7 +264,11 @@ export default function DayScreen() {
       <ConfirmModal
         visible={removing != null}
         title={`Remover ${removing?.exerciseName ?? ''} do plano?`}
-        message={`Sai de ${everyWeekday(weekday)} a partir de agora. O que já foi registrado continua no histórico.`}
+        message={
+          isLinked
+            ? `Sai de ${everyWeekday(weekday)} a partir de agora. Este treino deixará de seguir a ficha da academia e não receberá mais atualizações do instrutor.`
+            : `Sai de ${everyWeekday(weekday)} a partir de agora. O que já foi registrado continua no histórico.`
+        }
         cancelLabel="Cancelar"
         confirmLabel="Remover"
         onClose={() => setRemoving(null)}
@@ -245,6 +278,38 @@ export default function DayScreen() {
             bumpData();
             reload();
           });
+        }}
+      />
+
+      <ConfirmModal
+        visible={confirmUnlinkAction != null}
+        title="Personalizar este treino?"
+        message="Este treino segue a ficha da academia. Ao adicionar um exercício, ele passará a ser totalmente seu e deixará de receber atualizações do instrutor."
+        cancelLabel="Cancelar"
+        confirmLabel="Continuar e personalizar"
+        onClose={() => setConfirmUnlinkAction(null)}
+        onConfirm={() => {
+          if (confirmUnlinkAction) {
+            const action = confirmUnlinkAction;
+            setConfirmUnlinkAction(null);
+            action();
+          }
+        }}
+      />
+
+      <ConfirmModal
+        visible={pendingReorder != null}
+        title="Personalizar este treino?"
+        message="Ao alterar a ordem dos exercícios, este treino passará a ser seu e deixará de receber atualizações do instrutor."
+        cancelLabel="Cancelar"
+        confirmLabel="Continuar e personalizar"
+        onClose={() => setPendingReorder(null)}
+        onConfirm={() => {
+          if (pendingReorder) {
+            const ids = pendingReorder;
+            setPendingReorder(null);
+            executeReorder(ids);
+          }
         }}
       />
 
@@ -394,6 +459,10 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     fontSize: fontSize.bodyLg,
     color: colors.textPrimary,
+  },
+  linkedNotice: {
+    marginTop: spacing.xs,
+    color: colors.textSecondary,
   },
   weekNav: {
     marginTop: spacing.md,

@@ -1,13 +1,15 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { BackHandler, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { createPushPullLegs, startEmpty } from '@/db/onboarding';
-import { DEFAULT_TRAINING_DAYS, assignCycle } from '@/domain/templates';
-import type { Weekday } from '@/domain/types';
+import { adoptPresetsForDays, createPushPullLegs, startEmpty } from '@/db/onboarding';
+import { listLocalPresets } from '@/db/repo';
+import { DEFAULT_TRAINING_DAYS, assignCycle, assignPresetCycle } from '@/domain/templates';
+import type { GymPreset, Weekday } from '@/domain/types';
 import { weekdayInitials, weekdayName } from '@/domain/week';
-import { bumpData } from '@/store/data';
+import { bumpData, useQuery } from '@/store/data';
+import { FLAG_SUGGESTED_WORKOUTS, useFlag } from '@/store/flags';
 import { useOnboarding } from '@/store/onboarding';
 import { colors, fontSize, fonts, radius, spacing, surfaces } from '@/theme/tokens';
 import { Button } from '@/ui/Button';
@@ -20,9 +22,9 @@ import { BarsMark, FieldCover, IGNITION, Staged } from '@/ui/onboarding/Ignition
 import { LearnVolume, type VolumeDraft } from '@/ui/onboarding/LearnVolume';
 import { Header, Screen } from '@/ui/Screen';
 import { Body, Label, Meta, Mono } from '@/ui/Text';
-import { APP_NAME } from '@/world';
+import { APP_NAME, GYM } from '@/world';
 
-type Start = 'ppl' | 'empty';
+type Start = 'ppl' | 'presets' | 'empty';
 
 /**
  * Onboarding: o app liga, ensina a metrica fazendo, explica as abas e monta o
@@ -58,6 +60,13 @@ export default function OnboardingScreen() {
   const [failed, setFailed] = useState(false);
   const [example, setExample] = useState<VolumeDraft>({ sets: 3, reps: 10, weightKg: 40 });
 
+  // Consulta viva, e nao uma leitura na montagem: numa instalacao nova o cache
+  // de fichas ainda esta vazio quando esta tela abre, e o `pullPresets` do boot
+  // avisa com `bumpData` quando elas chegam. O mesmo vale para a flag.
+  const suggestedOn = useFlag(FLAG_SUGGESTED_WORKOUTS);
+  const { data: cachedPresets } = useQuery(useCallback(() => listLocalPresets(GYM), []));
+  const presets: GymPreset[] = suggestedOn ? (cachedPresets ?? []) : [];
+
   // Decidido na montagem, nao a cada render: `complete()` vira o status para
   // `done` enquanto esta tela ainda esta aberta, e o redirect abaixo nao pode
   // disparar no meio do proprio fim do onboarding.
@@ -72,16 +81,21 @@ export default function OnboardingScreen() {
     setSaving(true);
     setFailed(false);
     try {
-      if (choice === 'ppl') await createPushPullLegs(days);
-      else await startEmpty();
+      if (choice === 'ppl') {
+        await createPushPullLegs(days);
+      } else if (choice === 'presets') {
+        await adoptPresetsForDays(days, presets);
+      } else {
+        await startEmpty();
+      }
       confirm();
       bumpData();
       useOnboarding.getState().complete();
-      // PPL tem treino montado: cai em Hoje. Do zero, a semana esta vazia, e o
-      // proximo passo e o Plano.
+      // PPL e fichas tem treino montado: cai em Hoje. Do zero, a semana esta
+      // vazia, e o proximo passo e o Plano.
       // `saving` fica true: a tela esta saindo, e o botao voltando a "Criar
       // plano" durante a transicao so convidaria um segundo toque.
-      router.replace(choice === 'ppl' ? '/' : '/plan');
+      router.replace(choice === 'empty' ? '/plan' : '/');
     } catch (reason) {
       console.warn('[Voluma] falha ao montar o plano', reason);
       setFailed(true);
@@ -133,7 +147,9 @@ export default function OnboardingScreen() {
           <Button
             variant="primary"
             label={saving ? 'Preparando…' : 'Continuar'}
-            disabled={start == null || saving}
+            // Fichas escolhidas e depois sumidas (flag desligada, cache trocado)
+            // nao podem levar a um plano vazio.
+            disabled={start == null || saving || (start === 'presets' && presets.length === 0)}
             onPress={() => (start === 'empty' ? void finish('empty') : setStep(4))}
           />
         );
@@ -147,7 +163,7 @@ export default function OnboardingScreen() {
                 : `Criar plano · ${days.length} ${days.length === 1 ? 'dia' : 'dias'}`
             }
             disabled={days.length === 0 || saving}
-            onPress={() => void finish('ppl')}
+            onPress={() => void finish(start ?? 'ppl')}
           />
         );
     }
@@ -201,8 +217,17 @@ export default function OnboardingScreen() {
           {step === 0 ? <Welcome /> : null}
           {step === 1 ? <LearnVolume value={example} onChange={setExample} /> : null}
           {step === 2 ? <HowItWorks /> : null}
-          {step === 3 ? <ChooseStart value={start} onChange={setStart} /> : null}
-          {step === 4 ? <ChooseDays days={days} onToggle={toggleDay} /> : null}
+          {step === 3 ? (
+            <ChooseStart value={start} onChange={setStart} presets={presets} />
+          ) : null}
+          {step === 4 ? (
+            <ChooseDays
+              days={days}
+              onToggle={toggleDay}
+              start={start}
+              presets={presets}
+            />
+          ) : null}
         </Reveal>
       </ScrollView>
     </Screen>
@@ -250,25 +275,42 @@ function HowItWorks() {
   );
 }
 
-const STARTS: { value: Start; title: string; text: string }[] = [
-  {
-    value: 'ppl',
-    title: 'Push / Pull / Legs',
-    text: 'Empurrar, puxar e pernas, 5 exercícios por dia. Você escolhe os dias e ajusta as cargas no primeiro treino.',
-  },
-  {
-    value: 'empty',
-    title: 'Montar do zero',
-    text: 'A semana vazia, com o catálogo de exercícios pronto para escolher.',
-  },
-];
+function ChooseStart({
+  value,
+  onChange,
+  presets,
+}: {
+  value: Start | null;
+  onChange: (next: Start) => void;
+  presets: GymPreset[];
+}) {
+  const options: { value: Start; title: string; text: string }[] = [
+    {
+      value: 'ppl',
+      title: 'Push / Pull / Legs',
+      text: 'Empurrar, puxar e pernas, 5 exercícios por dia. Você escolhe os dias e ajusta as cargas no primeiro treino.',
+    },
+    ...(presets.length > 0
+      ? [
+          {
+            value: 'presets' as const,
+            title: 'Fichas da academia',
+            text: 'Treinos sugeridos pelos instrutores, prontos e vinculados para a sua semana.',
+          },
+        ]
+      : []),
+    {
+      value: 'empty',
+      title: 'Montar do zero',
+      text: 'A semana vazia, com o catálogo de exercícios pronto para escolher.',
+    },
+  ];
 
-function ChooseStart({ value, onChange }: { value: Start | null; onChange: (next: Start) => void }) {
   return (
     <View style={styles.section}>
       <Body style={styles.heading}>Como quer começar?</Body>
       <Meta>Dá para mudar tudo depois, na aba Plano.</Meta>
-      {STARTS.map((option) => {
+      {options.map((option) => {
         const selected = option.value === value;
         return (
           <PressableSurface
@@ -292,16 +334,39 @@ function ChooseStart({ value, onChange }: { value: Start | null; onChange: (next
   );
 }
 
-function ChooseDays({ days, onToggle }: { days: Weekday[]; onToggle: (weekday: Weekday) => void }) {
+function ChooseDays({
+  days,
+  onToggle,
+  start,
+  presets,
+}: {
+  days: Weekday[];
+  onToggle: (weekday: Weekday) => void;
+  start: Start | null;
+  presets: GymPreset[];
+}) {
   const initials = weekdayInitials();
-  const plan = assignCycle(days);
+  const isPresets = start === 'presets';
+  const plan = isPresets
+    ? assignPresetCycle(days, presets).map((item) => ({
+        weekday: item.weekday,
+        name: item.preset.name,
+      }))
+    : assignCycle(days).map((item) => ({
+        weekday: item.weekday,
+        name: item.day.name,
+      }));
   // Segunda primeiro, como o ciclo e distribuido — ver `assignCycle`.
   const order: Weekday[] = [1, 2, 3, 4, 5, 6, 0];
 
   return (
     <View style={styles.section}>
       <Body style={styles.heading}>Quais dias você treina?</Body>
-      <Meta>O ciclo Push, Pull, Legs segue a ordem dos dias marcados.</Meta>
+      <Meta>
+        {isPresets
+          ? 'As fichas sugeridas seguem a ordem dos dias marcados.'
+          : 'O ciclo Push, Pull, Legs segue a ordem dos dias marcados.'}
+      </Meta>
 
       <View style={styles.days}>
         {order.map((weekday) => {
@@ -326,11 +391,11 @@ function ChooseDays({ days, onToggle }: { days: Weekday[]; onToggle: (weekday: W
 
       {plan.length > 0 ? (
         <Card>
-          {plan.map(({ weekday, day }, index) => (
+          {plan.map(({ weekday, name }, index) => (
             <View key={weekday} style={[styles.planRow, index > 0 && styles.divided]}>
               <Body style={styles.planDay}>{weekdayName(weekday)}</Body>
               <Meta numberOfLines={1} style={styles.planName}>
-                {day.name}
+                {name}
               </Meta>
             </View>
           ))}
