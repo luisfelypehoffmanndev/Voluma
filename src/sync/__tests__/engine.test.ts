@@ -57,6 +57,15 @@ describe('toLocal', () => {
     expect(local.completed_at).toBe('2026-10-10T22:40:22.495Z');
   });
 
+  it('normaliza o prescribed_at do painel e mantem quem prescreveu', () => {
+    const local = toLocal('routines', {
+      id: 'r1',
+      prescribed_by: 'instrutor-1',
+      prescribed_at: '2026-10-23T13:30:52.967517+00:00',
+    });
+    expect(local).toMatchObject({ prescribed_by: 'instrutor-1', prescribed_at: '2026-10-23T13:30:52.967Z' });
+  });
+
   it('volta o done para 0/1', () => {
     const remota = { ...serie, done: true, user_id: 'u1', gym_id: 'padrao' };
     expect(toLocal('session_sets', remota)).toMatchObject({ done: 1 });

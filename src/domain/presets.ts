@@ -102,7 +102,11 @@ export function routineLink(
   return null;
 }
 
-/** O que o dia vinculado deixa de seguir ao ser editado, para os avisos. */
+/**
+ * O que o dia vinculado deixa de seguir ao ser editado, para os avisos. Os
+ * avisos ja terminam em "...atualizacoes do instrutor": por isso o do
+ * instrutor e so "a prescricao", e nao "o treino do instrutor" de novo.
+ */
 export function linkSourceName(link: Exclude<RoutineLink, null>): string {
-  return link === 'preset' ? 'a ficha da academia' : 'o treino do instrutor';
+  return link === 'preset' ? 'a ficha da academia' : 'a prescrição';
 }

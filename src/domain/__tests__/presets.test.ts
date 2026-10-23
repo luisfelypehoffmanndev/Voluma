@@ -155,6 +155,6 @@ describe('routineLink', () => {
 
   it('nomeia o que o aviso de desvincular cita', () => {
     expect(linkSourceName('preset')).toBe('a ficha da academia');
-    expect(linkSourceName('instructor')).toBe('o treino do instrutor');
+    expect(linkSourceName('instructor')).toBe('a prescrição');
   });
 });
