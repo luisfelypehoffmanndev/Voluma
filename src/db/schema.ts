@@ -10,7 +10,7 @@
  * last-write-wins do sync. Nada e apagado de verdade: delete e soft delete.
  */
 
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 export const MIGRATIONS: readonly string[] = [
   // v1 — schema inicial
@@ -266,6 +266,37 @@ export const MIGRATIONS: readonly string[] = [
   `
   ALTER TABLE routines ADD COLUMN prescribed_by TEXT;
   ALTER TABLE routines ADD COLUMN prescribed_at TEXT;
+  `,
+
+  // v8 — planos da academia (plano 20). O dia sabe de qual plano veio, e a
+  // linha guarda se tem numeros proprios do instrutor (excecao). Os planos
+  // ficam em cache, como as fichas: dados da academia, que nao sobem.
+  `
+  ALTER TABLE routines ADD COLUMN plan_id TEXT;
+  ALTER TABLE routine_exercises ADD COLUMN custom_targets INTEGER NOT NULL DEFAULT 0;
+
+  CREATE TABLE IF NOT EXISTS local_gym_plans (
+    id               TEXT PRIMARY KEY NOT NULL,
+    gym_id           TEXT NOT NULL,
+    name             TEXT NOT NULL,
+    open_to_students INTEGER NOT NULL DEFAULT 0,
+    position         INTEGER NOT NULL DEFAULT 0,
+    updated_at       TEXT NOT NULL,
+    deleted_at       TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS local_gym_plan_days (
+    id         TEXT PRIMARY KEY NOT NULL,
+    plan_id    TEXT NOT NULL,
+    gym_id     TEXT NOT NULL,
+    weekday    INTEGER NOT NULL,
+    preset_id  TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    deleted_at TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_local_plans_gym ON local_gym_plans (gym_id);
+  CREATE INDEX IF NOT EXISTS idx_local_plan_days_plan ON local_gym_plan_days (plan_id);
   `,
 ];
 

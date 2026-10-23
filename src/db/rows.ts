@@ -35,6 +35,7 @@ export type RoutineRow = {
   preset_id?: string | null;
   prescribed_by?: string | null;
   prescribed_at?: string | null;
+  plan_id?: string | null;
   updated_at: string;
   deleted_at: string | null;
 };
@@ -59,6 +60,26 @@ export type GymPresetRow = {
   gym_id: string;
   name: string;
   position: number;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+export type GymPlanRow = {
+  id: string;
+  gym_id: string;
+  name: string;
+  open_to_students: number | boolean;
+  position: number;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+export type GymPlanDayRow = {
+  id: string;
+  plan_id: string;
+  gym_id: string;
+  weekday: number;
+  preset_id: string;
   updated_at: string;
   deleted_at: string | null;
 };
@@ -147,6 +168,7 @@ export const toRoutine = (row: RoutineRow): Routine => ({
   presetId: row.preset_id ?? null,
   prescribedBy: row.prescribed_by ?? null,
   prescribedAt: row.prescribed_at ?? null,
+  planId: row.plan_id ?? null,
   updatedAt: row.updated_at,
   deletedAt: row.deleted_at,
 });

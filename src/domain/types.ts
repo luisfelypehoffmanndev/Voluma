@@ -41,6 +41,18 @@ export type Routine = Syncable & {
   prescribedBy?: string | null;
   /** Quando foi prescrito. Fica quando o aluno desvincula: o painel mostra "editado pelo aluno". */
   prescribedAt?: string | null;
+  /** O plano da academia de onde veio o dia (com `presetId`, o treino daquele dia do plano). */
+  planId?: string | null;
+};
+
+/** Plano da academia: um programa da semana, um treino (ficha) por dia. */
+export type GymPlan = {
+  id: string;
+  gymId: string;
+  name: string;
+  openToStudents: boolean;
+  position: number;
+  days: { weekday: Weekday; presetId: string }[];
 };
 
 export type RoutineExercise = Syncable & {

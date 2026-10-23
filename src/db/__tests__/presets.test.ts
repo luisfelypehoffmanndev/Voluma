@@ -2,7 +2,9 @@ import { DatabaseSync } from 'node:sqlite';
 
 import {
   addExerciseToRoutine,
+  adoptPlan,
   adoptPresetIntoDay,
+  listLocalPlans,
   listLocalPresetExercises,
   listLocalPresets,
   removeRoutineExercise,
@@ -365,6 +367,63 @@ describe('presets no banco local (SQLite)', () => {
       const updated = row('routines', 'r-pull');
       expect(updated?.preset_id).toBe('preset-a');
       expect(updated?.prescribed_by).toBeNull();
+    });
+  });
+
+  describe('planos da academia (plano 20)', () => {
+    // Plano "Hipertrofia": segunda = ficha A, quarta = ficha B (preset-b, sem exercicios)
+    beforeEach(() => {
+      seed(`
+        INSERT INTO local_gym_plans (id, gym_id, name, open_to_students, position, updated_at)
+        VALUES ('plano-1', 'gym-iron', 'Hipertrofia', 1, 0, '${T0}');
+        INSERT INTO local_gym_plan_days (id, plan_id, gym_id, weekday, preset_id, updated_at) VALUES
+          ('pd-1', 'plano-1', 'gym-iron', 1, 'preset-a', '${T0}'),
+          ('pd-3', 'plano-1', 'gym-iron', 3, 'preset-b', '${T0}');
+      `);
+    });
+
+    it('lista o plano com os dias em ordem', async () => {
+      const [plan] = await listLocalPlans('gym-iron');
+      expect(plan).toMatchObject({ name: 'Hipertrofia', openToStudents: true });
+      expect(plan.days).toEqual([
+        { weekday: 1, presetId: 'preset-a' },
+        { weekday: 3, presetId: 'preset-b' },
+      ]);
+    });
+
+    it('seguir o plano poe cada treino no dia e marca o plano', async () => {
+      await adoptPlan('plano-1', 'gym-iron');
+
+      const rows = raw
+        .prepare('SELECT weekday, preset_id, plan_id FROM routines WHERE deleted_at IS NULL ORDER BY weekday')
+        .all() as { weekday: number; preset_id: string; plan_id: string }[];
+      expect(rows).toEqual([
+        { weekday: 1, preset_id: 'preset-a', plan_id: 'plano-1' },
+        { weekday: 3, preset_id: 'preset-b', plan_id: 'plano-1' },
+      ]);
+      const queued = raw.prepare("SELECT COUNT(DISTINCT row_id) AS n FROM outbox WHERE table_name = 'routines'").get() as {
+        n: number;
+      };
+      expect(queued.n).toBe(2);
+    });
+
+    it('editar um dia do plano tira so aquele dia do plano', async () => {
+      await adoptPlan('plano-1', 'gym-iron');
+      const monday = raw.prepare('SELECT id FROM routines WHERE weekday = 1').get() as { id: string };
+      seed(`INSERT INTO exercises (id, name, updated_at) VALUES ('ex-extra', 'Tríceps corda', '${T0}');`);
+
+      await addExerciseToRoutine(monday.id, 'ex-extra', strengthTargets(3, 12));
+
+      expect(row('routines', monday.id)).toMatchObject({ preset_id: null, plan_id: null });
+      const wednesday = raw.prepare('SELECT plan_id FROM routines WHERE weekday = 3').get() as { plan_id: string };
+      expect(wednesday.plan_id).toBe('plano-1');
+    });
+
+    it('adotar so uma ficha num dia do plano tira o dia do plano', async () => {
+      await adoptPlan('plano-1', 'gym-iron');
+      await adoptPresetIntoDay('preset-b', 1);
+      const monday = raw.prepare('SELECT preset_id, plan_id FROM routines WHERE weekday = 1').get();
+      expect(monday).toMatchObject({ preset_id: 'preset-b', plan_id: null });
     });
   });
 });

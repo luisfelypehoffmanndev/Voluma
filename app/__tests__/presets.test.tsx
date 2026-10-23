@@ -42,6 +42,8 @@ jest.mock('@/db/repo', () => ({
   listRoutines: jest.fn(),
   routineExerciseCounts: jest.fn(),
   adoptPresetIntoDay: jest.fn(),
+  adoptPlan: jest.fn(),
+  listLocalPlans: jest.fn(async () => []),
 }));
 
 const samplePreset: GymPreset = {
@@ -240,6 +242,45 @@ describe('PresetsScreen', () => {
 
     await waitFor(() => {
       expect(repo.adoptPresetIntoDay).toHaveBeenCalledWith('preset-push', 2);
+    });
+  });
+
+  it('plano aberto: mostra a semana e avisa quais dias com treino ele substitui', async () => {
+    jest.mocked(repo.listLocalPresets).mockResolvedValueOnce([samplePreset]);
+    jest.mocked(repo.listLocalPresetExercises).mockResolvedValueOnce(sampleExercises);
+    jest.mocked(repo.listRoutines).mockResolvedValueOnce([
+      { id: 'r-seg', name: 'Meu treino', weekday: 1, position: 0, updatedAt: '2026-10-12T00:00:00.000Z', deletedAt: null },
+    ]);
+    jest.mocked(repo.routineExerciseCounts).mockResolvedValueOnce(new Map([['r-seg', 3]]));
+    jest.mocked(repo.listLocalPlans).mockResolvedValueOnce([
+      {
+        id: 'plano-1',
+        gymId: 'iron',
+        name: 'Hipertrofia',
+        openToStudents: true,
+        position: 0,
+        days: [
+          { weekday: 1, presetId: 'preset-push' },
+          { weekday: 3, presetId: 'preset-push' },
+        ],
+      },
+    ]);
+    jest.mocked(repo.adoptPlan).mockResolvedValueOnce();
+
+    render(<PresetsScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Hipertrofia')).toBeTruthy();
+      expect(screen.getByText('Seg Superior Foco Peito · Qua Superior Foco Peito')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Seguir plano'));
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'Os dias do plano recebem os treinos dele, com as suas cargas. Substitui o treino de segunda. O histórico continua salvo.',
+        ),
+      ).toBeTruthy();
     });
   });
 });

@@ -144,6 +144,9 @@ describe('domain presets', () => {
 describe('routineLink', () => {
   it('ficha, instrutor ou do proprio aluno', () => {
     expect(routineLink({ presetId: 'p-1', prescribedBy: null })).toBe('preset');
+    expect(routineLink({ presetId: 'p-1', planId: 'plano-1' })).toBe('plan');
+    // plan_id sobrando sem treino (app antigo desvinculou): o dia e do aluno
+    expect(routineLink({ presetId: null, planId: 'plano-1' })).toBeNull();
     expect(routineLink({ presetId: null, prescribedBy: 'instrutor-1' })).toBe('instructor');
     expect(routineLink({ presetId: null, prescribedBy: null })).toBeNull();
     expect(routineLink(undefined)).toBeNull();
@@ -156,5 +159,6 @@ describe('routineLink', () => {
   it('nomeia o que o aviso de desvincular cita', () => {
     expect(linkSourceName('preset')).toBe('a ficha da academia');
     expect(linkSourceName('instructor')).toBe('a prescrição');
+    expect(linkSourceName('plan')).toBe('o plano da academia');
   });
 });

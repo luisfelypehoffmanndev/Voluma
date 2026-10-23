@@ -86,17 +86,18 @@ export function preparePresetAdoption(
 }
 
 /**
- * De quem e o dia: da ficha sugerida pela academia, do instrutor (prescrito
- * pelo painel) ou do proprio aluno (`null`).
+ * De quem e o dia: de um plano da academia, da ficha sugerida, do instrutor
+ * (prescrito pelo painel) ou do proprio aluno (`null`).
  *
- * Nos dois primeiros o dia esta VINCULADO: series e reps vem da academia, a
+ * Nos tres primeiros o dia esta VINCULADO: series e reps vem da academia, a
  * carga vem do aluno (`resolveTargets`), e editar a composicao desvincula.
  */
-export type RoutineLink = 'preset' | 'instructor' | null;
+export type RoutineLink = 'plan' | 'preset' | 'instructor' | null;
 
 export function routineLink(
-  routine: { presetId?: string | null; prescribedBy?: string | null } | null | undefined,
+  routine: { presetId?: string | null; prescribedBy?: string | null; planId?: string | null } | null | undefined,
 ): RoutineLink {
+  if (routine?.presetId && routine.planId) return 'plan';
   if (routine?.presetId) return 'preset';
   if (routine?.prescribedBy) return 'instructor';
   return null;
@@ -108,5 +109,6 @@ export function routineLink(
  * instrutor e so "a prescricao", e nao "o treino do instrutor" de novo.
  */
 export function linkSourceName(link: Exclude<RoutineLink, null>): string {
+  if (link === 'plan') return 'o plano da academia';
   return link === 'preset' ? 'a ficha da academia' : 'a prescrição';
 }

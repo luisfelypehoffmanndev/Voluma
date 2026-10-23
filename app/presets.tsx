@@ -4,13 +4,15 @@ import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
+  adoptPlan,
   adoptPresetIntoDay,
+  listLocalPlans,
   listLocalPresetExercises,
   listLocalPresets,
   listRoutines,
   routineExerciseCounts,
 } from '@/db/repo';
-import type { GymPreset, GymPresetExercise, Weekday } from '@/domain/types';
+import type { GymPlan, GymPreset, GymPresetExercise, Weekday } from '@/domain/types';
 import { weekPlan, weekdayName } from '@/domain/week';
 import { findMovementBySlug } from '@/movements/library';
 import { bumpData, useQuery } from '@/store/data';
@@ -42,6 +44,7 @@ export default function PresetsScreen() {
   const [confirmReplace, setConfirmReplace] = useState(false);
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [adoptingPlan, setAdoptingPlan] = useState<GymPlan | null>(null);
   const suggestedOn = useFlag(FLAG_SUGGESTED_WORKOUTS);
 
   const { data, loading, error, reload } = useQuery(
@@ -54,15 +57,16 @@ export default function PresetsScreen() {
         }),
       );
 
-      const [routines, perRoutine] = await Promise.all([
+      const [routines, perRoutine, plans] = await Promise.all([
         listRoutines(),
         routineExerciseCounts(),
+        listLocalPlans(GYM),
       ]);
 
       const days = weekPlan(routines);
       const counts = days.map((day) => (day ? (perRoutine.get(day.id) ?? 0) : 0));
 
-      return { presets: withExercises, days, counts };
+      return { presets: withExercises, days, counts, plans };
     }, []),
   );
 
@@ -74,6 +78,24 @@ export default function PresetsScreen() {
       setConfirmReplace(true);
     } else {
       void executeAdoption(adoptingPreset.id, weekday);
+    }
+  };
+
+  const executePlanAdoption = async (plan: GymPlan) => {
+    if (saving) return;
+    try {
+      setSaving(true);
+      setFailed(false);
+      await adoptPlan(plan.id, GYM);
+      confirm();
+      bumpData();
+      setAdoptingPlan(null);
+      reload();
+    } catch (err) {
+      console.warn('[Voluma] falha ao seguir plano', err);
+      setFailed(true);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -126,6 +148,15 @@ export default function PresetsScreen() {
   const { days, counts } = data;
   // Flag desligada: a academia tirou as fichas do ar, mesmo com o cache cheio.
   const presets = suggestedOn ? data.presets : [];
+  const presetName = (id: string) => data.presets.find((p) => p.preset.id === id)?.preset.name ?? 'Treino';
+  // So os abertos se escolhem; o plano que a pessoa ja segue aparece marcado.
+  const followed = new Set(days.map((day) => day?.planId).filter((id): id is string => Boolean(id)));
+  const plans = suggestedOn ? data.plans.filter((p) => p.openToStudents || followed.has(p.id)) : [];
+  // Dias com treino que o plano substituiria (menos os que ja seguem este plano).
+  const replacedDays = (plan: GymPlan) =>
+    plan.days
+      .filter((d) => (counts[d.weekday] ?? 0) > 0 && days[d.weekday]?.planId !== plan.id)
+      .map((d) => weekdayName(d.weekday).toLowerCase());
 
   return (
     <Screen>
@@ -140,7 +171,28 @@ export default function PresetsScreen() {
           são atualizadas dinamicamente, mantendo sempre as suas cargas individuais.
         </Body>
 
-        {presets.length === 0 ? (
+        {plans.length > 0 ? <Section>Planos</Section> : null}
+        {plans.map((plan) => (
+          <Card key={plan.id} style={styles.presetCard}>
+            <View style={styles.presetHeader}>
+              <View style={styles.titleContainer}>
+                <Section>{plan.name}</Section>
+                <Meta>
+                  {plan.days.map((d) => `${weekdayName(d.weekday).slice(0, 3)} ${presetName(d.presetId)}`).join(' · ') ||
+                    'Sem dias'}
+                </Meta>
+              </View>
+              {followed.has(plan.id) ? (
+                <Meta>Você segue</Meta>
+              ) : (
+                <Button label="Seguir plano" onPress={() => setAdoptingPlan(plan)} />
+              )}
+            </View>
+          </Card>
+        ))}
+        {plans.length > 0 && presets.length > 0 ? <Section>Fichas</Section> : null}
+
+        {presets.length === 0 && plans.length === 0 ? (
           <EmptyState
             title="Nenhuma ficha cadastrada"
             message="Sua academia ainda não cadastrou treinos sugeridos no sistema."
@@ -240,6 +292,30 @@ export default function PresetsScreen() {
           style={styles.cancelBtn}
         />
       </Sheet>
+
+      {/* Seguir um plano: diz quais dias com treino ele substitui */}
+      <ConfirmModal
+        visible={adoptingPlan != null}
+        title={`Seguir "${adoptingPlan?.name ?? ''}"?`}
+        message={(() => {
+          if (!adoptingPlan) return '';
+          const replaced = replacedDays(adoptingPlan);
+          const base = 'Os dias do plano recebem os treinos dele, com as suas cargas.';
+          const tail = replaced.length
+            ? ` Substitui o treino de ${replaced.join(', ')}. O histórico continua salvo.`
+            : ' Nenhum dia com treino seu é substituído.';
+          return base + tail + (failed ? ' Não foi possível seguir o plano. Tente de novo.' : '');
+        })()}
+        confirmLabel={saving ? 'Aplicando...' : 'Seguir plano'}
+        cancelLabel="Voltar"
+        onClose={() => {
+          setAdoptingPlan(null);
+          setFailed(false);
+        }}
+        onConfirm={() => {
+          if (adoptingPlan) void executePlanAdoption(adoptingPlan);
+        }}
+      />
 
       {/* Confirmação de substituição de dia existente */}
       <ConfirmModal

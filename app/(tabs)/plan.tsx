@@ -103,6 +103,7 @@ export default function PlanScreen() {
                     <Section numberOfLines={1}>{weekdayName(weekday as Weekday)}</Section>
                     {routineLink(day) === 'preset' ? <Label style={styles.presetTag}>SUGERIDO</Label> : null}
                     {routineLink(day) === 'instructor' ? <Label style={styles.presetTag}>INSTRUTOR</Label> : null}
+                    {routineLink(day) === 'plan' ? <Label style={styles.presetTag}>PLANO</Label> : null}
                     {isToday ? <Label style={styles.todayTag}>HOJE</Label> : null}
                   </View>
                   <Meta>{daySummary(day?.name ?? '', count)}</Meta>
