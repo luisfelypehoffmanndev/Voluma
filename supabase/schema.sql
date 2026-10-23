@@ -1655,24 +1655,37 @@ revoke insert, update, delete, truncate on public.gym_staff, public.gym_staff_in
 grant select on public.gym_staff, public.gym_staff_invites, public.prescription_log to authenticated;
 
 -- Cada um ve a propria linha (e por ela sabe de quais academias e equipe); o
--- admin ve a equipe inteira da academia dele.
-drop policy if exists staff_read on public.gym_staff;
-create policy staff_read on public.gym_staff
-  for select
-  to authenticated
-  using (user_id = (select auth.uid()) or gym_id in (select public.my_admin_gyms()));
+-- admin ve a equipe inteira da academia dele. Convites e log, so o admin.
+--
+-- Cria so o que falta, em vez de `drop policy` + `create`: sem comando
+-- destrutivo, o MCP nao pede confirmacao (ver o v13). Mudar uma destas policies
+-- depois pede uma secao nova com o `drop` explicito.
+do $$
+begin
+  if not exists (select 1 from pg_policies
+                  where schemaname = 'public' and tablename = 'gym_staff' and policyname = 'staff_read') then
+    create policy staff_read on public.gym_staff
+      for select
+      to authenticated
+      using (user_id = (select auth.uid()) or gym_id in (select public.my_admin_gyms()));
+  end if;
 
-drop policy if exists staff_invites_read on public.gym_staff_invites;
-create policy staff_invites_read on public.gym_staff_invites
-  for select
-  to authenticated
-  using (gym_id in (select public.my_admin_gyms()));
+  if not exists (select 1 from pg_policies
+                  where schemaname = 'public' and tablename = 'gym_staff_invites' and policyname = 'staff_invites_read') then
+    create policy staff_invites_read on public.gym_staff_invites
+      for select
+      to authenticated
+      using (gym_id in (select public.my_admin_gyms()));
+  end if;
 
-drop policy if exists prescription_log_read on public.prescription_log;
-create policy prescription_log_read on public.prescription_log
-  for select
-  to authenticated
-  using (gym_id in (select public.my_admin_gyms()));
+  if not exists (select 1 from pg_policies
+                  where schemaname = 'public' and tablename = 'prescription_log' and policyname = 'prescription_log_read') then
+    create policy prescription_log_read on public.prescription_log
+      for select
+      to authenticated
+      using (gym_id in (select public.my_admin_gyms()));
+  end if;
+end $$;
 
 -- A equipe le o PLANO dos alunos da academia, para o painel montar as telas com
 -- consultas simples. So select, somada a `own_rows`, que continua igual. O app
@@ -1688,7 +1701,8 @@ declare
 begin
   foreach target in array array['routines', 'routine_exercises', 'exercises']
   loop
-    execute format('drop policy if exists staff_select on public.%I', target);
+    continue when exists (select 1 from pg_policies
+                           where schemaname = 'public' and tablename = target and policyname = 'staff_select');
     execute format(
       'create policy staff_select on public.%I
          for select
@@ -1822,10 +1836,15 @@ $$;
 
 -- ------------------------------------------ separacao prescricao x historico
 
--- Toda RPC do painel que escreve liga este marcador na propria declaracao
--- (`set voluma.staff_write = '1'`): ele vale so enquanto ela roda, e o Postgres
--- o desliga na saida. Um `set_config(..., true)` duraria ate o fim da
--- transacao e pegaria o que viesse depois dela.
+-- Toda RPC do painel que escreve liga este marcador logo antes de escrever e o
+-- desliga antes de cada `return`: ele vale so enquanto ela escreve, e nao pega
+-- o que vier depois na mesma transacao. Se ela falhar no meio, o Postgres
+-- desfaz o `set_config` junto com a (sub)transacao.
+--
+-- Nao e `set voluma.staff_write = '1'` na declaracao da funcao, que faria o
+-- mesmo sozinho: no Supabase o dono das funcoes nao e superusuario, e so
+-- superusuario declara parametro proprio ali ("permission denied to set
+-- parameter").
 -- Com ele ligado, as tabelas do historico recusam qualquer escrita. E a ultima
 -- camada: as RPCs ja nao escrevem nelas, e a equipe nao tem grant em nenhuma.
 create or replace function public.forbid_staff_history_write()
@@ -2069,7 +2088,6 @@ returns uuid
 language plpgsql
 security definer
 set search_path = ''
-set voluma.staff_write = '1'
 as $$
 declare
   me     uuid := (select auth.uid());
@@ -2099,6 +2117,7 @@ begin
     perform public.check_prescription_item(item);
   end loop;
 
+  perform set_config('voluma.staff_write', '1', true);
 
   -- Um dia de um aluno por vez: duas pessoas da equipe criando o mesmo dia
   -- vazio ao mesmo tempo criariam duas rotinas.
@@ -2190,6 +2209,7 @@ begin
           jsonb_build_object('student', student, 'day', day, 'name', day_name, 'items', items),
           1, cardinality(kept));
 
+  perform set_config('voluma.staff_write', '', true);
   return ro.id;
 end;
 $$;
@@ -2200,7 +2220,6 @@ returns int
 language plpgsql
 security definer
 set search_path = ''
-set voluma.staff_write = '1'
 as $$
 declare
   me uuid := (select auth.uid());
@@ -2211,6 +2230,8 @@ begin
   if not public.is_gym_student(gym, student) then
     raise exception 'aluno fora da academia' using errcode = '42501';
   end if;
+
+  perform set_config('voluma.staff_write', '1', true);
 
   update public.routine_exercises re
      set deleted_at = ts, updated_at = public.staff_stamp(ts, re.updated_at)
@@ -2226,6 +2247,7 @@ begin
 
   insert into public.prescription_log (gym_id, actor_id, action, params, affected_students, affected_rows)
   values (gym, me, 'clear_day', jsonb_build_object('student', student, 'day', day), 1, n);
+  perform set_config('voluma.staff_write', '', true);
   return n;
 end;
 $$;
@@ -2236,13 +2258,13 @@ returns int
 language plpgsql
 security definer
 set search_path = ''
-set voluma.staff_write = '1'
 as $$
 declare
   me uuid := (select auth.uid());
   n  int;
 begin
   perform public.require_staff(gym);
+  perform set_config('voluma.staff_write', '1', true);
 
   update public.routines
      set prescribed_by = null, prescribed_at = null,
@@ -2253,6 +2275,7 @@ begin
 
   insert into public.prescription_log (gym_id, actor_id, action, params, affected_students, affected_rows)
   values (gym, me, 'release_day', jsonb_build_object('student', student, 'day', day), 1, n);
+  perform set_config('voluma.staff_write', '', true);
   return n;
 end;
 $$;
@@ -2399,7 +2422,6 @@ returns table (
 language plpgsql
 security definer
 set search_path = ''
-set voluma.staff_write = '1'
 as $$
 declare
   me       uuid := (select auth.uid());
@@ -2478,6 +2500,7 @@ begin
     return;
   end if;
 
+  perform set_config('voluma.staff_write', '1', true);
 
   -- Trava as rotinas atingidas, sempre na mesma ordem: dois lotes ao mesmo
   -- tempo esperam um pelo outro em vez de travar em deadlock.
@@ -2553,6 +2576,7 @@ begin
                              'include_presets', include_presets),
           n_stu, n_rows);
 
+  perform set_config('voluma.staff_write', '', true);
   return query select n_stu, n_rows, n_self, n_preset, n_dup, n_pre;
 end;
 $$;
@@ -2583,7 +2607,6 @@ returns table (
 language plpgsql
 security definer
 set search_path = ''
-set voluma.staff_write = '1'
 as $$
 declare
   me     uuid := (select auth.uid());
@@ -2646,6 +2669,7 @@ begin
     return;
   end if;
 
+  perform set_config('voluma.staff_write', '1', true);
 
   perform 1 from public.routines r
    where r.id in (select v.routine_id from pg_temp.volume_rows v where v.klass = 'adjust')
@@ -2670,6 +2694,7 @@ begin
                              'sets_set', sets_set, 'reps_set', reps_set),
           n_stu, n_rows);
 
+  perform set_config('voluma.staff_write', '', true);
   return query select n_stu, n_rows, n_self, n_pre;
 end;
 $$;
@@ -2687,7 +2712,6 @@ returns uuid
 language plpgsql
 security definer
 set search_path = ''
-set voluma.staff_write = '1'
 as $$
 declare
   me   uuid := (select auth.uid());
@@ -2713,6 +2737,7 @@ begin
     end if;
   end loop;
 
+  perform set_config('voluma.staff_write', '1', true);
 
   if pid is null then
     insert into public.gym_presets (gym_id, name, position, updated_at)
@@ -2780,6 +2805,7 @@ begin
   insert into public.prescription_log (gym_id, actor_id, action, params, affected_students, affected_rows)
   values (gym, me, 'upsert_preset', jsonb_build_object('preset', pid, 'body', preset), 0, cardinality(kept));
 
+  perform set_config('voluma.staff_write', '', true);
   return pid;
 end;
 $$;
@@ -2793,7 +2819,6 @@ returns int
 language plpgsql
 security definer
 set search_path = ''
-set voluma.staff_write = '1'
 as $$
 declare
   me uuid := (select auth.uid());
@@ -2804,6 +2829,8 @@ begin
   if not exists (select 1 from public.gym_presets where id = preset and gym_id = gym and deleted_at is null) then
     raise exception 'ficha % nao e desta academia', preset using errcode = '22023';
   end if;
+
+  perform set_config('voluma.staff_write', '1', true);
 
   update public.routines
      set preset_id = null, updated_at = public.staff_stamp(ts, updated_at)
@@ -2820,6 +2847,7 @@ begin
 
   insert into public.prescription_log (gym_id, actor_id, action, params, affected_students, affected_rows)
   values (gym, me, 'delete_preset', jsonb_build_object('preset', preset), n, n);
+  perform set_config('voluma.staff_write', '', true);
   return n;
 end;
 $$;
@@ -2896,3 +2924,11 @@ begin
     execute format('grant execute on function %s to authenticated', fn);
   end loop;
 end $$;
+
+-- ------------------------------------------ v17: indices das FKs do painel
+-- As FKs da v16 para auth.users com `on delete set null`: apagar uma conta
+-- procura as linhas dela nestas tabelas, e o log cresce para sempre. Achado na
+-- checagem dos advisors depois de aplicar a v16.
+create index if not exists idx_gym_staff_invited_by on public.gym_staff (invited_by);
+create index if not exists idx_gym_staff_invites_invited_by on public.gym_staff_invites (invited_by);
+create index if not exists idx_prescription_log_actor on public.prescription_log (actor_id);

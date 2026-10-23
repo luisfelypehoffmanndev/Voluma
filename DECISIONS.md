@@ -164,7 +164,7 @@ legibilidade dos gráficos antigos.
 ## Painel da academia: quem vê e quem manda no treino
 
 **Data:** 2026-10-22
-**Status:** backend e app feitos no código, falta aplicar a v16 no Supabase — ver [`plans/18-painel-admin.md`](plans/18-painel-admin.md)
+**Status:** backend e app feitos, v16 no Supabase (2026-10-23) — ver [`plans/18-painel-admin.md`](plans/18-painel-admin.md)
 
 Um painel web em que admins e instrutores de uma academia editam o treino dos
 alunos, um a um ou em lote (trocar um exercício por outro, ajustar séries e

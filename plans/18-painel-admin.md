@@ -3,17 +3,19 @@
 **Arquivos:** `supabase/schema.sql` (v16), `supabase/tests/18-painel.sql` (novo),
 `src/db/schema.ts`, `src/db/repo.ts`, telas do Plano, do dia e do onboarding
 **Depende de:** [16](16-multi-academia.md)
-**Estado:** **18.1 a 18.5 e 18.7 feitas no código** (2026-10-22): v16 no `schema.sql`, `18-painel.sql` e os seis testes SQL anteriores passando num Postgres 18 local com um stub do Supabase, Jest com 649 testes passando. **Falta:** aplicar a v16 no Supabase (produção, com confirmação), o teste no aparelho e a 18.6 (Realtime, opcional). O painel web fica para um plano próprio.
+**Estado:** **18.1 a 18.5 e 18.7 feitas; v16 aplicada no Supabase** (2026-10-23, migração `v16_painel_academia`). Ensaio da v16 + `18-painel.sql` na produção dentro de `rollback` passando; depois de aplicar, `16.6-presets.sql` e `17-relogio-do-servidor.sql` passando no banco real e o hash do corpo das 24 funções igual ao do banco local. Jest com 649 testes passando. **Falta:** aplicar a seção `v17` (3 índices de FK, achados na checagem dos advisors), o teste no aparelho e a 18.6 (Realtime, opcional). O painel web fica para um plano próprio.
 
 ### O que mudou na implementação (em relação ao desenho abaixo)
 
 - **`profiles` ficou fora da leitura da equipe.** A linha inteira traria idade, anos de treino e foto, que estão atrás do toggle de compartilhamento. O painel lê nome e @ pelo `staff_find_students`.
-- **O marcador `voluma.staff_write` vai na declaração da função** (`set voluma.staff_write = '1'`), e não num `set_config(..., true)`. Assim ele vale só enquanto a RPC roda; o `set_config` duraria até o fim da transação, e o teste pegou isso (a escrita do aluno logo depois passava como se fosse da equipe).
+- **O marcador `voluma.staff_write` é ligado com `set_config` logo antes de escrever e desligado antes de cada `return`.** Ligado e esquecido, ele duraria até o fim da transação, e o teste pegou isso: a escrita do aluno logo depois passava como se fosse da equipe. A primeira correção foi declarar `set voluma.staff_write = '1'` na função, mas o ensaio na produção recusou ("permission denied to set parameter"): no Supabase o dono das funções não é superusuário, e só superusuário declara parâmetro próprio ali.
 - **`staff_stamp(ts, updated_at)`:** toda escrita do painel numa linha do aluno usa `greatest(ts, updated_at + 1 ms)`. O `sync_stamp` (v13) descarta em silêncio um UPDATE com `updated_at` menor que o da linha. Com o relógio do aparelho do aluno adiantado, a prescrição sumiria.
 - **`prescribed_by` sem FK para `auth.users`:** a linha sobe do aparelho do aluno com esse valor, e se a pessoa da equipe sair, a FK recusaria todo push dele dali em diante.
 - **O gatilho de conflito só age em linha nova de verdade** (`not exists` pelo id). O push é um upsert, e o BEFORE INSERT roda também quando o conflito vira UPDATE: sem isso, uma edição velha de uma linha existente viraria remoção com carimbo novo.
 - **`staff_delete_preset` desvincula os dias antes de apagar a ficha.** Na ordem contrária, o gatilho da v15 apagaria os exercícios de quem a adotou.
 - **O aviso de privacidade ficou no Perfil (Nuvem) e no login, atrás da flag `staff_panel`.** É no login que os dados passam a sair do aparelho; sem conta, a equipe não vê nada. A flag liga quando a academia passa a usar o painel.
+- **Testes SQL locais em `supabase/tests/local/`:** `run.sh` sobe um Postgres descartável com um stub do Supabase (`stub.sql`) e roda o schema duas vezes e todos os testes, como um dono **sem superusuário**, igual ao `postgres` do Supabase. Foi assim que o erro do parâmetro passou a aparecer aqui antes da produção.
+- **No MCP, comandos no nível de cima viram pedido de confirmação** (como o `drop policy` do item 17). As policies novas são criadas só se faltarem, dentro de um bloco `do`.
 - **Desempenho medido localmente** (1.000 alunos, 6 dias com 6 exercícios, 600 mil séries): `staff_find_students` em 0,2 s, a troca de 3.000 exercícios em 0,3 s e o ajuste de 18.000 em 0,6 s.
 
 ## Contexto
@@ -225,7 +227,7 @@ begin
   if not public.is_gym_student(gym, student) then
     raise exception 'aluno fora da academia' using errcode = '42501';
   end if;
-  -- o guarda da secao 2.4 vem da declaracao: `set voluma.staff_write = '1'`
+  -- o guarda da secao 2.4: set_config('voluma.staff_write', '1', true) aqui, e '' antes de cada return
 
   -- Trava a rotina do dia: um push do aluno no mesmo instante espera.
   select * into ro from public.routines
@@ -276,7 +278,7 @@ O que garante a separação, em camadas:
    - `routine_exercises`: `exercise_id` (só no insert), `position`, `target_sets`, `target_reps`, `target_distance_km`, `target_duration_min`, `deleted_at`;
    - `exercises`: só insert.
    - **`target_weight_kg` nunca muda.** Quando o aluno já treinou, a carga vem do histórico dele (`resolveTargets` vinculado); quando é exercício novo, começa em 0.
-3. **Guarda no banco:** toda RPC do painel que escreve declara `set voluma.staff_write = '1'`, que só vale enquanto ela roda. Um gatilho `BEFORE INSERT OR UPDATE OR DELETE` em `sessions`, `session_sets`, `week_targets` e `body_weight_logs` recusa a escrita com esse GUC ligado:
+3. **Guarda no banco:** toda RPC do painel que escreve liga `set_config('voluma.staff_write', '1', true)` antes de escrever e desliga antes de cada `return`. Um gatilho `BEFORE INSERT OR UPDATE OR DELETE` em `sessions`, `session_sets`, `week_targets` e `body_weight_logs` recusa a escrita com esse GUC ligado:
 
 ```sql
 create or replace function public.forbid_staff_history_write()
