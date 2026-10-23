@@ -217,7 +217,9 @@ export default function DayScreen() {
             <Meta style={styles.linkedNotice}>
               {link === 'instructor'
                 ? 'Treino do instrutor · Recebe as mudanças dele'
-                : 'Ficha sugerida pela academia · Recebe atualizações do instrutor'}
+                : link === 'plan'
+                  ? 'Plano da academia · Recebe atualizações do instrutor'
+                  : 'Ficha sugerida pela academia · Recebe atualizações do instrutor'}
             </Meta>
           ) : null}
         </Card>

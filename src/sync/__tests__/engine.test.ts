@@ -66,6 +66,16 @@ describe('toLocal', () => {
     expect(local).toMatchObject({ prescribed_by: 'instrutor-1', prescribed_at: '2026-10-23T13:30:52.967Z' });
   });
 
+  it('custom_targets: booleano no Postgres, 0/1 no SQLite', () => {
+    expect(toLocal('routine_exercises', { id: 're1', custom_targets: true })).toMatchObject({ custom_targets: 1 });
+    expect(toLocal('routine_exercises', { id: 're1', custom_targets: false })).toMatchObject({ custom_targets: 0 });
+    expect(toRemote('routine_exercises', { id: 're1', custom_targets: 1 }, 'u1', 'zztx')).toMatchObject({
+      custom_targets: true,
+    });
+    // App que ainda nao tem a coluna: nao inventa o campo
+    expect(toRemote('routine_exercises', { id: 're1' }, 'u1', 'zztx')).not.toHaveProperty('custom_targets');
+  });
+
   it('volta o done para 0/1', () => {
     const remota = { ...serie, done: true, user_id: 'u1', gym_id: 'padrao' };
     expect(toLocal('session_sets', remota)).toMatchObject({ done: 1 });

@@ -5,6 +5,7 @@ import type {
   BodyWeightLog,
   Exercise,
   ExerciseKind,
+  GymPlan,
   GymPreset,
   GymPresetExercise,
   Routine,
@@ -41,6 +42,8 @@ import {
   toWeekTarget,
   type BodyWeightLogRow,
   type ExerciseRow,
+  type GymPlanDayRow,
+  type GymPlanRow,
   type GymPresetExerciseRow,
   type GymPresetRow,
   type RoutineExerciseRow,
@@ -357,8 +360,9 @@ async function unlinkRoutineIfLinked(
     routineId,
   );
   if (routine?.preset_id || routine?.prescribed_by) {
+    // O plano sai junto: o dia so segue o plano enquanto segue o treino dele.
     await db.runAsync(
-      'UPDATE routines SET preset_id = NULL, prescribed_by = NULL, updated_at = ? WHERE id = ?',
+      'UPDATE routines SET preset_id = NULL, prescribed_by = NULL, plan_id = NULL, updated_at = ? WHERE id = ?',
       timestamp,
       routineId,
     );
@@ -788,6 +792,7 @@ export async function listLocalPresetExercises(presetId: string): Promise<GymPre
 export async function adoptPresetIntoDay(
   presetId: string,
   weekday: Weekday,
+  planId: string | null = null,
 ): Promise<Routine> {
   const db = await getDb();
   const timestamp = now();
@@ -839,10 +844,11 @@ export async function adoptPresetIntoDay(
     }
 
     // Adotar uma ficha num dia prescrito tira o dia do instrutor: quem o segue
-    // agora e a ficha.
+    // agora e a ficha (e o plano, quando a ficha vem de um plano).
     await db.runAsync(
-      'UPDATE routines SET preset_id = ?, prescribed_by = NULL, name = ?, updated_at = ? WHERE id = ?',
+      'UPDATE routines SET preset_id = ?, prescribed_by = NULL, plan_id = ?, name = ?, updated_at = ? WHERE id = ?',
       preset.id,
+      planId,
       preset.name,
       timestamp,
       routine.id,
@@ -1918,4 +1924,44 @@ function remapIdList(json: string, map: ReadonlyMap<string, string>): string {
   }
   if (!Array.isArray(ids) || !ids.some((id) => map.has(String(id)))) return json;
   return JSON.stringify([...new Set(ids.map((id) => map.get(String(id)) ?? String(id)))]);
+}
+
+// ------------------------------------------------------ planos da academia
+
+/** Os planos da academia em cache, com os dias de cada um. */
+export async function listLocalPlans(gymId: string): Promise<GymPlan[]> {
+  const db = await getDb();
+  const [plans, days] = await Promise.all([
+    db.getAllAsync<GymPlanRow>(
+      'SELECT * FROM local_gym_plans WHERE gym_id = ? AND deleted_at IS NULL ORDER BY position, name',
+      gymId,
+    ),
+    db.getAllAsync<GymPlanDayRow>(
+      'SELECT * FROM local_gym_plan_days WHERE gym_id = ? AND deleted_at IS NULL ORDER BY weekday',
+      gymId,
+    ),
+  ]);
+  return plans.map((p) => ({
+    id: p.id,
+    gymId: p.gym_id,
+    name: p.name,
+    openToStudents: Boolean(p.open_to_students),
+    position: p.position,
+    days: days
+      .filter((d) => d.plan_id === p.id)
+      .map((d) => ({ weekday: d.weekday as Weekday, presetId: d.preset_id })),
+  }));
+}
+
+/**
+ * O aluno passa a seguir o plano: cada dia do plano recebe o treino dele, como
+ * `adoptPresetIntoDay`, e fica marcado com o plano. Os outros dias da semana
+ * ficam como estao. Quem confirma a substituicao de um dia com treino e a tela.
+ */
+export async function adoptPlan(planId: string, gymId: string): Promise<void> {
+  const plan = (await listLocalPlans(gymId)).find((p) => p.id === planId);
+  if (!plan) throw new Error(`Plano nao encontrado: ${planId}`);
+  for (const day of plan.days) {
+    await adoptPresetIntoDay(day.presetId, day.weekday, plan.id);
+  }
 }

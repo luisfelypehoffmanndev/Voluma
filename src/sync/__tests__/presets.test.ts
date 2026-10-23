@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 
-import { listLocalPresetExercises, listLocalPresets } from '@/db/repo';
+import { listLocalPlans, listLocalPresetExercises, listLocalPresets } from '@/db/repo';
 import { MIGRATIONS } from '@/db/schema';
 
 import { bumpData } from '@/store/data';
@@ -29,7 +29,8 @@ jest.mock('../supabase', () => ({
           eq: (_col: string, gym: string) => ({
             is: () => {
               mockQueried.push({ table, gym });
-              return Promise.resolve(mockResults[table]);
+              // Tabela sem resultado no caso (os planos, nos testes das fichas): vazia.
+              return Promise.resolve(mockResults[table] ?? { data: [], error: null });
             },
           }),
         }),
@@ -122,6 +123,8 @@ describe('pullPresets', () => {
     expect(mockQueried).toEqual([
       { table: 'gym_presets', gym: 'gym-iron' },
       { table: 'gym_preset_exercises', gym: 'gym-iron' },
+      { table: 'gym_plans', gym: 'gym-iron' },
+      { table: 'gym_plan_days', gym: 'gym-iron' },
     ]);
     const presets = await listLocalPresets('gym-iron');
     expect(presets.map((p) => p.name)).toEqual(['Ficha A']);
@@ -202,5 +205,33 @@ describe('pullPresets', () => {
 
     expect((await listLocalPresets('gym-iron')).map((p) => p.id)).toEqual(['p-a']);
     expect(await listLocalPresetExercises('p-a')).toHaveLength(1);
+  });
+
+  it('guarda os planos e os dias no cache, com o aberto em 0/1', async () => {
+    mockResults = {
+      gym_presets: { data: [preset('p-a', 'Ficha A')], error: null },
+      gym_preset_exercises: { data: [], error: null },
+      gym_plans: {
+        data: [{ id: 'pl-1', gym_id: 'gym-iron', name: 'Hipertrofia', open_to_students: true, position: 0, updated_at: T0, deleted_at: null }],
+        error: null,
+      },
+      gym_plan_days: {
+        data: [
+          { id: 'd-1', plan_id: 'pl-1', gym_id: 'gym-iron', weekday: 1, preset_id: 'p-a', updated_at: T0, deleted_at: null },
+          // dia de um plano que nao veio: fica de fora
+          { id: 'd-x', plan_id: 'pl-x', gym_id: 'gym-iron', weekday: 2, preset_id: 'p-a', updated_at: T0, deleted_at: null },
+        ],
+        error: null,
+      },
+    };
+
+    await pullPresets();
+
+    expect(await listLocalPlans('gym-iron')).toEqual([
+      { id: 'pl-1', gymId: 'gym-iron', name: 'Hipertrofia', openToStudents: true, position: 0, days: [{ weekday: 1, presetId: 'p-a' }] },
+    ]);
+    jest.mocked(bumpData).mockClear();
+    await pullPresets();
+    expect(bumpData).not.toHaveBeenCalled();
   });
 });

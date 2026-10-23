@@ -464,6 +464,9 @@ export function toRemote(
     // SQLite guarda 0/1; a coluna no Postgres e boolean.
     out.done = row.done === 1 || row.done === true;
   }
+  if (table === 'routine_exercises' && 'custom_targets' in row) {
+    out.custom_targets = row.custom_targets === 1 || row.custom_targets === true;
+  }
   return out;
 }
 
@@ -474,6 +477,9 @@ export function toLocal(table: SyncedTable, row: Record<string, unknown>): Recor
 
   if (table === 'session_sets') {
     out.done = row.done === true ? 1 : 0;
+  }
+  if (table === 'routine_exercises' && 'custom_targets' in row) {
+    out.custom_targets = row.custom_targets === true ? 1 : 0;
   }
   // Timestamps do Postgres vem como "2026-08-21 12:00:00+00"; o resto do app
   // compara essas strings com ISO, entao normaliza aqui.
