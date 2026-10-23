@@ -59,6 +59,13 @@ const mockRoutineUnlinked: Routine = {
   deletedAt: null,
 };
 
+const mockRoutineInstructor: Routine = {
+  ...mockRoutineUnlinked,
+  name: 'Pull B',
+  prescribedBy: 'instrutor-1',
+  prescribedAt: '2026-10-23T13:30:52.967Z',
+};
+
 const mockItem: WeekExercise = {
   id: 're-1',
   routineId: 'routine-1',
@@ -174,6 +181,47 @@ describe('DayScreen — Vínculo com ficha sugerida', () => {
     await waitFor(() => {
       expect(screen.queryByText('Personalizar este treino?')).toBeNull();
       expect(screen.getByText('Passa a valer toda segunda')).toBeTruthy();
+    });
+  });
+
+  it('dia do instrutor: aviso proprio e o mesmo cuidado antes de editar', async () => {
+    jest.mocked(repo.ensureDayRoutine).mockResolvedValue(mockRoutineInstructor);
+    jest.mocked(repo.targetsForWeek).mockResolvedValue([{ ...mockItem, source: 'preset' }]);
+
+    render(<DayScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Treino do instrutor · Recebe as mudanças dele')).toBeTruthy();
+    });
+    expect(
+      screen.queryByText('Ficha sugerida pela academia · Recebe atualizações do instrutor'),
+    ).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('Remover Supino Reto do plano'));
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'Sai de toda segunda a partir de agora. Este treino deixará de seguir a prescrição e não receberá mais atualizações do instrutor.',
+        ),
+      ).toBeTruthy();
+    });
+    expect(repo.removeRoutineExercise).not.toHaveBeenCalled();
+  });
+
+  it('dia do instrutor: adicionar exercicio pede confirmacao', async () => {
+    jest.mocked(repo.ensureDayRoutine).mockResolvedValue(mockRoutineInstructor);
+    jest.mocked(repo.targetsForWeek).mockResolvedValue([mockItem]);
+
+    render(<DayScreen />);
+    await waitFor(() => expect(screen.getByText('Supino Reto')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('Adicionar exercício'));
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'Este treino segue a prescrição. Ao adicionar um exercício, ele passará a ser totalmente seu e deixará de receber atualizações do instrutor.',
+        ),
+      ).toBeTruthy();
     });
   });
 });

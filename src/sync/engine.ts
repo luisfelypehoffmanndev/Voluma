@@ -477,7 +477,7 @@ export function toLocal(table: SyncedTable, row: Record<string, unknown>): Recor
   }
   // Timestamps do Postgres vem como "2026-08-21 12:00:00+00"; o resto do app
   // compara essas strings com ISO, entao normaliza aqui.
-  for (const key of ['updated_at', 'deleted_at', 'started_at', 'finished_at', 'completed_at', 'logged_at']) {
+  for (const key of ['updated_at', 'deleted_at', 'started_at', 'finished_at', 'completed_at', 'logged_at', 'prescribed_at']) {
     const value = out[key];
     if (typeof value === 'string') out[key] = new Date(value).toISOString();
   }
