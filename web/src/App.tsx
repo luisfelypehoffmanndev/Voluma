@@ -36,7 +36,7 @@ type Access =
   | { status: 'error'; message: string }
   | { status: 'ready'; memberships: Membership[] };
 
-export function App() {
+export function App({ demo = false }: { demo?: boolean }) {
   const session = useSession();
   const route = useRoute();
   const [access, setAccess] = useState<Access>({ status: 'loading' });
@@ -97,6 +97,11 @@ export function App() {
   const config = gymConfig(current.gym_id);
   return (
     <div className="shell" style={{ ['--accent' as string]: config.accent }}>
+      {demo ? (
+        <p className="demo-bar">
+          Modo demo: dados de mentira, nada vai para o banco. Recarregar a página recomeça.
+        </p>
+      ) : null}
       <header className="topbar">
         <a className="brand" href="#/alunos">
           {config.name}
