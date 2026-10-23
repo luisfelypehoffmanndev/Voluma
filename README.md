@@ -3,6 +3,14 @@
 App de academia minimalista. Expo (iOS + Android). Interface em português,
 estética definida em [`Design/design.md`](Design/design.md).
 
+O repositório tem duas partes:
+
+- **o app** (raiz), que o aluno usa para montar a semana e registrar o treino;
+- **o painel da academia** ([`web/`](web/README.md)), um site em que a equipe
+  da academia acompanha os alunos e monta treinos e planos para eles.
+
+Os dois falam com o mesmo Supabase.
+
 ## Rodar
 
 ```bash
@@ -22,7 +30,13 @@ npm run typecheck
 
 Os testes SQL (`supabase/tests/*.sql`) rodam num Postgres local descartável,
 sem tocar no Supabase: `supabase/tests/local/run.sh` (precisa de `initdb`,
-`pg_ctl` e `psql`).
+`pg_ctl` e `psql`). O runner roda como um dono comum, não superusuário, como no
+Supabase; `supabase/tests/local/run.sh 20` roda só os arquivos que começam
+com `20`.
+
+O painel tem os próprios comandos (`cd web && npm run dev`, `npm test`) e um
+modo demo com dados de mentira (`http://localhost:5173/?demo`). Ver
+[`web/README.md`](web/README.md).
 
 Quase todo teste é de função pura, sem banco e sem render — a convenção está em
 [`plans/08-testes-puros.md`](plans/08-testes-puros.md). As exceções de render que
@@ -55,7 +69,12 @@ src/sync/       Supabase: cliente, auth, push/pull, avatar
 src/ui/         componentes do design system e gráficos
 src/theme/      tokens do design.md, paleta de pessoas e conta do vidro
 scripts/        manutenção: vendorização de artes e seed de avatares
-supabase/       schema.sql para colar no SQL Editor (tabelas, RLS, Storage)
+gyms/           um app por academia: nome, cor e ícones (ver gyms/README.md)
+web/            painel da academia (Vite + React), ver web/README.md
+supabase/
+  schema.sql    tabelas, RLS, Storage e RPCs, para colar no SQL Editor
+  tests/        testes SQL de cada versão, com o runner local
+  seeds/        dados de mentira para a academia teste (e como apagar)
 ```
 
 ### Abas
@@ -93,7 +112,7 @@ sincronização entre aparelhos:
 2. **SQL Editor**: rode [`supabase/schema.sql`](supabase/schema.sql) inteiro.
    Ele cria as tabelas, os índices, o bucket `avatars` no Storage e o RLS.
    O arquivo é idempotente: rodar de novo depois de cada versão nova (hoje até a
-   `v10: nome de exibicao`) não quebra nada.
+   `v18: planos da academia`) não quebra nada.
 3. Configure o login com Google (abaixo).
 4. Copie `.env.example` para `.env` e preencha URL e anon key
    (**Project Settings → Data API**).
@@ -123,6 +142,32 @@ o Google não tem como devolver a sessão ao app. Use o dev client
 
 A anon key é pública por design. O que protege os dados é o RLS: cada linha
 carrega `user_id` e a policy só libera `auth.uid() = user_id`.
+
+## Academias, fichas e planos
+
+O mesmo código gera um app por academia (`APP_VARIANT=<slug>`, pastas em
+[`gyms/`](gyms/README.md)). Sem variante, é o Voluma padrão. Cada academia é um
+**mundo** isolado no banco (`gym_id` em toda linha): o aluno de uma não vê nada
+da outra. Ver [`plans/16-multi-academia.md`](plans/16-multi-academia.md).
+
+No app de uma academia, o aluno pode receber treinos de três jeitos. Em todos,
+**séries e reps vêm da academia e a carga vem do aluno**:
+
+| Origem | Quem decide | Marca no app |
+|---|---|---|
+| **Ficha** | o aluno escolhe um treino sugerido para um dia | SUGERIDO |
+| **Plano** | o aluno escolhe um plano aberto, ou o instrutor o põe nele pelo painel; cada dia da semana vem de um treino | PLANO |
+| **Prescrição** | o instrutor monta o dia só para aquele aluno | INSTRUTOR |
+
+Quando a academia muda uma ficha ou um plano, a mudança chega a todo mundo que
+segue, menos nas exceções que o instrutor fez para um aluno. Se o próprio aluno
+edita um dia, só aquele dia se solta (o app avisa antes) e passa a ser dele.
+
+A equipe (admin e instrutores) nunca grava direto nas tabelas do aluno: tudo
+passa por RPCs `staff_*`, que conferem o papel, registram quem mudou o quê em
+`prescription_log` e nunca tocam em carga, séries feitas ou peso corporal. Ver
+[`plans/18-painel-admin.md`](plans/18-painel-admin.md) e
+[`plans/20-planos.md`](plans/20-planos.md).
 
 ## Sincronização
 
