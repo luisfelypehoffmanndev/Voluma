@@ -16,6 +16,13 @@
 
 **Ainda não testado:** o login com Google no painel, que precisa de uma pessoa.
 
+**Atribuir ficou mais fácil** (2026-10-23), depois do primeiro uso no modo demo, em que não estava claro como pôr alunos num plano:
+- a tela Alunos ganhou caixas de seleção e a barra "N alunos marcados · [plano] · Pôr no plano", que abre a prévia direto. Esse passou a ser o caminho principal;
+- na tela do plano, "Adicionar alunos" subiu para o topo e a seção Alunos veio antes de Treinos;
+- a lista de alunos para adicionar carrega na hora, e os filtros se aplicam sozinhos (saiu o botão "Buscar alunos").
+
+O guia das telas e dos fluxos está em [`web/README.md`](../web/README.md).
+
 Desvios do desenho abaixo:
 - `staff_plan_members` e `day_has_exceptions` foram acrescentadas para a tela do plano.
 - O app marca dias de plano como **PLANO**, com um texto genérico; o nome do plano aparece só no painel.

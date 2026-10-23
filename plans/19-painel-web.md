@@ -1,7 +1,13 @@
 # 19 — Painel web da academia (esboço)
 
 **Depende de:** [18](18-painel-admin.md) (backend pronto e no Supabase)
-**Estado:** passos 1 e 2 feitos no código (2026-10-23), em `web/`: login com Google, escolha de academia, "Sem acesso", lista de alunos com filtros e a semana de um aluno, tudo só leitura. Vite + React + TypeScript, CSS próprio com os tokens do `design.md`, sem biblioteca de UI. 9 testes (Vitest) nas regras puras e nas rotas. Falta testar logado (precisa da URL do painel nas Redirect URLs do Supabase) e os passos 3 em diante.
+**Estado:** passos 1 a 3 feitos (2026-10-23), em `web/`. O guia do painel, com telas, fluxos e código, está em [`web/README.md`](../web/README.md).
+- **Passos 1 e 2:** login com Google, escolha de academia, "Sem acesso", lista de alunos com filtros e a semana de um aluno. Vite + React + TypeScript, CSS próprio com os tokens do `design.md`, sem biblioteca de UI.
+- **Passo 3** (o editor de um dia) entrou pelo [plano 20](20-planos.md), junto com a aba Planos: personalizar, editar e voltar ao plano.
+- **Modo demo** (`?demo`): o painel com dados de mentira em memória, sem login.
+- **Testes:** 17 no Vitest, nas regras puras e nas rotas. Os fluxos passaram num Chromium headless, no modo demo e com o Supabase simulado.
+
+**Falta:** testar o login de verdade (precisa da URL do painel nas Redirect URLs do Supabase) e os passos 4 em diante.
 
 ### Como rodar
 
