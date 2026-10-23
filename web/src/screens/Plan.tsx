@@ -180,6 +180,16 @@ export function Plan({ gym, planId }: { gym: string; planId: string | null }) {
               Apagar plano
             </button>
           ) : null}
+          {planId ? (
+            <button
+              className="button"
+              onClick={() => setAssigning(true)}
+              disabled={dirty || busy}
+              title={dirty ? 'Salve o plano antes' : undefined}
+            >
+              Adicionar alunos
+            </button>
+          ) : null}
           <button className="button button-accent" onClick={() => void save()} disabled={!canSave || busy}>
             {planId ? 'Salvar plano' : 'Criar plano'}
           </button>
@@ -214,6 +224,61 @@ export function Plan({ gym, planId }: { gym: string; planId: string | null }) {
           Aberto: os alunos podem escolher este plano no app
         </label>
       </div>
+
+      {planId ? (
+        <div className="panel">
+          <div className="panel-head">
+            <h2>Alunos</h2>
+            <button className="button" onClick={() => setAssigning(true)} disabled={dirty}>
+              Adicionar alunos
+            </button>
+          </div>
+          {dirty ? <p className="muted">Salve o plano antes de adicionar alunos.</p> : null}
+          {members.length === 0 ? (
+            <p className="muted">
+              Ninguém segue este plano ainda. Use “Adicionar alunos”, ou marque os alunos na tela Alunos e escolha “Pôr no plano”.
+            </p>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Aluno</th>
+                  <th>Como está</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {members.map((m) => (
+                  <tr key={m.user_id}>
+                    <td>
+                      <a className="row-link" href={hrefFor({ name: 'student', id: m.user_id })}>
+                        {studentName(m)}
+                      </a>
+                    </td>
+                    <td>{memberStatus(m)}</td>
+                    <td className="right">
+                      <button
+                        className="link"
+                        onClick={async () => {
+                          if (!window.confirm(`Tirar ${studentName(m)} do plano? Os treinos ficam com ele, como prescritos.`)) return;
+                          try {
+                            await removeFromPlan(gym, planId, [m.user_id]);
+                            reload();
+                          } catch (e) {
+                            setError((e as Error).message);
+                          }
+                        }}
+                      >
+                        Tirar do plano
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      ) : null}
 
       <div className="panel">
         <div className="panel-head">
@@ -275,61 +340,8 @@ export function Plan({ gym, planId }: { gym: string; planId: string | null }) {
         ) : null}
       </div>
 
-      {planId ? (
-        <div className="panel">
-          <div className="panel-head">
-            <h2>Alunos</h2>
-            <button className="button" onClick={() => setAssigning(true)} disabled={dirty}>
-              Adicionar alunos
-            </button>
-          </div>
-          {dirty ? <p className="muted">Salve o plano antes de adicionar alunos.</p> : null}
-          {members.length === 0 ? (
-            <p className="muted">Ninguém segue este plano ainda.</p>
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Aluno</th>
-                  <th>Como está</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {members.map((m) => (
-                  <tr key={m.user_id}>
-                    <td>
-                      <a className="row-link" href={hrefFor({ name: 'student', id: m.user_id })}>
-                        {studentName(m)}
-                      </a>
-                    </td>
-                    <td>{memberStatus(m)}</td>
-                    <td className="right">
-                      <button
-                        className="link"
-                        onClick={async () => {
-                          if (!window.confirm(`Tirar ${studentName(m)} do plano? Os treinos ficam com ele, como prescritos.`)) return;
-                          try {
-                            await removeFromPlan(gym, planId, [m.user_id]);
-                            reload();
-                          } catch (e) {
-                            setError((e as Error).message);
-                          }
-                        }}
-                      >
-                        Tirar do plano
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      ) : null}
-
       {assigning && planId ? (
-        <AssignPanel gym={gym} plan={planId} onClose={() => setAssigning(false)} onApplied={reload} />
+        <AssignPanel gym={gym} plan={planId} planName={draft.name} onClose={() => setAssigning(false)} onApplied={reload} />
       ) : null}
     </section>
   );
