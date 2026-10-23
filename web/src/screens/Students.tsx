@@ -1,7 +1,8 @@
 import { toDateKey } from '@domain/week';
 import { useEffect, useMemo, useState } from 'react';
 
-import { DEFAULT_FILTERS, loadStudents, type StudentFilters } from '../lib/data';
+import { AssignPanel } from '../components/AssignPanel';
+import { DEFAULT_FILTERS, loadPlans, loadStudents, type Plan, type StudentFilters } from '../lib/data';
 import { hrefFor } from '../lib/route';
 import { lastTrainedLabel, matchesSearch, studentName, type StudentRow } from '../lib/students';
 
@@ -16,6 +17,16 @@ export function Students({ gym }: { gym: string }) {
   const [search, setSearch] = useState('');
   const [load, setLoad] = useState<Load>({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [targetPlan, setTargetPlan] = useState('');
+  const [assigning, setAssigning] = useState(false);
+
+  useEffect(() => {
+    loadPlans(gym)
+      .then(setPlans)
+      .catch(() => setPlans([]));
+  }, [gym]);
 
   useEffect(() => {
     let alive = true;
@@ -38,6 +49,16 @@ export function Students({ gym }: { gym: string }) {
     filters.prescribedOnly ||
     filters.inactiveDays !== null ||
     filters.hasExercise.trim() !== '';
+
+  const toggle = (id: string, on: boolean) => {
+    const next = new Set(selected);
+    if (on) next.add(id);
+    else next.delete(id);
+    setSelected(next);
+  };
+  const allVisible = rows.length > 0 && rows.every((r) => selected.has(r.user_id));
+  const chosenRows = load.status === 'ready' ? load.rows.filter((r) => selected.has(r.user_id)) : [];
+  const plan = plans.find((p) => p.id === targetPlan);
 
   const clear = () => {
     setSearch('');
@@ -131,6 +152,14 @@ export function Students({ gym }: { gym: string }) {
         <table className="table">
           <thead>
             <tr>
+              <th className="check-col">
+                <input
+                  type="checkbox"
+                  aria-label="Marcar todos da lista"
+                  checked={allVisible}
+                  onChange={(e) => setSelected(e.target.checked ? new Set(rows.map((r) => r.user_id)) : new Set())}
+                />
+              </th>
               <th>Aluno</th>
               <th className="right">Treinou</th>
               <th>Último treino</th>
@@ -142,6 +171,14 @@ export function Students({ gym }: { gym: string }) {
           <tbody>
             {rows.map((row) => (
               <tr key={row.user_id}>
+                <td className="check-col">
+                  <input
+                    type="checkbox"
+                    aria-label={`Marcar ${studentName(row)}`}
+                    checked={selected.has(row.user_id)}
+                    onChange={(e) => toggle(row.user_id, e.target.checked)}
+                  />
+                </td>
                 <td>
                   <a className="row-link" href={hrefFor({ name: 'student', id: row.user_id })}>
                     {studentName(row)}
@@ -160,6 +197,53 @@ export function Students({ gym }: { gym: string }) {
             ))}
           </tbody>
         </table>
+      ) : null}
+
+      {selected.size > 0 ? (
+        <div className="action-bar" role="region" aria-label="Alunos marcados">
+          <span>
+            <span className="num">{selected.size}</span> {selected.size === 1 ? 'aluno marcado' : 'alunos marcados'}
+          </span>
+          {plans.length > 0 ? (
+            <>
+              <label className="field">
+                <span className="sr-only">Plano</span>
+                <select value={targetPlan} onChange={(e) => setTargetPlan(e.target.value)}>
+                  <option value="">Escolha um plano</option>
+                  {plans.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button className="button button-accent" disabled={!plan} onClick={() => setAssigning(true)}>
+                Pôr no plano
+              </button>
+            </>
+          ) : (
+            <a className="link" href={hrefFor({ name: 'plan', id: null })}>
+              Crie um plano para pôr os alunos nele
+            </a>
+          )}
+          <button className="link" onClick={() => setSelected(new Set())}>
+            Desmarcar
+          </button>
+        </div>
+      ) : null}
+
+      {assigning && plan ? (
+        <AssignPanel
+          gym={gym}
+          plan={plan.id}
+          planName={plan.name}
+          preselected={chosenRows}
+          onClose={() => setAssigning(false)}
+          onApplied={() => {
+            setSelected(new Set());
+            setAttempt((n) => n + 1);
+          }}
+        />
       ) : null}
     </section>
   );

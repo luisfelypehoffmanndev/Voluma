@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { assignPlan, DEFAULT_FILTERS, loadStudents, type AssignRow, type StudentFilters } from '../lib/data';
 import { buildReplace, countToApply, CURRENT_LABEL, isConflict, pairKey, shortDay } from '../lib/plans';
@@ -14,35 +14,61 @@ type Step =
 /**
  * Adicionar alunos ao plano: filtra, marca, ve a previa por aluno e dia e
  * aplica exatamente o que a previa mostrou.
+ *
+ * Vindo da tela Alunos (`preselected`), os alunos ja estao escolhidos e a
+ * janela abre direto na previa.
  */
-export function AssignPanel({ gym, plan, onClose, onApplied }: { gym: string; plan: string; onClose: () => void; onApplied: () => void }) {
+export function AssignPanel({
+  gym,
+  plan,
+  planName,
+  preselected,
+  onClose,
+  onApplied,
+}: {
+  gym: string;
+  plan: string;
+  planName?: string;
+  preselected?: StudentRow[];
+  onClose: () => void;
+  onApplied: () => void;
+}) {
   const [filters, setFilters] = useState<StudentFilters & { onlyWithoutPlan: boolean }>({ ...DEFAULT_FILTERS, onlyWithoutPlan: false });
   const [search, setSearch] = useState('');
-  const [students, setStudents] = useState<StudentRow[] | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [students, setStudents] = useState<StudentRow[] | null>(preselected ?? null);
+  const [selected, setSelected] = useState<Set<string>>(new Set(preselected?.map((s) => s.user_id) ?? []));
   const [chosen, setChosen] = useState<Set<string>>(new Set());
   const [step, setStep] = useState<Step>({ name: 'pick' });
   const [error, setError] = useState<string | null>(null);
 
-  const search_ = async () => {
-    setError(null);
-    try {
-      const rows = await loadStudents(gym, filters, new Date(), { noPlan: filters.onlyWithoutPlan });
-      setStudents(rows.filter((r) => !r.plan_ids?.includes(plan)));
-      setSelected(new Set());
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  };
+  // A lista aparece ao abrir e acompanha os filtros (o texto do exercicio
+  // espera parar de digitar). Com alunos ja escolhidos, nao busca nada.
+  useEffect(() => {
+    if (preselected) return;
+    let alive = true;
+    const timer = setTimeout(() => {
+      loadStudents(gym, filters, new Date(), { noPlan: filters.onlyWithoutPlan })
+        .then((rows) => {
+          if (!alive) return;
+          setStudents(rows.filter((r) => !r.plan_ids?.includes(plan)));
+          setSelected((current) => new Set([...current].filter((id) => rows.some((r) => r.user_id === id))));
+        })
+        .catch((e: Error) => alive && setError(e.message));
+    }, 300);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [gym, plan, filters, preselected]);
 
   const visible = useMemo(() => (students ?? []).filter((s) => matchesSearch(s, search)), [students, search]);
   const names = useMemo(() => new Map((students ?? []).map((s) => [s.user_id, studentName(s)])), [students]);
 
-  const preview = async () => {
+  const preview = async (ids: string[] = [...selected]) => {
     setError(null);
     setStep({ name: 'loading' });
     try {
-      const rows = await assignPlan(gym, plan, [...selected], [], true);
+      const rows = await assignPlan(gym, plan, ids, [], true);
       setChosen(new Set());
       setStep({ name: 'preview', rows });
     } catch (e) {
@@ -50,6 +76,13 @@ export function AssignPanel({ gym, plan, onClose, onApplied }: { gym: string; pl
       setStep({ name: 'pick' });
     }
   };
+
+  // Alunos ja escolhidos: vai direto para a previa.
+  useEffect(() => {
+    if (preselected) void preview(preselected.map((s) => s.user_id));
+    // so ao abrir
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const apply = async (rows: AssignRow[]) => {
     setError(null);
@@ -71,7 +104,7 @@ export function AssignPanel({ gym, plan, onClose, onApplied }: { gym: string; pl
   return (
     <div className="sheet" role="dialog" aria-label="Adicionar alunos ao plano">
       <div className="sheet-head">
-        <h2>Adicionar alunos</h2>
+        <h2>{planName ? `Pôr no plano ${planName}` : 'Adicionar alunos'}</h2>
         <button className="link" onClick={onClose}>
           Fechar
         </button>
@@ -109,9 +142,6 @@ export function AssignPanel({ gym, plan, onClose, onApplied }: { gym: string; pl
               />
               Só quem não está em nenhum plano
             </label>
-            <button className="button" onClick={() => void search_()}>
-              Buscar alunos
-            </button>
           </div>
 
           {students ? (
@@ -161,7 +191,7 @@ export function AssignPanel({ gym, plan, onClose, onApplied }: { gym: string; pl
               </div>
             </>
           ) : (
-            <p className="muted pad">Escolha os filtros e busque os alunos.</p>
+            <p className="muted pad">Carregando alunos</p>
           )}
         </>
       ) : null}
@@ -171,7 +201,14 @@ export function AssignPanel({ gym, plan, onClose, onApplied }: { gym: string; pl
       ) : null}
 
       {step.name === 'preview' ? (
-        <Preview rows={step.rows} names={names} chosen={chosen} setChosen={setChosen} onBack={() => setStep({ name: 'pick' })} onApply={() => void apply(step.rows)} />
+        <Preview
+          rows={step.rows}
+          names={names}
+          chosen={chosen}
+          setChosen={setChosen}
+          onBack={preselected ? onClose : () => setStep({ name: 'pick' })}
+          onApply={() => void apply(step.rows)}
+        />
       ) : null}
 
       {step.name === 'done' ? (

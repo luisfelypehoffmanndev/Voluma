@@ -729,3 +729,27 @@ a {
   color: var(--text-2);
   border-bottom: 1px solid var(--border);
 }
+
+.check-col {
+  width: 32px;
+}
+
+/* Barra fixa embaixo quando ha alunos marcados na tela Alunos. */
+.action-bar {
+  position: sticky;
+  bottom: 16px;
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--divider);
+  background: rgba(20, 20, 20, 0.94);
+  backdrop-filter: blur(24px);
+}
+
+.action-bar .field select {
+  min-width: 220px;
+}
