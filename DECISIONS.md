@@ -190,3 +190,24 @@ reps). Decisões:
   `week_targets`.
 - **A equipe Voluma cria o admin de cada academia; o admin convida
   instrutores** pelo e-mail Google. O painel também edita as fichas sugeridas.
+
+## Planos da academia
+
+**Data:** 2026-10-23
+**Status:** planejado — ver [`plans/20-planos.md`](plans/20-planos.md)
+
+Uma aba Planos no painel, em que o instrutor monta programas e põe os alunos
+neles. Decisões:
+
+- **Um plano é um programa da semana**: cada dia aponta para um treino, e cada
+  treino é uma ficha (`gym_presets`), com o editor e a propagação que já
+  existem.
+- **Quem está no plano se lê das rotinas do aluno** (`routines.plan_id`), não
+  de uma tabela de membros: o app adota offline, e o aluno que edita um dia
+  tira só aquele dia do plano.
+- **Personalizar um aluno não o tira do plano**: ele recebe as mudanças do
+  plano, menos no que o instrutor mudou só para ele (séries e reps próprias,
+  exercício a mais, exercício tirado ou trocado).
+- **Ao atribuir, a prévia mostra os conflitos** (aluno que já tem treino no
+  dia) e o instrutor escolhe substituir ou pular, por aluno e por dia.
+- **O aluno continua escolhendo no app** os planos marcados como abertos.
