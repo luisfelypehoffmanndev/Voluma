@@ -194,7 +194,7 @@ reps). Decisões:
 ## Planos da academia
 
 **Data:** 2026-10-23
-**Status:** planejado — ver [`plans/20-planos.md`](plans/20-planos.md)
+**Status:** feito, falta o teste no aparelho — ver [`plans/20-planos.md`](plans/20-planos.md)
 
 Uma aba Planos no painel, em que o instrutor monta programas e põe os alunos
 neles. Decisões:
