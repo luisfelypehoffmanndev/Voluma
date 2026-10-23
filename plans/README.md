@@ -27,9 +27,29 @@ como verificar. A ideia é resolver um de cada vez.
 | [15](15-avatar-e-nomes.md) | Foto de perfil, nome de exibição, cor por amigo e refatoração dos gráficos | feature | **feito** — v9 e v10 rodadas, bucket avatars criado, teste 15-avatar.sql passando |
 | [16](16-multi-academia.md) | Multi-academia: app padrão + um app por academia, mesmo backend | feature | **16.1 a 16.4 feitas** — v11 e v12 no Supabase, app filtra por mundo, OTA configurado, variantes por academia; testado no aparelho (mundo padrão e app `teste` isolado). **16.5 feita** — v14 no Supabase, flags por academia com cache offline. **16.6 feita** — v15 no Supabase, teste 16.6-presets.sql e Jest passando: fichas sugeridas, gatilhos de propagação, migração v6 no SQLite, pull das sugestões, cascata campo a campo e desvinculação automática. **16.7 feita no código** — telas de fichas, onboarding pelas fichas, marca e origem "da academia", avisos antes de desvincular (dia e treino), atrás da flag `suggested_workouts`; falta testar no aparelho |
 | [17](17-rodada-de-bugs.md) | Rodada de bugs: instalação nova, sync e dados do treino | bugs | **feito e verificado no aparelho** — v13 no Supabase; o teste no aparelho achou e corrigiu mais três (crash no "Criar plano", erro de sync escondido sem rede, divisor solto) |
-| [18](18-painel-admin.md) | Painel da academia: equipe (admin/instrutor), prescrição por aluno e em lote, conflito com o aluno offline | feature | **18.1 a 18.5 e 18.7 feitas no código** — v16 no `schema.sql`, `18-painel.sql` passando no Postgres local, Jest passando; falta aplicar a v16 no Supabase e testar no aparelho. O painel web fica para um plano próprio |
+| [18](18-painel-admin.md) | Painel da academia: equipe (admin/instrutor), prescrição por aluno e em lote, conflito com o aluno offline | feature | **18.1 a 18.5 e 18.7 feitas, v16 no Supabase** — ensaio com rollback e testes no banco real passando; falta a v17 (índices de FK) e o teste no aparelho. O painel web fica para um plano próprio |
 
 ## Pendências fora do código
+
+Concluída em 2026-10-23:
+
+8. **Item 18** — a seção `-- v16: painel da academia` foi aplicada no Supabase
+   pelo MCP (`v16_painel_academia`), depois de um ensaio da v16 com o
+   `18-painel.sql` dentro de `rollback`. O `16.6-presets.sql` e o
+   `17-relogio-do-servidor.sql` passaram no banco real, e o hash do corpo das
+   24 funções novas bate com o do banco local.
+
+### O que travou no caminho (item 18)
+
+- **O projeto estava pausado de novo** (plano gratuito). Restaurado pelo
+  painel; a API respondeu 521 por alguns minutos antes do Postgres voltar.
+- **`set meu.parametro = ...` na declaração de uma função exige
+  superusuário**, e o dono das funções no Supabase não é. O teste local rodava
+  como superusuário e não pegava; agora roda como um dono comum
+  (`supabase/tests/local/`).
+- **O MCP pede confirmação para comando destrutivo, e a confirmação expira**
+  ("Invalid or expired requestState"). Além de `drop`, o ensaio tinha `delete`
+  e `truncate` dentro de funções e testes; foi preciso aprovar na hora.
 
 Concluída em 2026-10-10:
 

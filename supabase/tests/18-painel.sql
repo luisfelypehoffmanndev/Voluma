@@ -184,7 +184,9 @@ end $$;
 reset role;
 
 -- O convidado cria a conta e entra no painel
-insert into auth.users (id, email) values ('00000000-0000-4000-8000-00000000a004', 'novo@x.voluma');
+-- Conta Google: e-mail confirmado (o staff_claim_invites confere)
+insert into auth.users (id, email, email_confirmed_at)
+values ('00000000-0000-4000-8000-00000000a004', 'novo@x.voluma', now());
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-00000000a004","role":"authenticated"}', true);
 set local role authenticated;
 do $$
@@ -496,8 +498,11 @@ end $$;
 
 -- 9. Relogio do aluno adiantado: a prescricao nao some no sync_stamp
 reset role;
-update public.routines set updated_at = now() + interval '1 day'
- where id = (select v from t_ids where k = 'r_qua');
+do $$
+begin
+  update public.routines set updated_at = now() + interval '1 day'
+   where id = (select v from t_ids where k = 'r_qua');
+end $$;
 set local role authenticated;
 do $$
 declare
@@ -531,17 +536,18 @@ begin
 end $$;
 reset role;
 
--- 11. O guarda do historico
+-- 11. O guarda do historico. Restrito a aluna do teste: se o guarda falhasse,
+-- sem o `where` isto tocaria o banco inteiro (mesmo que o rollback desfaca).
 do $$
 begin
   perform set_config('voluma.staff_write', '1', true);
   begin
-    update public.session_sets set reps = 99;
+    update public.session_sets set reps = 99 where user_id = '00000000-0000-4000-8000-00000000a011';
     raise exception 'o guarda deixou o painel escrever serie';
   exception when insufficient_privilege then null;
   end;
   begin
-    delete from public.body_weight_logs;
+    delete from public.body_weight_logs where user_id = '00000000-0000-4000-8000-00000000a011';
     raise exception 'o guarda deixou o painel apagar peso';
   exception when insufficient_privilege then null;
   end;

@@ -20,6 +20,10 @@ npm test        # domínio, sqlite, sync, store, tema, gráficos e render de per
 npm run typecheck
 ```
 
+Os testes SQL (`supabase/tests/*.sql`) rodam num Postgres local descartável,
+sem tocar no Supabase: `supabase/tests/local/run.sh` (precisa de `initdb`,
+`pg_ctl` e `psql`).
+
 Quase todo teste é de função pura, sem banco e sem render — a convenção está em
 [`plans/08-testes-puros.md`](plans/08-testes-puros.md). As exceções de render que
 usam `@testing-library/react-native` são `src/ui/profile/` (onde a regra do
