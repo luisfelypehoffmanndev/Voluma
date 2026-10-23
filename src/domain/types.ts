@@ -37,6 +37,10 @@ export type Routine = Syncable & {
   weekday: Weekday;
   position: number;
   presetId?: string | null;
+  /** Quem da equipe prescreveu o dia pelo painel; nulo quando o aluno desvinculou. */
+  prescribedBy?: string | null;
+  /** Quando foi prescrito. Fica quando o aluno desvincula: o painel mostra "editado pelo aluno". */
+  prescribedAt?: string | null;
 };
 
 export type RoutineExercise = Syncable & {

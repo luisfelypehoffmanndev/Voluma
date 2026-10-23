@@ -6,6 +6,7 @@ import { listBodyWeightLogs } from '@/db/repo';
 import type { Profile } from '@/domain/types';
 import { formatWeight } from '@/domain/volume';
 import { useQuery } from '@/store/data';
+import { FLAG_STAFF_PANEL, STAFF_PANEL_NOTICE, useFlag } from '@/store/flags';
 import { useFriends } from '@/store/friends';
 import { useProfile } from '@/store/profile';
 import { useAuth } from '@/sync/auth';
@@ -422,6 +423,7 @@ function SyncCard() {
   const router = useRouter();
   const { status, email, syncing, pending, lastSync, runSync, signOut } = useAuth();
   const [confirmingSignOut, setConfirmingSignOut] = useState(false);
+  const staffPanel = useFlag(FLAG_STAFF_PANEL);
 
   if (!isCloudConfigured) {
     return (
@@ -443,6 +445,7 @@ function SyncCard() {
           <View style={styles.rowText}>
             <Body>Entrar</Body>
             <Meta>Backup e sincronização</Meta>
+            {staffPanel ? <Meta>{STAFF_PANEL_NOTICE}</Meta> : null}
           </View>
           <ChevronRightIcon size={16} color={colors.textSecondary} />
         </View>
@@ -458,6 +461,7 @@ function SyncCard() {
         <View style={styles.rowText}>
           <Body numberOfLines={1}>{email}</Body>
           <Meta>{syncStatusText(syncing, pending, lastSync?.error ?? null)}</Meta>
+          {staffPanel ? <Meta>{STAFF_PANEL_NOTICE}</Meta> : null}
         </View>
         <SyncIcon size={18} color={colors.textSecondary} />
       </Pressable>

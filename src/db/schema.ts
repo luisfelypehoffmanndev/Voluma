@@ -10,7 +10,7 @@
  * last-write-wins do sync. Nada e apagado de verdade: delete e soft delete.
  */
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 export const MIGRATIONS: readonly string[] = [
   // v1 — schema inicial
@@ -259,6 +259,13 @@ export const MIGRATIONS: readonly string[] = [
   CREATE INDEX IF NOT EXISTS idx_routines_preset ON routines (preset_id);
   CREATE INDEX IF NOT EXISTS idx_local_presets_gym ON local_gym_presets (gym_id);
   CREATE INDEX IF NOT EXISTS idx_local_preset_exercises_preset ON local_gym_preset_exercises (preset_id);
+  `,
+
+  // v7 — dia prescrito pelo instrutor no painel (plano 18). Desce do servidor
+  // pelo pull; o app so zera o `prescribed_by` quando o aluno edita o dia.
+  `
+  ALTER TABLE routines ADD COLUMN prescribed_by TEXT;
+  ALTER TABLE routines ADD COLUMN prescribed_at TEXT;
   `,
 ];
 

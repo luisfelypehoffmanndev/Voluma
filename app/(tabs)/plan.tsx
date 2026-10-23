@@ -3,6 +3,7 @@ import { useCallback } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { listExercises, listLocalPresets, listRoutines, routineExerciseCounts } from '@/db/repo';
+import { routineLink } from '@/domain/presets';
 import type { Weekday } from '@/domain/types';
 import { weekPlan, weekdayName, weekdayOf } from '@/domain/week';
 import { useQuery } from '@/store/data';
@@ -100,7 +101,8 @@ export default function PlanScreen() {
                 <View style={styles.rowText}>
                   <View style={styles.dayLine}>
                     <Section numberOfLines={1}>{weekdayName(weekday as Weekday)}</Section>
-                    {day?.presetId ? <Label style={styles.presetTag}>SUGERIDO</Label> : null}
+                    {routineLink(day) === 'preset' ? <Label style={styles.presetTag}>SUGERIDO</Label> : null}
+                    {routineLink(day) === 'instructor' ? <Label style={styles.presetTag}>INSTRUTOR</Label> : null}
                     {isToday ? <Label style={styles.todayTag}>HOJE</Label> : null}
                   </View>
                   <Meta>{daySummary(day?.name ?? '', count)}</Meta>

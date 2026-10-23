@@ -33,6 +33,8 @@ export type RoutineRow = {
   weekday: number;
   position: number;
   preset_id?: string | null;
+  prescribed_by?: string | null;
+  prescribed_at?: string | null;
   updated_at: string;
   deleted_at: string | null;
 };
@@ -143,6 +145,8 @@ export const toRoutine = (row: RoutineRow): Routine => ({
   weekday: row.weekday as Weekday,
   position: row.position,
   presetId: row.preset_id ?? null,
+  prescribedBy: row.prescribed_by ?? null,
+  prescribedAt: row.prescribed_at ?? null,
   updatedAt: row.updated_at,
   deletedAt: row.deleted_at,
 });

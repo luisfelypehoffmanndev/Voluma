@@ -36,6 +36,7 @@ import {
 } from '@/db/repo';
 import type { ExerciseKind, SessionSet, Targets } from '@/domain/types';
 import { applyOrder } from '@/domain/order';
+import { linkSourceName, routineLink, type RoutineLink } from '@/domain/presets';
 import { formatDistance, formatDuration, runTargetsFromSets } from '@/domain/run';
 import { allDone, countSets, nextSetIndex, type SetDraft, sameSetDrafts, summarizeSets } from '@/domain/sets';
 import { sameTargets, targetsFromSets } from '@/domain/targets';
@@ -547,7 +548,7 @@ export default function SessionScreen() {
           title={`Adicionar ${pendingPick?.name ?? ''}`}
           message={
             linked
-              ? `Só neste treino, ou no plano de ${everyDay} a partir de agora? No plano, o dia deixa de seguir a ficha da academia e não recebe mais as mudanças do instrutor.`
+              ? `Só neste treino, ou no plano de ${everyDay} a partir de agora? No plano, o dia deixa de seguir ${linkSourceName(linked)} e não recebe mais as mudanças do instrutor.`
               : `Só neste treino, ou no plano de ${everyDay} a partir de agora?`
           }
           cancelLabel="Só hoje"
@@ -706,8 +707,8 @@ type CardProps = {
   onStructuralChange: () => void;
   /** "toda segunda" — para o menu dizer de qual dia o exercicio sai. */
   everyDay: string;
-  /** O dia segue a ficha da academia: remover do plano desvincula, e o menu avisa. */
-  linked: boolean;
+  /** O dia segue a ficha da academia ou o instrutor: remover do plano desvincula, e o menu avisa. */
+  linked: RoutineLink;
   /** "Pular hoje". Quem cuida do "Desfazer" e a tela, nao o card que some. */
   onSkip: (sessionId: string, item: SessionExercise) => void;
   /** Entrega a tela um jeito de esperar as escritas pendentes deste card. */
@@ -846,7 +847,7 @@ function ExerciseMenu({
                   confirm: {
                     title: `Remover ${item.exerciseName} do plano?`,
                     message: linked
-                      ? `Sai de ${everyDay} a partir de agora. O dia deixa de seguir a ficha da academia e não recebe mais as mudanças do instrutor.`
+                      ? `Sai de ${everyDay} a partir de agora. O dia deixa de seguir ${linkSourceName(linked)} e não recebe mais as mudanças do instrutor.`
                       : `Sai de ${everyDay} a partir de agora. O que já foi registrado continua no histórico.`,
                     confirmLabel: 'Remover',
                   },
@@ -1436,7 +1437,7 @@ async function loadSession(id: string) {
       : Promise.resolve<WeekExercise[]>([]),
     session.routineId ? listRoutines() : Promise.resolve([]),
   ]);
-  const linked = Boolean(routines.find((routine) => routine.id === session.routineId)?.presetId);
+  const linked = routineLink(routines.find((routine) => routine.id === session.routineId));
 
   const buckets = groupSetsByExercise(sets);
   const recorded = recordedByExercise(buckets, catalog);

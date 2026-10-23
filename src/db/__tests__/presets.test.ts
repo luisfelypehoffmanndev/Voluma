@@ -309,4 +309,62 @@ describe('presets no banco local (SQLite)', () => {
       expect(supinoTarget?.source).toBe('lastActual');
     });
   });
+
+  describe('dia prescrito pelo instrutor (painel, plano 18)', () => {
+    // A rotina como o pull a entrega depois de um `staff_set_day`: sem ficha,
+    // com quem prescreveu e quando. Series e reps sao do instrutor.
+    beforeEach(() => {
+      seed(`
+        INSERT INTO exercises (id, name, updated_at) VALUES ('ex-remada', 'Remada curvada', '${T0}');
+        INSERT INTO routines (id, name, weekday, position, prescribed_by, prescribed_at, updated_at)
+        VALUES ('r-pull', 'Pull A', 2, 0, 'instrutor-1', '${T0}', '${T0}');
+        INSERT INTO routine_exercises
+          (id, routine_id, exercise_id, position, target_sets, target_reps, target_weight_kg, updated_at)
+        VALUES ('re-remada', 'r-pull', 'ex-remada', 0, 4, 8, 0, '${T0}');
+      `);
+    });
+
+    it('series e reps do instrutor, carga do historico do aluno', async () => {
+      seed(`
+        INSERT INTO sessions (id, routine_id, date, started_at, finished_at, updated_at)
+        VALUES ('sess-antiga', 'r-pull', '2026-10-06', '2026-10-06T10:00:00.000Z', '2026-10-06T11:00:00.000Z', '${T0}');
+        INSERT INTO session_sets (id, session_id, exercise_id, set_index, reps, weight_kg, done, updated_at)
+        VALUES ('s-1', 'sess-antiga', 'ex-remada', 1, 12, 40, 1, '${T0}');
+      `);
+
+      const [remada] = await targetsForWeek('2026-10-12', 'r-pull');
+      expect(remada.targets).toMatchObject({ sets: 4, reps: 8, weightKg: 40 });
+      expect(remada.source).toBe('preset');
+    });
+
+    it('editar o dia desvincula do instrutor e guarda quando foi prescrito', async () => {
+      seed(`
+        INSERT INTO exercises (id, name, updated_at) VALUES ('ex-rosca', 'Rosca direta', '${T0}');
+      `);
+
+      await addExerciseToRoutine('r-pull', 'ex-rosca', strengthTargets(3, 12));
+
+      const updated = row('routines', 'r-pull');
+      expect(updated?.prescribed_by).toBeNull();
+      // O painel mostra "editado pelo aluno" por esta coluna
+      expect(updated?.prescribed_at).toBe(T0);
+      const queued = raw
+        .prepare("SELECT COUNT(*) AS n FROM outbox WHERE table_name = 'routines' AND row_id = 'r-pull'")
+        .get() as { n: number };
+      expect(queued.n).toBe(1);
+
+      // Desvinculado, o historico volta a mandar (sem historico: a semente)
+      const [remada] = await targetsForWeek('2026-10-12', 'r-pull');
+      expect(remada.source).toBe('plan');
+    });
+
+    it('adotar uma ficha num dia prescrito tira o dia do instrutor', async () => {
+      const routine = await adoptPresetIntoDay('preset-a', 2);
+
+      expect(routine.id).toBe('r-pull');
+      const updated = row('routines', 'r-pull');
+      expect(updated?.preset_id).toBe('preset-a');
+      expect(updated?.prescribed_by).toBeNull();
+    });
+  });
 });

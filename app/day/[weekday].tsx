@@ -19,6 +19,7 @@ import {
   type WeekExercise,
 } from '@/db/repo';
 import { applyOrder } from '@/domain/order';
+import { linkSourceName, routineLink } from '@/domain/presets';
 import type { Targets, Weekday } from '@/domain/types';
 import { addWeeks, everyWeekday, weekRangeLabel, weekStartKey, weekdayName, weeksBetween } from '@/domain/week';
 import { bumpData, useQuery } from '@/store/data';
@@ -93,7 +94,9 @@ export default function DayScreen() {
     }, [weekday, weekStart]),
   );
 
-  const isLinked = Boolean(data?.routine.presetId);
+  const link = routineLink(data?.routine);
+  const isLinked = link != null;
+  const linkedTo = link ? linkSourceName(link) : '';
 
   // O que acabou de ser arrastado, na frente do banco ate a recarga chegar —
   // sem isso o card voltaria ao lugar antigo por um quadro depois do drop.
@@ -212,7 +215,9 @@ export default function DayScreen() {
           <DayNameInput routineId={routine.id} value={routine.name} />
           {isLinked ? (
             <Meta style={styles.linkedNotice}>
-              Ficha sugerida pela academia · Recebe atualizações do instrutor
+              {link === 'instructor'
+                ? 'Treino do instrutor · Recebe as mudanças dele'
+                : 'Ficha sugerida pela academia · Recebe atualizações do instrutor'}
             </Meta>
           ) : null}
         </Card>
@@ -266,7 +271,7 @@ export default function DayScreen() {
         title={`Remover ${removing?.exerciseName ?? ''} do plano?`}
         message={
           isLinked
-            ? `Sai de ${everyWeekday(weekday)} a partir de agora. Este treino deixará de seguir a ficha da academia e não receberá mais atualizações do instrutor.`
+            ? `Sai de ${everyWeekday(weekday)} a partir de agora. Este treino deixará de seguir ${linkedTo} e não receberá mais atualizações do instrutor.`
             : `Sai de ${everyWeekday(weekday)} a partir de agora. O que já foi registrado continua no histórico.`
         }
         cancelLabel="Cancelar"
@@ -284,7 +289,7 @@ export default function DayScreen() {
       <ConfirmModal
         visible={confirmUnlinkAction != null}
         title="Personalizar este treino?"
-        message="Este treino segue a ficha da academia. Ao adicionar um exercício, ele passará a ser totalmente seu e deixará de receber atualizações do instrutor."
+        message={`Este treino segue ${linkedTo}. Ao adicionar um exercício, ele passará a ser totalmente seu e deixará de receber atualizações do instrutor.`}
         cancelLabel="Cancelar"
         confirmLabel="Continuar e personalizar"
         onClose={() => setConfirmUnlinkAction(null)}

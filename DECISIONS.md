@@ -160,3 +160,33 @@ legibilidade dos gráficos antigos.
   único (`FriendsRanking`). O detalhe individual (12 semanas, meta da rotina e
   km de corrida) foi movido para uma tela dedicada `app/friend/[id].tsx`,
   focando na comparação "Você vs Amigo".
+
+## Painel da academia: quem vê e quem manda no treino
+
+**Data:** 2026-10-22
+**Status:** backend e app feitos no código, falta aplicar a v16 no Supabase — ver [`plans/18-painel-admin.md`](plans/18-painel-admin.md)
+
+Um painel web em que admins e instrutores de uma academia editam o treino dos
+alunos, um a um ou em lote (trocar um exercício por outro, ajustar séries e
+reps). Decisões:
+
+- **Instalar o app da academia já vincula o aluno.** Quem tem dados no mundo
+  daquela academia aparece no painel, com o plano e a frequência. Não há código
+  nem aceite (o mesmo motivo do "sem token por aluno" do plano 16). O app avisa
+  isso no Perfil e no login. O mundo `padrao` nunca tem equipe, e quem usa
+  o app sem conta não aparece.
+- **A equipe escreve só a prescrição, e só por RPC.** Dias, exercícios, ordem,
+  séries e reps. Nunca carga, séries feitas, ajuste da semana ou peso corporal:
+  nenhuma tabela ganha grant de escrita para a equipe, e um gatilho recusa a
+  escrita no histórico vinda de RPC do painel. Cargas e séries cruas não
+  aparecem no painel; a frequência sai agregada.
+- **Dia prescrito funciona como a ficha sugerida.** Séries e reps vêm do
+  instrutor, a carga vem do aluno. Se o aluno edita o dia, desvincula (com
+  aviso), os lotes deixam de tocá-lo e o painel mostra "editado pelo aluno".
+- **Edição do aluno feita antes da prescrição perde; depois, desvincula.** O
+  last-write-wins por `updated_at` continua; uma linha nova que o aluno criou
+  offline num dia prescrito depois dela entra no servidor já apagada.
+- **O ajuste da semana (stepper) vale até domingo.** O painel não apaga
+  `week_targets`.
+- **A equipe Voluma cria o admin de cada academia; o admin convida
+  instrutores** pelo e-mail Google. O painel também edita as fichas sugeridas.

@@ -1518,3 +1518,1381 @@ create or replace trigger trg_propagate_preset_exercise
 create or replace trigger trg_propagate_preset_exercise_delete
   before delete on public.gym_preset_exercises
   for each row execute function public.propagate_preset_exercise_changes();
+
+-- ------------------------------------------- v16: painel da academia
+-- Admins e instrutores de uma academia editam o treino dos alunos dela, um a um
+-- ou em lote, por um painel web. Ver plans/18-painel-admin.md.
+--
+-- A regra que organiza tudo: a academia escreve SO a prescricao (dias,
+-- exercicios, ordem, series, reps), e SO por RPC. Nenhuma tabela ganha grant de
+-- escrita para a equipe; carga, series feitas, ajuste da semana e peso corporal
+-- ficam fora de alcance, e um gatilho recusa se alguma RPC tentar.
+--
+-- Instalar o app da academia ja vincula: quem tem dados no mundo e aluno dela.
+-- O mundo `padrao` nunca tem equipe, senao ela leria a base inteira do Voluma.
+
+-- ------------------------------------------------------------- equipe
+
+create table if not exists public.gym_staff (
+  gym_id     text not null references public.gyms (id) on delete cascade,
+  user_id    uuid not null references auth.users (id) on delete cascade,
+  role       text not null check (role in ('admin', 'instructor')),
+  invited_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  primary key (gym_id, user_id),
+  constraint gym_staff_not_padrao check (gym_id <> 'padrao')
+);
+
+create index if not exists idx_gym_staff_user on public.gym_staff (user_id);
+
+-- Convite por e-mail: o instrutor pode nunca ter entrado. Vira linha em
+-- `gym_staff` quando ele entra no painel (`staff_claim_invites`).
+create table if not exists public.gym_staff_invites (
+  gym_id     text not null references public.gyms (id) on delete cascade,
+  email      text not null check (email = lower(btrim(email)) and email like '%@%'),
+  role       text not null default 'instructor' check (role in ('admin', 'instructor')),
+  invited_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  primary key (gym_id, email),
+  constraint gym_staff_invites_not_padrao check (gym_id <> 'padrao')
+);
+
+-- Toda escrita do painel: quem, o que e em quantos alunos.
+create table if not exists public.prescription_log (
+  id                uuid primary key default gen_random_uuid(),
+  gym_id            text not null references public.gyms (id) on delete cascade,
+  actor_id          uuid references auth.users (id) on delete set null,
+  action            text not null,
+  params            jsonb not null,
+  affected_students int not null default 0,
+  affected_rows     int not null default 0,
+  created_at        timestamptz not null default now()
+);
+
+create index if not exists idx_prescription_log_gym on public.prescription_log (gym_id, created_at desc);
+
+-- A marca da prescricao no plano do aluno, par do `preset_id` da v15:
+--   prescribed_by preenchido            -> prescrito; os lotes tocam
+--   prescribed_by nulo, prescribed_at nao -> o aluno editou depois e desvinculou
+--   os dois nulos                       -> plano do proprio aluno
+-- Sem FK para auth.users, de proposito: a linha sobe do aparelho do aluno com
+-- esses valores, e se a pessoa da equipe sair, a FK recusaria todo push dela
+-- dali em diante (o mesmo motivo do "sem FK" do inicio do arquivo).
+alter table public.routines add column if not exists prescribed_by uuid;
+alter table public.routines add column if not exists prescribed_at timestamptz;
+
+-- ---------------------------------------------------------- papeis
+
+-- `security definer`: leem `gym_staff` por cima do RLS dela, que por sua vez as
+-- usa (sem isso, a policy de gym_staff consultando gym_staff seria recursiva).
+create or replace function public.my_staff_gyms()
+returns setof text
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select gym_id from public.gym_staff where user_id = (select auth.uid());
+$$;
+
+create or replace function public.my_admin_gyms()
+returns setof text
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select gym_id from public.gym_staff where user_id = (select auth.uid()) and role = 'admin';
+$$;
+
+create or replace function public.staff_role(gym text)
+returns text
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select role from public.gym_staff where gym_id = gym and user_id = (select auth.uid());
+$$;
+
+revoke all on function public.my_staff_gyms() from public, anon;
+revoke all on function public.my_admin_gyms() from public, anon;
+revoke all on function public.staff_role(text) from public, anon;
+grant execute on function public.my_staff_gyms() to authenticated;
+grant execute on function public.my_admin_gyms() to authenticated;
+grant execute on function public.staff_role(text) to authenticated;
+
+-- Abre toda RPC do painel. Interna: so as RPCs (que rodam como dono) chamam.
+create or replace function public.require_staff(gym text, need text default 'instructor')
+returns text
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  r text := public.staff_role(gym);
+begin
+  if r is null or (need = 'admin' and r <> 'admin') then
+    raise exception 'sem permissao na academia %', gym using errcode = '42501';
+  end if;
+  return r;
+end;
+$$;
+
+revoke all on function public.require_staff(text, text) from public, anon, authenticated;
+
+-- ------------------------------------------------------------------ RLS
+
+alter table public.gym_staff         enable row level security;
+alter table public.gym_staff_invites enable row level security;
+alter table public.prescription_log  enable row level security;
+
+-- Leitura so; toda escrita passa pelas RPCs abaixo.
+revoke all on public.gym_staff, public.gym_staff_invites, public.prescription_log from anon;
+revoke insert, update, delete, truncate on public.gym_staff, public.gym_staff_invites, public.prescription_log
+  from authenticated;
+grant select on public.gym_staff, public.gym_staff_invites, public.prescription_log to authenticated;
+
+-- Cada um ve a propria linha (e por ela sabe de quais academias e equipe); o
+-- admin ve a equipe inteira da academia dele.
+drop policy if exists staff_read on public.gym_staff;
+create policy staff_read on public.gym_staff
+  for select
+  to authenticated
+  using (user_id = (select auth.uid()) or gym_id in (select public.my_admin_gyms()));
+
+drop policy if exists staff_invites_read on public.gym_staff_invites;
+create policy staff_invites_read on public.gym_staff_invites
+  for select
+  to authenticated
+  using (gym_id in (select public.my_admin_gyms()));
+
+drop policy if exists prescription_log_read on public.prescription_log;
+create policy prescription_log_read on public.prescription_log
+  for select
+  to authenticated
+  using (gym_id in (select public.my_admin_gyms()));
+
+-- A equipe le o PLANO dos alunos da academia, para o painel montar as telas com
+-- consultas simples. So select, somada a `own_rows`, que continua igual. O app
+-- nao sente: o pull filtra `user_id = eu`.
+--
+-- Sessoes, series, peso e ajuste da semana NAO entram: a frequencia sai
+-- agregada por `staff_find_students`, nunca em linha crua. `profiles` tambem
+-- nao: a linha inteira traria idade, anos de treino e foto, que estao atras do
+-- toggle de compartilhamento. Nome e @ saem pelo `staff_find_students`.
+do $$
+declare
+  target text;
+begin
+  foreach target in array array['routines', 'routine_exercises', 'exercises']
+  loop
+    execute format('drop policy if exists staff_select on public.%I', target);
+    execute format(
+      'create policy staff_select on public.%I
+         for select
+         to authenticated
+         using (gym_id in (select public.my_staff_gyms()))',
+      target
+    );
+  end loop;
+end $$;
+
+-- ------------------------------------------------------- equipe: RPCs
+
+-- O admin convida um instrutor pelo e-mail Google. Quem ja tem conta entra na
+-- hora; quem nao tem fica no convite. Admin novo, so a equipe Voluma cria.
+create or replace function public.staff_invite(gym text, member_email text, member_role text default 'instructor')
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  me     uuid := (select auth.uid());
+  mail   text := lower(btrim(member_email));
+  member uuid;
+begin
+  perform public.require_staff(gym, 'admin');
+  if member_role <> 'instructor' then
+    raise exception 'so a equipe Voluma cria admin' using errcode = '42501';
+  end if;
+  if mail !~ '^[^@\s]+@[^@\s]+$' then
+    raise exception 'e-mail invalido' using errcode = '22023';
+  end if;
+
+  select u.id into member from auth.users u where lower(u.email) = mail limit 1;
+  if member is not null then
+    insert into public.gym_staff (gym_id, user_id, role, invited_by)
+    values (gym, member, member_role, me)
+    on conflict (gym_id, user_id) do nothing;
+    return 'added';
+  end if;
+
+  insert into public.gym_staff_invites (gym_id, email, role, invited_by)
+  values (gym, mail, member_role, me)
+  on conflict (gym_id, email) do nothing;
+  return 'invited';
+end;
+$$;
+
+-- Chamada pelo painel a cada login: transforma os convites do e-mail da conta
+-- em equipe. O e-mail sai de `auth.users` (confirmado), nunca do JWT: o
+-- `user_metadata` e editavel pelo proprio usuario.
+create or replace function public.staff_claim_invites()
+returns table (gym_id text, role text)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  me   uuid := (select auth.uid());
+  mail text;
+begin
+  select lower(u.email) into mail
+    from auth.users u
+   where u.id = me and u.email_confirmed_at is not null;
+  if mail is null then
+    return;
+  end if;
+
+  insert into public.gym_staff (gym_id, user_id, role, invited_by)
+  select i.gym_id, me, i.role, i.invited_by
+    from public.gym_staff_invites i
+   where i.email = mail
+  on conflict on constraint gym_staff_pkey do nothing;
+
+  delete from public.gym_staff_invites i where i.email = mail;
+
+  return query
+    select s.gym_id, s.role from public.gym_staff s where s.user_id = me order by s.gym_id;
+end;
+$$;
+
+create or replace function public.staff_revoke_invite(gym text, member_email text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.require_staff(gym, 'admin');
+  delete from public.gym_staff_invites
+   where gym_id = gym and email = lower(btrim(member_email));
+end;
+$$;
+
+-- O admin tira um instrutor. Admin, so a equipe Voluma tira.
+create or replace function public.staff_remove(gym text, member uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.require_staff(gym, 'admin');
+  if exists (select 1 from public.gym_staff where gym_id = gym and user_id = member and role = 'admin') then
+    raise exception 'so a equipe Voluma tira um admin' using errcode = '42501';
+  end if;
+  delete from public.gym_staff where gym_id = gym and user_id = member;
+end;
+$$;
+
+-- A equipe com e-mail, para o admin. O e-mail sai de auth.users, que a equipe
+-- nao le direto.
+create or replace function public.staff_list(gym text)
+returns table (user_id uuid, role text, email text, display_name text, created_at timestamptz)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.require_staff(gym, 'admin');
+  return query
+    select s.user_id, s.role, u.email::text, p.display_name, s.created_at
+      from public.gym_staff s
+      join auth.users u on u.id = s.user_id
+      left join public.profiles p on p.id = s.user_id and p.gym_id = s.gym_id
+     where s.gym_id = gym
+     order by s.role, s.created_at;
+end;
+$$;
+
+-- ------------------------------------------ separacao prescricao x historico
+
+-- Toda RPC do painel que escreve liga este marcador na propria declaracao
+-- (`set voluma.staff_write = '1'`): ele vale so enquanto ela roda, e o Postgres
+-- o desliga na saida. Um `set_config(..., true)` duraria ate o fim da
+-- transacao e pegaria o que viesse depois dela.
+-- Com ele ligado, as tabelas do historico recusam qualquer escrita. E a ultima
+-- camada: as RPCs ja nao escrevem nelas, e a equipe nao tem grant em nenhuma.
+create or replace function public.forbid_staff_history_write()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if current_setting('voluma.staff_write', true) = '1' then
+    raise exception 'o painel nao escreve historico (%)', tg_table_name using errcode = '42501';
+  end if;
+  return coalesce(new, old);
+end;
+$$;
+
+revoke all on function public.forbid_staff_history_write() from public, anon, authenticated;
+
+do $$
+declare
+  target text;
+begin
+  foreach target in array array['sessions', 'session_sets', 'week_targets', 'body_weight_logs']
+  loop
+    execute format(
+      'create or replace trigger forbid_staff_history_write
+         before insert or update or delete on public.%I
+         for each row execute function public.forbid_staff_history_write()',
+      target
+    );
+  end loop;
+end $$;
+
+-- ------------------------------------------------------- aluno e exercicio
+
+-- Quem tem qualquer coisa no mundo e aluno dele (decisao do plano 18).
+create or replace function public.is_gym_student(gym text, student uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (select 1 from public.profiles where id = student and gym_id = gym)
+      or exists (select 1 from public.routines where user_id = student and gym_id = gym);
+$$;
+
+revoke all on function public.is_gym_student(text, uuid) from public, anon, authenticated;
+
+-- O exercicio do aluno com aquele nome no mundo, criado se faltar. Saiu de
+-- dentro do gatilho das fichas (v15), que passa a chama-la, para o painel achar
+-- o mesmo exercicio pela mesma regra.
+create or replace function public.ensure_student_exercise(
+  student  uuid,
+  gym      text,
+  ex_name  text,
+  ex_group text,
+  ex_kind  text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  ex uuid;
+begin
+  select e.id into ex
+    from public.exercises e
+   where e.user_id = student
+     and e.gym_id = gym
+     and e.deleted_at is null
+     and public.exercise_name_key(e.name) = public.exercise_name_key(ex_name)
+   order by e.updated_at, e.id
+   limit 1;
+
+  if ex is null then
+    ex := gen_random_uuid();
+    insert into public.exercises (id, user_id, gym_id, name, muscle_group, kind, updated_at)
+    values (ex, student, gym, btrim(ex_name), ex_group, coalesce(ex_kind, 'strength'), clock_timestamp());
+  end if;
+  return ex;
+end;
+$$;
+
+revoke all on function public.ensure_student_exercise(uuid, text, text, text, text) from public, anon, authenticated;
+
+-- O gatilho da v15, agora com o exercicio vindo de `ensure_student_exercise`.
+-- Mesmo comportamento: o 16.6-presets.sql continua passando.
+create or replace function public.propagate_preset_exercise_changes()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  r  record;
+  ex uuid;
+begin
+  if tg_op = 'DELETE' then
+    update public.routine_exercises re
+       set deleted_at = clock_timestamp(),
+           updated_at = clock_timestamp()
+      from public.routines ro
+     where re.preset_exercise_id = old.id
+       and re.deleted_at is null
+       and ro.id = re.routine_id
+       and ro.preset_id = old.preset_id
+       and ro.deleted_at is null;
+    return old;
+  end if;
+
+  if tg_op = 'UPDATE' and not (old.deleted_at is not null and new.deleted_at is null) then
+    update public.routine_exercises re
+       set target_sets = new.target_sets,
+           target_reps = new.target_reps,
+           target_distance_km = new.target_distance_km,
+           target_duration_min = new.target_duration_min,
+           position = new.position,
+           deleted_at = new.deleted_at,
+           updated_at = clock_timestamp()
+      from public.routines ro
+     where re.preset_exercise_id = new.id
+       and re.deleted_at is null
+       and ro.id = re.routine_id
+       and ro.preset_id = new.preset_id
+       and ro.deleted_at is null;
+    return new;
+  end if;
+
+  -- INSERT, ou UPDATE que restaurou um exercicio apagado
+  if new.deleted_at is not null then
+    return new;
+  end if;
+
+  for r in
+    select ro.id, ro.user_id, ro.gym_id
+      from public.routines ro
+     where ro.preset_id = new.preset_id
+       and ro.deleted_at is null
+       and not exists (
+         select 1 from public.routine_exercises re
+          where re.routine_id = ro.id
+            and re.preset_exercise_id = new.id
+            and re.deleted_at is null
+       )
+  loop
+    ex := public.ensure_student_exercise(r.user_id, r.gym_id, new.name, new.muscle_group, new.kind);
+
+    -- Um exercicio aparece uma vez por dia (mesma regra do app)
+    if not exists (
+      select 1 from public.routine_exercises re
+       where re.routine_id = r.id and re.exercise_id = ex and re.deleted_at is null
+    ) then
+      insert into public.routine_exercises
+        (id, user_id, gym_id, routine_id, exercise_id, preset_exercise_id, position,
+         target_sets, target_reps, target_weight_kg, target_distance_km, target_duration_min, updated_at)
+      values
+        (gen_random_uuid(), r.user_id, r.gym_id, r.id, ex, new.id, new.position,
+         new.target_sets, new.target_reps, 0, new.target_distance_km, new.target_duration_min,
+         clock_timestamp());
+    end if;
+  end loop;
+
+  return new;
+end;
+$$;
+
+-- --------------------------------------------------------------- indices
+-- O painel busca pela academia inteira, e nao por dono como o pull.
+
+create index if not exists idx_exercises_gym_namekey
+  on public.exercises (gym_id, public.exercise_name_key(name)) where deleted_at is null;
+create index if not exists idx_routines_gym_user
+  on public.routines (gym_id, user_id) where deleted_at is null;
+create index if not exists idx_routine_exercises_routine
+  on public.routine_exercises (routine_id) where deleted_at is null;
+create index if not exists idx_sessions_gym_date
+  on public.sessions (gym_id, date) where deleted_at is null;
+
+-- ------------------------------------------------------- prescricao: helpers
+
+-- O carimbo de uma escrita do painel numa linha do aluno: a hora do servidor,
+-- mas sempre DEPOIS da versao atual. O `sync_stamp` (v13) descarta em silencio
+-- um UPDATE com `updated_at` menor que o da linha, e o `updated_at` vem do
+-- relogio do aparelho: com o relogio do aluno adiantado, a prescricao sumiria.
+create or replace function public.staff_stamp(ts timestamptz, current_stamp timestamptz)
+returns timestamptz
+language sql
+immutable
+set search_path = ''
+as $$
+  select greatest(ts, current_stamp + interval '1 millisecond');
+$$;
+
+revoke all on function public.staff_stamp(timestamptz, timestamptz) from public, anon, authenticated;
+
+-- Os numeros de um item do painel dentro do que o app aceita (TargetsEditor):
+-- series 1..12, reps 1..100, km 0..200, minutos 0..600.
+create or replace function public.check_prescription_item(item jsonb)
+returns void
+language plpgsql
+immutable
+set search_path = ''
+as $$
+begin
+  if jsonb_typeof(item) <> 'object'
+     or coalesce(btrim(item ->> 'name'), '') = ''
+     or char_length(btrim(item ->> 'name')) > 80
+     or coalesce(item ->> 'kind', 'strength') not in ('strength', 'run')
+     or coalesce((item ->> 'sets')::int, 3) not between 1 and 12
+     or coalesce((item ->> 'reps')::int, 10) not between 1 and 100
+     or coalesce((item ->> 'distance_km')::real, 0) not between 0 and 200
+     or coalesce((item ->> 'duration_min')::int, 0) not between 0 and 600
+  then
+    raise exception 'item invalido: %', item using errcode = '22023';
+  end if;
+end;
+$$;
+
+revoke all on function public.check_prescription_item(jsonb) from public, anon, authenticated;
+
+-- ------------------------------------------- prescricao: um aluno, um dia
+
+-- Substitui a composicao do dia inteiro: o painel manda o estado final, na
+-- ordem. Itens com `routine_exercise_id` mantem a linha (o `week_targets` do
+-- aluno aponta para ela); os sem id acham o exercicio pelo nome ou criam.
+-- Nunca muda `target_weight_kg`: a carga e do aluno (resolveTargets vinculado).
+--
+-- `expected_updated_at` e a concorrencia otimista: o `updated_at` da rotina
+-- quando o painel abriu o dia. Se o aluno mexeu depois, erro P0409 e o painel
+-- recarrega.
+create or replace function public.staff_set_day(
+  gym                 text,
+  student             uuid,
+  day                 smallint,
+  day_name            text,
+  items               jsonb,
+  expected_updated_at timestamptz default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+set voluma.staff_write = '1'
+as $$
+declare
+  me     uuid := (select auth.uid());
+  ts     timestamptz := clock_timestamp();
+  ro     public.routines%rowtype;
+  item   jsonb;
+  pos    int;
+  slot   uuid;
+  ex     uuid;
+  kept   uuid[] := '{}';
+  used   uuid[] := '{}';
+begin
+  perform public.require_staff(gym);
+  if not public.is_gym_student(gym, student) then
+    raise exception 'aluno fora da academia' using errcode = '42501';
+  end if;
+  if day not between 0 and 6 then
+    raise exception 'dia invalido' using errcode = '22023';
+  end if;
+  if coalesce(btrim(day_name), '') = '' or char_length(btrim(day_name)) > 60 then
+    raise exception 'nome do dia invalido' using errcode = '22023';
+  end if;
+  if jsonb_typeof(items) <> 'array' or jsonb_array_length(items) > 30 then
+    raise exception 'lista de exercicios invalida' using errcode = '22023';
+  end if;
+  for item in select value from jsonb_array_elements(items) loop
+    perform public.check_prescription_item(item);
+  end loop;
+
+
+  -- Um dia de um aluno por vez: duas pessoas da equipe criando o mesmo dia
+  -- vazio ao mesmo tempo criariam duas rotinas.
+  perform pg_advisory_xact_lock(hashtextextended(student::text || '/' || gym || '/' || day, 0));
+
+  select * into ro
+    from public.routines r
+   where r.user_id = student and r.gym_id = gym and r.weekday = day and r.deleted_at is null
+   order by r.position, r.id
+   limit 1
+   for update;
+
+  if found then
+    if expected_updated_at is not null and ro.updated_at > expected_updated_at then
+      raise exception 'o dia mudou desde que foi aberto' using errcode = 'P0409';
+    end if;
+    update public.routines
+       set name = btrim(day_name),
+           preset_id = null,
+           prescribed_by = me,
+           prescribed_at = ts,
+           updated_at = public.staff_stamp(ts, updated_at)
+     where id = ro.id;
+  else
+    ro.id := gen_random_uuid();
+    insert into public.routines
+      (id, user_id, gym_id, name, weekday, position, prescribed_by, prescribed_at, updated_at)
+    values
+      (ro.id, student, gym, btrim(day_name), day, 0, me, ts, ts);
+  end if;
+
+  for item, pos in
+    select value, (ordinality - 1)::int from jsonb_array_elements(items) with ordinality
+  loop
+    slot := null;
+    if item ? 'routine_exercise_id' and item ->> 'routine_exercise_id' is not null then
+      select re.id, re.exercise_id into slot, ex
+        from public.routine_exercises re
+       where re.id = (item ->> 'routine_exercise_id')::uuid
+         and re.routine_id = ro.id
+         and re.deleted_at is null;
+      if slot is null then
+        raise exception 'exercicio % nao e deste dia', item ->> 'routine_exercise_id' using errcode = '22023';
+      end if;
+    else
+      ex := public.ensure_student_exercise(
+        student, gym, item ->> 'name', item ->> 'muscle_group', coalesce(item ->> 'kind', 'strength')
+      );
+      select re.id into slot
+        from public.routine_exercises re
+       where re.routine_id = ro.id and re.exercise_id = ex and re.deleted_at is null
+       order by re.position, re.id
+       limit 1;
+    end if;
+
+    -- Um exercicio aparece uma vez por dia: o repetido na lista e ignorado.
+    continue when ex = any (used);
+    used := used || ex;
+
+    if slot is null then
+      slot := gen_random_uuid();
+      insert into public.routine_exercises
+        (id, user_id, gym_id, routine_id, exercise_id, position,
+         target_sets, target_reps, target_weight_kg, target_distance_km, target_duration_min, updated_at)
+      values
+        (slot, student, gym, ro.id, ex, pos,
+         coalesce((item ->> 'sets')::int, 3), coalesce((item ->> 'reps')::int, 10), 0,
+         coalesce((item ->> 'distance_km')::real, 0), coalesce((item ->> 'duration_min')::int, 0), ts);
+    else
+      update public.routine_exercises
+         set position = pos,
+             target_sets = coalesce((item ->> 'sets')::int, target_sets),
+             target_reps = coalesce((item ->> 'reps')::int, target_reps),
+             target_distance_km = coalesce((item ->> 'distance_km')::real, target_distance_km),
+             target_duration_min = coalesce((item ->> 'duration_min')::int, target_duration_min),
+             preset_exercise_id = null,
+             updated_at = public.staff_stamp(ts, updated_at)
+       where id = slot;
+    end if;
+    kept := kept || slot;
+  end loop;
+
+  update public.routine_exercises
+     set deleted_at = ts, updated_at = public.staff_stamp(ts, updated_at)
+   where routine_id = ro.id and deleted_at is null and not (id = any (kept));
+
+  insert into public.prescription_log (gym_id, actor_id, action, params, affected_students, affected_rows)
+  values (gym, me, 'set_day',
+          jsonb_build_object('student', student, 'day', day, 'name', day_name, 'items', items),
+          1, cardinality(kept));
+
+  return ro.id;
+end;
+$$;
+
+-- Tira o dia do plano do aluno (soft delete da rotina e dos exercicios).
+create or replace function public.staff_clear_day(gym text, student uuid, day smallint)
+returns int
+language plpgsql
+security definer
+set search_path = ''
+set voluma.staff_write = '1'
+as $$
+declare
+  me uuid := (select auth.uid());
+  ts timestamptz := clock_timestamp();
+  n  int;
+begin
+  perform public.require_staff(gym);
+  if not public.is_gym_student(gym, student) then
+    raise exception 'aluno fora da academia' using errcode = '42501';
+  end if;
+
+  update public.routine_exercises re
+     set deleted_at = ts, updated_at = public.staff_stamp(ts, re.updated_at)
+    from public.routines ro
+   where ro.id = re.routine_id
+     and ro.user_id = student and ro.gym_id = gym and ro.weekday = day
+     and ro.deleted_at is null and re.deleted_at is null;
+
+  update public.routines
+     set deleted_at = ts, updated_at = public.staff_stamp(ts, updated_at)
+   where user_id = student and gym_id = gym and weekday = day and deleted_at is null;
+  get diagnostics n = row_count;
+
+  insert into public.prescription_log (gym_id, actor_id, action, params, affected_students, affected_rows)
+  values (gym, me, 'clear_day', jsonb_build_object('student', student, 'day', day), 1, n);
+  return n;
+end;
+$$;
+
+-- Devolve o dia ao aluno: o plano fica como esta, mas deixa de ser prescrito.
+create or replace function public.staff_release_day(gym text, student uuid, day smallint)
+returns int
+language plpgsql
+security definer
+set search_path = ''
+set voluma.staff_write = '1'
+as $$
+declare
+  me uuid := (select auth.uid());
+  n  int;
+begin
+  perform public.require_staff(gym);
+
+  update public.routines
+     set prescribed_by = null, prescribed_at = null,
+         updated_at = public.staff_stamp(clock_timestamp(), updated_at)
+   where user_id = student and gym_id = gym and weekday = day
+     and deleted_at is null and prescribed_by is not null;
+  get diagnostics n = row_count;
+
+  insert into public.prescription_log (gym_id, actor_id, action, params, affected_students, affected_rows)
+  values (gym, me, 'release_day', jsonb_build_object('student', student, 'day', day), 1, n);
+  return n;
+end;
+$$;
+
+-- -------------------------------------------------------- filtro de alunos
+
+-- Os alunos da academia, com o que o painel precisa para filtrar. Todo filtro
+-- nulo e ignorado. A frequencia usa a MESMA regra do dia treinado do app e do
+-- `friend_weekly_days`: serie feita com `reps * weight_kg > 0`.
+create or replace function public.staff_find_students(
+  gym             text,
+  preset          uuid    default null,
+  has_exercise    text    default null,
+  prescribed_only boolean default false,
+  weeks           int     default 4,
+  min_days        int     default null,
+  max_days        int     default null,
+  inactive_since  date    default null
+)
+returns table (
+  user_id          uuid,
+  display_name     text,
+  handle           text,
+  preset_ids       uuid[],
+  prescribed_days  int,
+  self_edited_days int,
+  planned_days     int,
+  trained_days     int,
+  last_trained_on  date
+)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.require_staff(gym);
+  if weeks not between 1 and 52 then
+    raise exception 'janela invalida' using errcode = '22023';
+  end if;
+
+  return query
+  with alunos as (
+    select p.id as uid from public.profiles p where p.gym_id = gym
+    union
+    select r.user_id from public.routines r where r.gym_id = gym and r.deleted_at is null
+  ),
+  plano as (
+    select r.user_id as uid,
+           array_agg(distinct r.preset_id) filter (where r.preset_id is not null) as presets,
+           count(distinct r.weekday) filter (where r.prescribed_by is not null)::int as prescribed,
+           count(distinct r.weekday) filter (where r.prescribed_by is null and r.prescribed_at is not null)::int as self_edited,
+           count(distinct r.weekday)::int as planned
+      from public.routines r
+     where r.gym_id = gym and r.deleted_at is null
+     group by r.user_id
+  ),
+  -- `exists` por sessao, e nao join + distinct: para na primeira serie que
+  -- conta, em vez de levar todas as series da academia ate o distinct.
+  dias as (
+    select distinct s.user_id as uid, s.date
+      from public.sessions s
+     where s.gym_id = gym
+       and s.deleted_at is null
+       and exists (
+         select 1 from public.session_sets st
+          where st.session_id = s.id and st.user_id = s.user_id and st.gym_id = gym
+            and st.deleted_at is null and st.done and st.reps * st.weight_kg > 0
+       )
+  ),
+  -- Calculado uma vez para a academia, e nao uma subconsulta por aluno.
+  com_exercicio as (
+    select distinct r.user_id as uid
+      from public.exercises e
+      join public.routine_exercises re on re.exercise_id = e.id and re.deleted_at is null
+      join public.routines r on r.id = re.routine_id and r.deleted_at is null and r.gym_id = gym
+     where has_exercise is not null
+       and e.gym_id = gym
+       and e.deleted_at is null
+       and public.exercise_name_key(e.name) = public.exercise_name_key(has_exercise)
+  ),
+  freq as (
+    select d.uid,
+           (count(*) filter (where d.date > current_date - weeks * 7))::int as trained,
+           max(d.date) as last_on
+      from dias d
+     group by d.uid
+  )
+  select a.uid,
+         p.display_name,
+         p.handle,
+         coalesce(pl.presets, '{}'),
+         coalesce(pl.prescribed, 0),
+         coalesce(pl.self_edited, 0),
+         coalesce(pl.planned, 0),
+         coalesce(f.trained, 0),
+         f.last_on
+    from alunos a
+    left join public.profiles p on p.id = a.uid and p.gym_id = gym
+    left join plano pl on pl.uid = a.uid
+    left join freq f on f.uid = a.uid
+   where (preset is null or preset = any (pl.presets))
+     and (not prescribed_only or coalesce(pl.prescribed, 0) > 0)
+     and (min_days is null or coalesce(f.trained, 0) >= min_days)
+     and (max_days is null or coalesce(f.trained, 0) <= max_days)
+     and (inactive_since is null or f.last_on is null or f.last_on < inactive_since)
+     and (has_exercise is null or a.uid in (select c.uid from com_exercicio c))
+   order by lower(coalesce(p.display_name, p.handle, a.uid::text));
+end;
+$$;
+
+-- ------------------------------------------------------ lote: trocar exercicio
+
+-- Troca um exercicio por outro nos dias PRESCRITOS dos alunos da lista. Dia
+-- desvinculado ou do proprio aluno nao e tocado; dia ligado a uma ficha muda
+-- pela ficha (`include_presets`).
+--
+-- A linha velha sai (soft delete) e entra uma nova na mesma posicao, com as
+-- mesmas series e reps e carga 0: o ajuste da semana e o historico continuam
+-- presos ao exercicio velho, e a carga do novo vem do historico do aluno, se
+-- houver. Se o dia ja tem o exercicio novo, so o velho sai.
+--
+-- `dry_run` (o padrao) so conta. O painel aplica com a mesma lista que mostrou
+-- na previa.
+create or replace function public.staff_swap_exercise(
+  gym             text,
+  from_name       text,
+  to_name         text,
+  to_group        text,
+  to_kind         text,
+  students        uuid[],
+  include_presets boolean default false,
+  to_slug         text    default null,
+  dry_run         boolean default true
+)
+returns table (
+  students_affected     int,
+  rows_affected         int,
+  skipped_self_managed  int,
+  skipped_preset_linked int,
+  skipped_duplicate     int,
+  presets_affected      int
+)
+language plpgsql
+security definer
+set search_path = ''
+set voluma.staff_write = '1'
+as $$
+declare
+  me       uuid := (select auth.uid());
+  ts       timestamptz := clock_timestamp();
+  from_key text := public.exercise_name_key(from_name);
+  to_key   text := public.exercise_name_key(to_name);
+  n_stu    int;
+  n_rows   int;
+  n_self   int;
+  n_preset int;
+  n_dup    int;
+  n_pre    int := 0;
+  pe       record;
+begin
+  perform public.require_staff(gym);
+  if coalesce(from_key, '') = '' or coalesce(to_key, '') = '' or from_key = to_key then
+    raise exception 'troca invalida' using errcode = '22023';
+  end if;
+  if char_length(btrim(to_name)) > 80 or coalesce(to_kind, 'strength') not in ('strength', 'run') then
+    raise exception 'exercicio novo invalido' using errcode = '22023';
+  end if;
+  if cardinality(students) > 2000 then
+    raise exception 'no maximo 2000 alunos por lote' using errcode = '22023';
+  end if;
+  if include_presets and coalesce(btrim(to_slug), '') = '' then
+    raise exception 'a ficha precisa do movement_slug do exercicio novo' using errcode = '22023';
+  end if;
+
+  create temporary table if not exists pg_temp.swap_rows (
+    re_id uuid, routine_id uuid, user_id uuid, klass text,
+    position int, target_sets int, target_reps int, target_distance_km real, target_duration_min int
+  ) on commit drop;
+  truncate pg_temp.swap_rows;
+
+  insert into pg_temp.swap_rows
+  select re.id, ro.id, ro.user_id,
+         case
+           when ro.prescribed_by is not null then
+             case when exists (
+               select 1
+                 from public.routine_exercises re2
+                 join public.exercises e2 on e2.id = re2.exercise_id and e2.deleted_at is null
+                where re2.routine_id = ro.id and re2.deleted_at is null
+                  and public.exercise_name_key(e2.name) = to_key
+             ) then 'dup' else 'swap' end
+           when ro.preset_id is not null then 'preset'
+           else 'self'
+         end,
+         re.position, re.target_sets, re.target_reps, re.target_distance_km, re.target_duration_min
+    from public.routines ro
+    join public.routine_exercises re on re.routine_id = ro.id and re.deleted_at is null
+    join public.exercises e on e.id = re.exercise_id and e.deleted_at is null
+   where ro.gym_id = gym
+     and ro.user_id = any (students)
+     and ro.deleted_at is null
+     and public.exercise_name_key(e.name) = from_key;
+
+  select count(distinct s.user_id) filter (where s.klass in ('swap', 'dup'))::int,
+         count(*) filter (where s.klass in ('swap', 'dup'))::int,
+         count(*) filter (where s.klass = 'self')::int,
+         count(*) filter (where s.klass = 'preset')::int,
+         count(*) filter (where s.klass = 'dup')::int
+    into n_stu, n_rows, n_self, n_preset, n_dup
+    from pg_temp.swap_rows s;
+
+  if include_presets then
+    select count(*)::int into n_pre
+      from public.gym_preset_exercises gpe
+      join public.gym_presets gp on gp.id = gpe.preset_id and gp.deleted_at is null
+     where gpe.gym_id = gym and gpe.deleted_at is null
+       and public.exercise_name_key(gpe.name) = from_key;
+  end if;
+
+  if dry_run then
+    return query select n_stu, n_rows, n_self, n_preset, n_dup, n_pre;
+    return;
+  end if;
+
+
+  -- Trava as rotinas atingidas, sempre na mesma ordem: dois lotes ao mesmo
+  -- tempo esperam um pelo outro em vez de travar em deadlock.
+  perform 1 from public.routines r
+   where r.id in (select s.routine_id from pg_temp.swap_rows s where s.klass in ('swap', 'dup'))
+   order by r.id
+   for update;
+
+  -- O exercicio novo no catalogo de quem ainda nao tem.
+  insert into public.exercises (id, user_id, gym_id, name, muscle_group, kind, updated_at)
+  select gen_random_uuid(), u.user_id, gym, btrim(to_name), to_group, coalesce(to_kind, 'strength'), ts
+    from (select distinct s.user_id from pg_temp.swap_rows s where s.klass = 'swap') u
+   where not exists (
+     select 1 from public.exercises e
+      where e.user_id = u.user_id and e.gym_id = gym and e.deleted_at is null
+        and public.exercise_name_key(e.name) = to_key
+   );
+
+  update public.routine_exercises re
+     set deleted_at = ts, updated_at = public.staff_stamp(ts, re.updated_at)
+    from pg_temp.swap_rows s
+   where s.re_id = re.id and s.klass in ('swap', 'dup');
+
+  insert into public.routine_exercises
+    (id, user_id, gym_id, routine_id, exercise_id, position,
+     target_sets, target_reps, target_weight_kg, target_distance_km, target_duration_min, updated_at)
+  select gen_random_uuid(), s.user_id, gym, s.routine_id,
+         (select e.id from public.exercises e
+           where e.user_id = s.user_id and e.gym_id = gym and e.deleted_at is null
+             and public.exercise_name_key(e.name) = to_key
+           order by e.updated_at, e.id limit 1),
+         s.position, s.target_sets, s.target_reps, 0, s.target_distance_km, s.target_duration_min, ts
+    from pg_temp.swap_rows s
+   where s.klass = 'swap';
+
+  update public.routines r
+     set prescribed_by = me, prescribed_at = ts, updated_at = public.staff_stamp(ts, r.updated_at)
+   where r.id in (select s.routine_id from pg_temp.swap_rows s where s.klass in ('swap', 'dup'));
+
+  -- Nas fichas: o velho sai e o novo entra; o gatilho da v15 leva as duas
+  -- mudancas para as rotinas vinculadas. Troca de nome no lugar ele nao leva.
+  if include_presets then
+    for pe in
+      select gpe.*
+        from public.gym_preset_exercises gpe
+        join public.gym_presets gp on gp.id = gpe.preset_id and gp.deleted_at is null
+       where gpe.gym_id = gym and gpe.deleted_at is null
+         and public.exercise_name_key(gpe.name) = from_key
+       order by gpe.id
+    loop
+      update public.gym_preset_exercises
+         set deleted_at = ts, updated_at = ts
+       where id = pe.id;
+
+      if not exists (
+        select 1 from public.gym_preset_exercises x
+         where x.preset_id = pe.preset_id and x.deleted_at is null
+           and public.exercise_name_key(x.name) = to_key
+      ) then
+        insert into public.gym_preset_exercises
+          (preset_id, gym_id, movement_slug, name, muscle_group, kind, position,
+           target_sets, target_reps, target_distance_km, target_duration_min, updated_at)
+        values
+          (pe.preset_id, gym, btrim(to_slug), btrim(to_name), to_group, coalesce(to_kind, 'strength'),
+           pe.position, pe.target_sets, pe.target_reps, pe.target_distance_km, pe.target_duration_min, ts);
+      end if;
+    end loop;
+  end if;
+
+  insert into public.prescription_log (gym_id, actor_id, action, params, affected_students, affected_rows)
+  values (gym, me, 'swap_exercise',
+          jsonb_build_object('from', from_name, 'to', to_name, 'students', to_jsonb(students),
+                             'include_presets', include_presets),
+          n_stu, n_rows);
+
+  return query select n_stu, n_rows, n_self, n_preset, n_dup, n_pre;
+end;
+$$;
+
+-- ------------------------------------------------------ lote: series e reps
+
+-- Ajusta series e reps nos dias PRESCRITOS dos alunos da lista. Muda a propria
+-- linha: o ajuste da semana do aluno continua valendo ate domingo. Corrida nao
+-- entra. Filtros nulos sao ignorados; `*_set` ganha de `*_delta`.
+create or replace function public.staff_adjust_volume(
+  gym         text,
+  students    uuid[],
+  match_name  text     default null,
+  match_group text     default null,
+  match_day   smallint default null,
+  sets_delta  int      default 0,
+  reps_delta  int      default 0,
+  sets_set    int      default null,
+  reps_set    int      default null,
+  dry_run     boolean  default true
+)
+returns table (
+  students_affected     int,
+  rows_affected         int,
+  skipped_self_managed  int,
+  skipped_preset_linked int
+)
+language plpgsql
+security definer
+set search_path = ''
+set voluma.staff_write = '1'
+as $$
+declare
+  me     uuid := (select auth.uid());
+  ts     timestamptz := clock_timestamp();
+  n_stu  int;
+  n_rows int;
+  n_self int;
+  n_pre  int;
+begin
+  perform public.require_staff(gym);
+  if coalesce(sets_delta, 0) = 0 and coalesce(reps_delta, 0) = 0 and sets_set is null and reps_set is null then
+    raise exception 'nada para ajustar' using errcode = '22023';
+  end if;
+  if sets_set is not null and sets_set not between 1 and 12
+     or reps_set is not null and reps_set not between 1 and 100 then
+    raise exception 'valor fora do limite' using errcode = '22023';
+  end if;
+  if cardinality(students) > 2000 then
+    raise exception 'no maximo 2000 alunos por lote' using errcode = '22023';
+  end if;
+
+  create temporary table if not exists pg_temp.volume_rows (
+    re_id uuid, routine_id uuid, user_id uuid, klass text, new_sets int, new_reps int
+  ) on commit drop;
+  truncate pg_temp.volume_rows;
+
+  insert into pg_temp.volume_rows
+  select re.id, ro.id, ro.user_id,
+         case
+           when ro.prescribed_by is not null then 'adjust'
+           when ro.preset_id is not null then 'preset'
+           else 'self'
+         end,
+         greatest(1, least(12, coalesce(sets_set, re.target_sets + coalesce(sets_delta, 0)))),
+         greatest(1, least(100, coalesce(reps_set, re.target_reps + coalesce(reps_delta, 0))))
+    from public.routines ro
+    join public.routine_exercises re on re.routine_id = ro.id and re.deleted_at is null
+    join public.exercises e on e.id = re.exercise_id and e.deleted_at is null
+   where ro.gym_id = gym
+     and ro.user_id = any (students)
+     and ro.deleted_at is null
+     and e.kind <> 'run'
+     and (match_name is null or public.exercise_name_key(e.name) = public.exercise_name_key(match_name))
+     and (match_group is null or lower(e.muscle_group) = lower(match_group))
+     and (match_day is null or ro.weekday = match_day)
+     -- So o que muda de fato: linha igual nao precisa descer para o aparelho.
+     and (ro.prescribed_by is null
+          or re.target_sets <> greatest(1, least(12, coalesce(sets_set, re.target_sets + coalesce(sets_delta, 0))))
+          or re.target_reps <> greatest(1, least(100, coalesce(reps_set, re.target_reps + coalesce(reps_delta, 0)))));
+
+  select count(distinct v.user_id) filter (where v.klass = 'adjust')::int,
+         count(*) filter (where v.klass = 'adjust')::int,
+         count(*) filter (where v.klass = 'self')::int,
+         count(*) filter (where v.klass = 'preset')::int
+    into n_stu, n_rows, n_self, n_pre
+    from pg_temp.volume_rows v;
+
+  if dry_run then
+    return query select n_stu, n_rows, n_self, n_pre;
+    return;
+  end if;
+
+
+  perform 1 from public.routines r
+   where r.id in (select v.routine_id from pg_temp.volume_rows v where v.klass = 'adjust')
+   order by r.id
+   for update;
+
+  update public.routine_exercises re
+     set target_sets = v.new_sets, target_reps = v.new_reps,
+         updated_at = public.staff_stamp(ts, re.updated_at)
+    from pg_temp.volume_rows v
+   where v.re_id = re.id and v.klass = 'adjust';
+
+  update public.routines r
+     set prescribed_at = ts, prescribed_by = me, updated_at = public.staff_stamp(ts, r.updated_at)
+   where r.id in (select v.routine_id from pg_temp.volume_rows v where v.klass = 'adjust');
+
+  insert into public.prescription_log (gym_id, actor_id, action, params, affected_students, affected_rows)
+  values (gym, me, 'adjust_volume',
+          jsonb_build_object('students', to_jsonb(students), 'match_name', match_name,
+                             'match_group', match_group, 'match_day', match_day,
+                             'sets_delta', sets_delta, 'reps_delta', reps_delta,
+                             'sets_set', sets_set, 'reps_set', reps_set),
+          n_stu, n_rows);
+
+  return query select n_stu, n_rows, n_self, n_pre;
+end;
+$$;
+
+-- ---------------------------------------------------------- fichas no painel
+
+-- Grava uma ficha inteira (declarativa, como `staff_set_day`). Exercicio que
+-- troca de nome ou de movimento sai e entra de novo, porque o gatilho da v15 so
+-- leva series, reps, posicao e remocao para as rotinas vinculadas.
+--   preset = { "id"?: uuid, "name", "position"?, "exercises": [{ "id"?: uuid,
+--              "movement_slug", "name", "muscle_group", "kind", "sets", "reps",
+--              "distance_km", "duration_min" }] }
+create or replace function public.staff_upsert_preset(gym text, preset jsonb)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+set voluma.staff_write = '1'
+as $$
+declare
+  me   uuid := (select auth.uid());
+  ts   timestamptz := clock_timestamp();
+  pid  uuid := nullif(preset ->> 'id', '')::uuid;
+  item jsonb;
+  pos  int;
+  cur  public.gym_preset_exercises%rowtype;
+  kept uuid[] := '{}';
+  eid  uuid;
+begin
+  perform public.require_staff(gym);
+  if coalesce(btrim(preset ->> 'name'), '') = '' or char_length(btrim(preset ->> 'name')) > 60 then
+    raise exception 'nome da ficha invalido' using errcode = '22023';
+  end if;
+  if jsonb_typeof(preset -> 'exercises') <> 'array' or jsonb_array_length(preset -> 'exercises') > 30 then
+    raise exception 'lista de exercicios invalida' using errcode = '22023';
+  end if;
+  for item in select value from jsonb_array_elements(preset -> 'exercises') loop
+    perform public.check_prescription_item(item);
+    if coalesce(btrim(item ->> 'movement_slug'), '') = '' then
+      raise exception 'exercicio sem movement_slug: %', item using errcode = '22023';
+    end if;
+  end loop;
+
+
+  if pid is null then
+    insert into public.gym_presets (gym_id, name, position, updated_at)
+    values (gym, btrim(preset ->> 'name'), coalesce((preset ->> 'position')::int, 0), ts)
+    returning id into pid;
+  else
+    update public.gym_presets
+       set name = btrim(preset ->> 'name'),
+           position = coalesce((preset ->> 'position')::int, position),
+           updated_at = ts
+     where id = pid and gym_id = gym and deleted_at is null;
+    if not found then
+      raise exception 'ficha % nao e desta academia', pid using errcode = '22023';
+    end if;
+    -- O dia adotado tem o nome da ficha (repo.ts adota assim).
+    update public.routines
+       set name = btrim(preset ->> 'name'), updated_at = public.staff_stamp(ts, updated_at)
+     where preset_id = pid and deleted_at is null and name <> btrim(preset ->> 'name');
+  end if;
+
+  for item, pos in
+    select value, (ordinality - 1)::int from jsonb_array_elements(preset -> 'exercises') with ordinality
+  loop
+    eid := nullif(item ->> 'id', '')::uuid;
+    cur := null;
+    if eid is not null then
+      select * into cur from public.gym_preset_exercises
+       where id = eid and preset_id = pid and deleted_at is null;
+      if cur.id is null then
+        raise exception 'exercicio % nao e desta ficha', eid using errcode = '22023';
+      end if;
+    end if;
+
+    if cur.id is not null
+       and public.exercise_name_key(cur.name) = public.exercise_name_key(item ->> 'name')
+       and cur.movement_slug = btrim(item ->> 'movement_slug') then
+      update public.gym_preset_exercises
+         set position = pos,
+             muscle_group = item ->> 'muscle_group',
+             target_sets = coalesce((item ->> 'sets')::int, 3),
+             target_reps = coalesce((item ->> 'reps')::int, 10),
+             target_distance_km = coalesce((item ->> 'distance_km')::real, 0),
+             target_duration_min = coalesce((item ->> 'duration_min')::int, 0),
+             updated_at = ts
+       where id = cur.id;
+      kept := kept || cur.id;
+    else
+      insert into public.gym_preset_exercises
+        (preset_id, gym_id, movement_slug, name, muscle_group, kind, position,
+         target_sets, target_reps, target_distance_km, target_duration_min, updated_at)
+      values
+        (pid, gym, btrim(item ->> 'movement_slug'), btrim(item ->> 'name'), item ->> 'muscle_group',
+         coalesce(item ->> 'kind', 'strength'), pos,
+         coalesce((item ->> 'sets')::int, 3), coalesce((item ->> 'reps')::int, 10),
+         coalesce((item ->> 'distance_km')::real, 0), coalesce((item ->> 'duration_min')::int, 0), ts)
+      returning id into eid;
+      kept := kept || eid;
+    end if;
+  end loop;
+
+  update public.gym_preset_exercises
+     set deleted_at = ts, updated_at = ts
+   where preset_id = pid and deleted_at is null and not (id = any (kept));
+
+  insert into public.prescription_log (gym_id, actor_id, action, params, affected_students, affected_rows)
+  values (gym, me, 'upsert_preset', jsonb_build_object('preset', pid, 'body', preset), 0, cardinality(kept));
+
+  return pid;
+end;
+$$;
+
+-- Apaga uma ficha sem apagar o treino de quem a adotou: os dias vinculados se
+-- desvinculam ANTES (e ficam com os exercicios que tinham), e so depois a ficha
+-- e os exercicios dela saem. Na ordem contraria, o gatilho da v15 apagaria os
+-- exercicios das rotinas vinculadas.
+create or replace function public.staff_delete_preset(gym text, preset uuid)
+returns int
+language plpgsql
+security definer
+set search_path = ''
+set voluma.staff_write = '1'
+as $$
+declare
+  me uuid := (select auth.uid());
+  ts timestamptz := clock_timestamp();
+  n  int;
+begin
+  perform public.require_staff(gym);
+  if not exists (select 1 from public.gym_presets where id = preset and gym_id = gym and deleted_at is null) then
+    raise exception 'ficha % nao e desta academia', preset using errcode = '22023';
+  end if;
+
+  update public.routines
+     set preset_id = null, updated_at = public.staff_stamp(ts, updated_at)
+   where preset_id = preset and deleted_at is null;
+  get diagnostics n = row_count;
+
+  update public.gym_preset_exercises
+     set deleted_at = ts, updated_at = ts
+   where preset_id = preset and deleted_at is null;
+
+  update public.gym_presets
+     set deleted_at = ts, updated_at = ts
+   where id = preset;
+
+  insert into public.prescription_log (gym_id, actor_id, action, params, affected_students, affected_rows)
+  values (gym, me, 'delete_preset', jsonb_build_object('preset', preset), n, n);
+  return n;
+end;
+$$;
+
+-- ------------------------------------------------ conflito com o aluno offline
+
+-- A regra: edicao do aluno ANTERIOR a prescricao perde; posterior desvincula.
+-- Linha que ja existe ja e coberta pelo `sync_stamp` (versao mais velha e
+-- recusada). Falta a linha NOVA: um exercicio que o aluno pos offline num dia
+-- que o instrutor prescreveu depois entraria e misturaria os dois planos. Ela
+-- entra ja apagada, com carimbo novo, e o pull do mesmo ciclo apaga no aparelho.
+--
+-- So linha nova de verdade: o push e um upsert, e o BEFORE INSERT roda tambem
+-- quando o conflito vira UPDATE. Sem o `not exists`, uma edicao velha de uma
+-- linha existente viraria remocao com carimbo novo, passando pelo `sync_stamp`.
+--
+-- Os gatilhos BEFORE rodam em ordem alfabetica: este ("reject…") antes do
+-- `sync_stamp`, que carimba o `synced_at` por ultimo.
+create or replace function public.reject_stale_student_insert()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  stamp timestamptz;
+begin
+  if current_setting('voluma.staff_write', true) = '1' or new.deleted_at is not null then
+    return new;
+  end if;
+  select r.prescribed_at into stamp
+    from public.routines r
+   where r.id = new.routine_id and r.prescribed_by is not null;
+  if stamp is not null
+     and new.updated_at < stamp
+     and not exists (select 1 from public.routine_exercises re where re.id = new.id) then
+    new.deleted_at := clock_timestamp();
+    new.updated_at := clock_timestamp();
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.reject_stale_student_insert() from public, anon, authenticated;
+
+create or replace trigger reject_stale_student_insert
+  before insert on public.routine_exercises
+  for each row execute function public.reject_stale_student_insert();
+
+-- -------------------------------------------------------------- permissoes
+-- O Postgres da EXECUTE a PUBLIC em toda funcao nova, e `security definer` em
+-- `public` vira endpoint da API. Toda RPC do painel: so `authenticated`, e a
+-- primeira linha dela confere a academia.
+do $$
+declare
+  fn text;
+begin
+  foreach fn in array array[
+    'public.staff_invite(text, text, text)',
+    'public.staff_claim_invites()',
+    'public.staff_revoke_invite(text, text)',
+    'public.staff_remove(text, uuid)',
+    'public.staff_list(text)',
+    'public.staff_set_day(text, uuid, smallint, text, jsonb, timestamptz)',
+    'public.staff_clear_day(text, uuid, smallint)',
+    'public.staff_release_day(text, uuid, smallint)',
+    'public.staff_find_students(text, uuid, text, boolean, int, int, int, date)',
+    'public.staff_swap_exercise(text, text, text, text, text, uuid[], boolean, text, boolean)',
+    'public.staff_adjust_volume(text, uuid[], text, text, smallint, int, int, int, int, boolean)',
+    'public.staff_upsert_preset(text, jsonb)',
+    'public.staff_delete_preset(text, uuid)'
+  ]
+  loop
+    execute format('revoke all on function %s from public, anon', fn);
+    execute format('grant execute on function %s to authenticated', fn);
+  end loop;
+end $$;

@@ -20,6 +20,15 @@ export type FlagsMap = Record<string, boolean>;
 /** Liga as fichas sugeridas da academia (Plano, onboarding e `/presets`). */
 export const FLAG_SUGGESTED_WORKOUTS = 'suggested_workouts';
 
+/**
+ * A academia usa o painel (plano 18): a equipe dela ve o plano e a frequencia
+ * de quem entra com a conta. Liga o aviso no Perfil e no login.
+ */
+export const FLAG_STAFF_PANEL = 'staff_panel';
+
+/** O aviso de privacidade do painel, igual nos dois lugares. */
+export const STAFF_PANEL_NOTICE = 'A equipe da academia vê seu plano e sua frequência';
+
 export const storageKeyFor = (gym: string) => `@voluma:flags:${gym}`;
 
 type FlagsState = {
