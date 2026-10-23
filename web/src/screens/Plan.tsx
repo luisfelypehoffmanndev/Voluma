@@ -43,7 +43,9 @@ export function Plan({ gym, planId }: { gym: string; planId: string | null }) {
 
   useEffect(() => {
     let alive = true;
-    setLoad({ status: 'loading' });
+    // Recarregar (depois de salvar ou aplicar) troca os dados sem tirar a tela:
+    // voltar ao "Carregando" desmontaria o painel de atribuicao no meio do fluxo.
+    setLoad((current) => (current.status === 'ready' ? current : { status: 'loading' }));
     Promise.all([loadWorkouts(gym), planId ? loadPlans(gym) : Promise.resolve([]), planId ? loadPlanMembers(gym, planId) : Promise.resolve([])])
       .then(([workouts, plans, members]) => {
         if (!alive) return;

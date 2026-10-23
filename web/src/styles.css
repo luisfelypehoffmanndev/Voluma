@@ -721,3 +721,11 @@ a {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+.demo-bar {
+  margin: 0;
+  padding: 8px 32px;
+  font-size: 13px;
+  color: var(--text-2);
+  border-bottom: 1px solid var(--border);
+}
