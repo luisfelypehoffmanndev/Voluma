@@ -1,7 +1,18 @@
 # 20 — Planos da academia (programa da semana)
 
 **Depende de:** [18](18-painel-admin.md), [19](19-painel-web.md)
-**Estado:** planejado (2026-10-23). Nada implementado.
+**Estado:** **20.1 a 20.5 feitas** (2026-10-23).
+- **Backend:** v18 no Supabase (`v18_planos_academia`). Antes de aplicar, a v18 e o `20-planos.sql` passaram num ensaio na produção dentro de `rollback`. O hash das 13 funções é igual ao do banco local, e os 9 testes SQL passam no runner local.
+- **Painel:** aba Planos, editor dos treinos, alunos do plano, adicionar com prévia, e personalizar ou voltar ao plano na tela do aluno.
+- **App:** migração v8, pull dos planos e "Seguir plano".
+- **Testes:** Jest com 661 e Vitest com 17, todos passando.
+
+**Falta:** a 20.6, o teste no aparelho e no painel logado.
+
+Desvios do desenho abaixo:
+- `staff_plan_members` e `day_has_exceptions` foram acrescentadas para a tela do plano.
+- O app marca dias de plano como **PLANO**, com um texto genérico; o nome do plano aparece só no painel.
+- O lote de atribuição vai em pedaços de 200 alunos. Medido localmente: 100 alunos × 3 dias × 6 exercícios levam 0,17 s.
 
 ## Contexto
 
