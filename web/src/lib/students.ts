@@ -9,8 +9,10 @@ export type StudentRow = {
   display_name: string | null;
   handle: string | null;
   preset_ids: string[];
+  plan_ids?: string[];
   prescribed_days: number;
   self_edited_days: number;
+  customized_days?: number;
   planned_days: number;
   trained_days: number;
   last_trained_on: string | null;

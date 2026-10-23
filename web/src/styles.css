@@ -468,3 +468,248 @@ a {
     scroll-behavior: auto !important;
   }
 }
+
+/* ------------------------------------------------------- planos e edicao */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.page-head-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.head-actions {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+
+.title-input input {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--divider);
+  color: var(--text);
+  font: 600 30px/1.15 var(--sans);
+  letter-spacing: -0.02em;
+  padding: 4px 0;
+  width: min(560px, 80vw);
+}
+
+.panel {
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+}
+
+.panel h2,
+.sheet h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.panel p {
+  margin: 0;
+}
+
+.panel-head,
+.sheet-head,
+.sheet-foot,
+.pick-head,
+.editor-actions,
+.day-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.day-actions {
+  justify-content: start;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.week-picker {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.week-picker select {
+  min-width: 0;
+}
+
+.workouts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.workout-item {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--radius-inner);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font: 500 15px var(--sans);
+  text-align: left;
+  cursor: pointer;
+}
+
+.editor {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  border-radius: var(--radius-inner);
+  border: 1px solid var(--divider);
+}
+
+.exercise-list {
+  display: grid;
+  gap: 8px;
+}
+
+.exercise-list > p {
+  margin: 0;
+}
+
+.exercise-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.mini {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.mini input,
+.exercise-add input {
+  appearance: none;
+  width: 64px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font: 300 15px var(--mono);
+  padding: 8px;
+  border-radius: 8px;
+}
+
+.row-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.exercise-add {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.exercise-add input {
+  flex: 1;
+  width: auto;
+  font: 400 15px var(--sans);
+  padding: 10px 12px;
+}
+
+.error {
+  margin: 0 0 12px;
+  padding: 12px 16px;
+  border-radius: var(--radius-inner);
+  border: 1px solid var(--divider);
+  background: var(--surface-2);
+}
+
+.notice {
+  margin: 0 0 12px;
+  color: var(--text-2);
+}
+
+/* Folha lateral: atribuir alunos, editar o dia de um aluno. */
+.sheet {
+  position: fixed;
+  inset: 0 0 0 auto;
+  z-index: 2;
+  width: min(760px, 100vw);
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  padding: 24px;
+  border-left: 1px solid var(--divider);
+  background: rgba(14, 14, 14, 0.97);
+  backdrop-filter: blur(24px);
+}
+
+.sheet p {
+  margin: 0;
+}
+
+.sheet-foot {
+  position: sticky;
+  bottom: -24px;
+  padding: 16px 0;
+  background: rgba(14, 14, 14, 0.97);
+  border-top: 1px solid var(--border);
+}
+
+.pick-list,
+.preview-days {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.preview-days li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.day-tag {
+  width: 36px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+@media (max-width: 1100px) {
+  .week-picker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .exercise-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}

@@ -6,6 +6,8 @@ import { useRoute } from './lib/route';
 import { signOut, useSession } from './lib/session';
 import { GymPicker } from './screens/GymPicker';
 import { Login } from './screens/Login';
+import { Plan } from './screens/Plan';
+import { Plans } from './screens/Plans';
 import { Message } from './screens/Message';
 import { Student } from './screens/Student';
 import { Students } from './screens/Students';
@@ -103,6 +105,9 @@ export function App() {
           <a href="#/alunos" aria-current={route.name === 'students' || route.name === 'student' ? 'page' : undefined}>
             Alunos
           </a>
+          <a href="#/planos" aria-current={route.name === 'plans' || route.name === 'plan' ? 'page' : undefined}>
+            Planos
+          </a>
         </nav>
         <div className="account">
           <span className="muted">
@@ -125,11 +130,10 @@ export function App() {
         </div>
       </header>
       <main className="content">
-        {route.name === 'student' ? (
-          <Student gym={current.gym_id} studentId={route.id} />
-        ) : (
-          <Students gym={current.gym_id} />
-        )}
+        {route.name === 'student' ? <Student gym={current.gym_id} studentId={route.id} /> : null}
+        {route.name === 'students' ? <Students gym={current.gym_id} /> : null}
+        {route.name === 'plans' ? <Plans gym={current.gym_id} /> : null}
+        {route.name === 'plan' ? <Plan key={route.id ?? 'novo'} gym={current.gym_id} planId={route.id} /> : null}
       </main>
     </div>
   );
