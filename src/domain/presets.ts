@@ -84,3 +84,25 @@ export function preparePresetAdoption(
     };
   });
 }
+
+/**
+ * De quem e o dia: da ficha sugerida pela academia, do instrutor (prescrito
+ * pelo painel) ou do proprio aluno (`null`).
+ *
+ * Nos dois primeiros o dia esta VINCULADO: series e reps vem da academia, a
+ * carga vem do aluno (`resolveTargets`), e editar a composicao desvincula.
+ */
+export type RoutineLink = 'preset' | 'instructor' | null;
+
+export function routineLink(
+  routine: { presetId?: string | null; prescribedBy?: string | null } | null | undefined,
+): RoutineLink {
+  if (routine?.presetId) return 'preset';
+  if (routine?.prescribedBy) return 'instructor';
+  return null;
+}
+
+/** O que o dia vinculado deixa de seguir ao ser editado, para os avisos. */
+export function linkSourceName(link: Exclude<RoutineLink, null>): string {
+  return link === 'preset' ? 'a ficha da academia' : 'o treino do instrutor';
+}

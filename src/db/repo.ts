@@ -340,22 +340,25 @@ async function listRoutineExercises(
 }
 
 /**
- * Desvincula uma rotina da ficha sugerida se ela estiver vinculada.
+ * Desvincula uma rotina da ficha sugerida ou do instrutor, se estiver vinculada.
  * A regra de negocio quebra o vinculo automaticamente quando a composicao
  * de exercicios do dia e alterada pelo aluno (adicionar, remover ou reordenar).
+ *
+ * Do instrutor, zera so o `prescribed_by`: o `prescribed_at` fica, e e por ele
+ * que o painel mostra "editado pelo aluno" e os lotes deixam o dia de fora.
  */
 async function unlinkRoutineIfLinked(
   db: SQLiteDatabase,
   routineId: string,
   timestamp: string,
 ): Promise<void> {
-  const routine = await db.getFirstAsync<{ preset_id: string | null }>(
-    'SELECT preset_id FROM routines WHERE id = ? AND deleted_at IS NULL',
+  const routine = await db.getFirstAsync<{ preset_id: string | null; prescribed_by: string | null }>(
+    'SELECT preset_id, prescribed_by FROM routines WHERE id = ? AND deleted_at IS NULL',
     routineId,
   );
-  if (routine?.preset_id) {
+  if (routine?.preset_id || routine?.prescribed_by) {
     await db.runAsync(
-      'UPDATE routines SET preset_id = NULL, updated_at = ? WHERE id = ?',
+      'UPDATE routines SET preset_id = NULL, prescribed_by = NULL, updated_at = ? WHERE id = ?',
       timestamp,
       routineId,
     );
@@ -491,8 +494,8 @@ export async function reorderRoutineExercises(orderedIds: readonly string[]): Pr
 
 /**
  * De qual degrau da cascata sairam os numeros — a tela mostra isso ao usuario.
- * `preset`: treino vinculado a ficha da academia, com series e reps dela (a
- * carga continua vindo do historico, ver `resolveTargets`).
+ * `preset`: treino vinculado a ficha da academia ou ao instrutor, com series e
+ * reps de la (a carga continua vindo do historico, ver `resolveTargets`).
  */
 export type TargetSource = 'override' | 'preset' | 'lastActual' | 'plan';
 
@@ -639,7 +642,7 @@ export async function targetsForWeek(
       weekStart,
     ),
   ]);
-  const isLinked = Boolean(routineRow?.preset_id);
+  const isLinked = Boolean(routineRow?.preset_id || routineRow?.prescribed_by);
   const bySlot = new Map<string, WeekTarget>();
   for (const row of overrides) bySlot.set(row.routine_exercise_id, toWeekTarget(row));
 
@@ -835,8 +838,10 @@ export async function adoptPresetIntoDay(
       }
     }
 
+    // Adotar uma ficha num dia prescrito tira o dia do instrutor: quem o segue
+    // agora e a ficha.
     await db.runAsync(
-      'UPDATE routines SET preset_id = ?, name = ?, updated_at = ? WHERE id = ?',
+      'UPDATE routines SET preset_id = ?, prescribed_by = NULL, name = ?, updated_at = ? WHERE id = ?',
       preset.id,
       preset.name,
       timestamp,

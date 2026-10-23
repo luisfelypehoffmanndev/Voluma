@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
+import { FLAG_STAFF_PANEL, STAFF_PANEL_NOTICE, useFlag } from '@/store/flags';
 import { useProfile } from '@/store/profile';
 import { useAuth } from '@/sync/auth';
 import { colors, fontSize, radius, spacing, surfaces } from '@/theme/tokens';
@@ -22,6 +23,7 @@ import { Body, Meta } from '@/ui/Text';
 export default function LoginScreen() {
   const router = useRouter();
   const signInWithGoogle = useAuth((state) => state.signInWithGoogle);
+  const staffPanel = useFlag(FLAG_STAFF_PANEL);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +64,7 @@ export default function LoginScreen() {
         <View style={styles.intro}>
           <Body>Entrar com o Google</Body>
           <Meta>backup e segundo aparelho, seus treinos continuam no aparelho</Meta>
+          {staffPanel ? <Meta>{STAFF_PANEL_NOTICE}</Meta> : null}
         </View>
 
         {/* Erro em texto branco, nao em vermelho: o brief proibe segunda cor. */}
