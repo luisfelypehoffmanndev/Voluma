@@ -29,7 +29,7 @@ como verificar. A ideia é resolver um de cada vez.
 | [17](17-rodada-de-bugs.md) | Rodada de bugs: instalação nova, sync e dados do treino | bugs | **feito e verificado no aparelho** — v13 no Supabase; o teste no aparelho achou e corrigiu mais três (crash no "Criar plano", erro de sync escondido sem rede, divisor solto) |
 | [18](18-painel-admin.md) | Painel da academia: equipe (admin/instrutor), prescrição por aluno e em lote, conflito com o aluno offline | feature | **feito e verificado no aparelho** — v16 e v17 no Supabase, ensaio com rollback e testes no banco real passando; prescrever, receber no app e desvincular testados no app `teste`. O painel web fica para um plano próprio |
 | [19](19-painel-web.md) | Painel web da academia: login, alunos, editor do dia, lotes, fichas e equipe | feature | **passos 1 e 2 no código** (`web/`): login, academias, alunos e semana do aluno, só leitura; falta testar logado e os passos 3 em diante |
-| [20](20-planos.md) | Planos da academia: programa da semana, alunos no plano com exceções individuais, atribuição em lote com prévia | feature | **20.1 a 20.5 feitas** — v18 no Supabase, painel e app; falta o teste no aparelho |
+| [20](20-planos.md) | Planos da academia: programa da semana, alunos no plano com exceções individuais, atribuição em lote com prévia | feature | **feito e verificado no aparelho** — v18 no Supabase, painel (testado headless) e app; falta só o login real no painel |
 
 ## Pendências fora do código
 
