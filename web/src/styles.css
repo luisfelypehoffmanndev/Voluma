@@ -128,6 +128,14 @@ a {
   filter: brightness(1.08);
 }
 
+/* Desativado nao gasta a cor: o destaque e so para a acao que da para fazer. */
+.button-accent:disabled {
+  background: var(--surface-2);
+  border-color: var(--divider);
+  color: var(--text-2);
+  filter: none;
+}
+
 .link {
   appearance: none;
   background: none;

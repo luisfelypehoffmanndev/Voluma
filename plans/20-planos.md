@@ -7,7 +7,14 @@
 - **App:** migração v8, pull dos planos e "Seguir plano".
 - **Testes:** Jest com 661 e Vitest com 17, todos passando.
 
-**Falta:** a 20.6, o teste no aparelho e no painel logado.
+**20.6 feita** (2026-10-23):
+- **Painel:** testado num Chromium headless com o Supabase simulado, passando por criar treino e plano, adicionar alunos, prévia com conflito, "Substituir todos", aplicar e editar o dia, sem erro na página.
+- **App `teste` no S24, com o backend de verdade:**
+  - o plano atribuído pelo SQL chegou como PLANO;
+  - a exceção (Leg press 5×5) sobreviveu à mudança do treino, enquanto o Agachamento recebeu o 5×5 novo;
+  - remover um exercício no app tirou o dia do plano, e o `staff_plan_members` passou a mostrar 0 alunos.
+
+**Ainda não testado:** o login com Google no painel, que precisa de uma pessoa.
 
 Desvios do desenho abaixo:
 - `staff_plan_members` e `day_has_exceptions` foram acrescentadas para a tela do plano.
