@@ -3,7 +3,7 @@
 **Arquivos:** `supabase/schema.sql` (v16), `supabase/tests/18-painel.sql` (novo),
 `src/db/schema.ts`, `src/db/repo.ts`, telas do Plano, do dia e do onboarding
 **Depende de:** [16](16-multi-academia.md)
-**Estado:** **18.1 a 18.5 e 18.7 feitas; v16 aplicada no Supabase** (2026-10-23, migração `v16_painel_academia`). Ensaio da v16 + `18-painel.sql` na produção dentro de `rollback` passando; depois de aplicar, `16.6-presets.sql` e `17-relogio-do-servidor.sql` passando no banco real e o hash do corpo das 24 funções igual ao do banco local. Jest com 649 testes passando. **Falta:** aplicar a seção `v17` (3 índices de FK, achados na checagem dos advisors), o teste no aparelho e a 18.6 (Realtime, opcional). O painel web fica para um plano próprio.
+**Estado:** **18.1 a 18.5 e 18.7 feitas; v16 aplicada no Supabase** (2026-10-23, migração `v16_painel_academia`). Ensaio da v16 + `18-painel.sql` na produção dentro de `rollback` passando; depois de aplicar, `16.6-presets.sql` e `17-relogio-do-servidor.sql` passando no banco real e o hash do corpo das 24 funções igual ao do banco local. Jest com 649 testes passando. `v17` (3 índices de FK, achados na checagem dos advisors) aplicada em seguida. **Testado no aparelho** (app `teste`, 2026-10-23): o `staff_set_day` pelo SQL desceu no pull, o Plano mostrou "INSTRUTOR" e o dia "Treino do instrutor" com o 5×5 prescrito; remover um exercício mostrou o aviso, desvinculou, e o servidor ficou com `prescribed_by` nulo e `prescribed_at` mantido (`staff_find_students` passou a contar 1 dia "editado pelo aluno"). **Falta:** a 18.6 (Realtime, opcional). O painel web fica para um plano próprio.
 
 ### O que mudou na implementação (em relação ao desenho abaixo)
 
