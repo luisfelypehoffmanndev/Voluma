@@ -11,6 +11,18 @@ O repositório tem duas partes:
 
 Os dois falam com o mesmo Supabase.
 
+**Destaques**
+
+- **Local-first:** registra séries sem sinal dentro da academia; o SQLite do
+  aparelho é a fonte de verdade e a nuvem é opcional.
+- **Sincronização com outbox**, last-write-wins e soft delete, para nada se
+  perder entre aparelhos.
+- **Um app por academia** a partir do mesmo código, com dados isolados por RLS.
+- **Painel web** para a equipe montar fichas, planos e prescrições.
+
+**Stack:** React Native 0.81 · Expo 54 · expo-router · TypeScript · SQLite ·
+Supabase (Postgres, Auth, Storage, RLS) · Zustand · Jest · painel em Vite + React.
+
 ## Rodar
 
 ```bash
