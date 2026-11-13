@@ -1,3 +1,5 @@
+<img src=".github/readme/capa.png" alt="Voluma — registro de treino minimalista">
+
 # Voluma
 
 App de academia minimalista. Expo (iOS + Android). Interface em português,
@@ -22,6 +24,9 @@ Os dois falam com o mesmo Supabase.
 
 **Stack:** React Native 0.81 · Expo 54 · expo-router · TypeScript · SQLite ·
 Supabase (Postgres, Auth, Storage, RLS) · Zustand · Jest · painel em Vite + React.
+
+<img src=".github/readme/painel.png" alt="Painel da academia em modo demo: lista de alunos com frequência e último treino">
+<sub>Painel da academia no modo demo (<code>web/</code>, <code>?demo</code>), com dados fictícios.</sub>
 
 ## Rodar
 
