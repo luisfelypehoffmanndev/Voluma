@@ -1,13 +1,21 @@
-import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { colors, fontSize, fonts, hitSlop, radius } from '@/theme/tokens';
+import { colors, fontSize, fonts, layout, radius, surfaces } from '@/theme/tokens';
 import { MinusIcon, PlusIcon } from './icons';
 import { PressableSurface } from './PressableSurface';
-import { Label, Mono } from './Text';
+import { FONT_SCALE_CAP, Label, Mono } from './Text';
+import { useNumberDraft, useRepeatPress } from './useNumberInput';
 
-/** Lado do botao redondo de + e -, tambem o alvo de toque minimo confortavel. */
-const BUTTON_SIZE = 32;
+/**
+ * Lado do botao de + e -.
+ *
+ * Era 32, com hitSlop de 12 compensando — o alvo existia, mas o OLHO mirava um
+ * circulo de 32 e o polegar suado errava para o vizinho. 44 e o piso do iOS
+ * visivel; o `hitSlop` leva o alvo ate os 48 de `layout.touch`.
+ */
+export const STEP_BUTTON_SIZE = 44;
+const BUTTON_SIZE = STEP_BUTTON_SIZE;
+const BUTTON_SLOP = (layout.touch - BUTTON_SIZE) / 2;
 
 /** Largura minima da caixa do numero: cabe "137,5" sem o campo pular de tamanho. */
 const VALUE_WIDTH = 74;
@@ -100,47 +108,38 @@ export function Stepper({
   // somar 2.5 repetidas vezes, arredondando em duas casas.
   const round = (next: number) => (integer ? Math.trunc(next) : Math.round(next * 100) / 100);
 
-  // `null` = nao esta editando. O ref anda junto porque `onSubmitEditing` e
-  // `onBlur` disparam os dois no mesmo toque do "done": sem ele o segundo ainda
-  // enxergaria o rascunho do estado antigo e gravaria duas vezes.
-  const [draft, setDraft] = useState<string | null>(null);
-  const draftRef = useRef<string | null>(null);
-  const setBoth = (next: string | null) => {
-    draftRef.current = next;
-    setDraft(next);
-  };
+  const { draft, start: startEditing, change, commit: commitDraft } = useNumberDraft({
+    value,
+    format,
+    integer,
+    clamp,
+    onCommit: (next) => onChange(next, 'type'),
+  });
 
-  // O rascunho parte do valor guardado, nao do formatado: se o formato
-  // arredondasse, confirmar sem mexer gravaria outro numero. A excecao e quando
-  // a caixa nem mostra numero — o "—" da idade em branco no perfil —: ai comeca
-  // vazio, porque o valor interno por tras (-1) nao e algo que alguem deva ver.
-  const startEditing = () => {
-    const shown = format(value).replace(',', '.');
-    setBoth(Number.isFinite(Number(shown)) ? String(value).replace('.', ',') : '');
-  };
-
-  const commitDraft = () => {
-    const current = draftRef.current;
-    if (current === null) return;
-    setBoth(null);
-    // Virgula porque e o que o teclado pt-BR entrega e o que `formatWeight` mostra.
-    const parsed = Number(current.trim().replace(',', '.'));
-    // Campo vazio ou lixo digitado: mantem o valor que ja estava, nao zera.
-    if (current.trim() === '' || !Number.isFinite(parsed)) return;
-    onChange(clamp(round(parsed)), 'type');
-  };
+  const minus = useRepeatPress(
+    value,
+    (current) => clamp(round(current - step)),
+    (next) => onChange(next, 'step'),
+  );
+  const plus = useRepeatPress(
+    value,
+    (current) => clamp(round(current + step)),
+    (next) => onChange(next, 'step'),
+  );
 
   const controls = (
     <View style={styles.row}>
       <PressableSurface
         accessibilityLabel={`Diminuir ${label.toLowerCase()}`}
-        hitSlop={hitSlop}
-        onPress={() => onChange(clamp(round(value - step)), 'step')}
-        pressedOpacity={0.5}
+        hitSlop={BUTTON_SLOP}
+        onPress={minus.onPress}
+        onPressIn={minus.onPressIn}
+        onPressOut={minus.onPressOut}
+        feedback="control"
         borderRadius={radius.pill}
         style={styles.button}
       >
-        <MinusIcon size={16} color={colors.textSecondary} />
+        <MinusIcon size={18} color={colors.textPrimary} />
       </PressableSurface>
 
       <Pressable
@@ -155,13 +154,14 @@ export function Stepper({
           <TextInput
             accessibilityLabel={label}
             value={draft}
-            onChangeText={setBoth}
+            onChangeText={change}
             onBlur={commitDraft}
             onSubmitEditing={commitDraft}
             keyboardType={integer ? 'number-pad' : 'decimal-pad'}
             returnKeyType="done"
             selectTextOnFocus
             autoFocus
+            maxFontSizeMultiplier={FONT_SCALE_CAP.mono}
             style={[styles.value, styles.input]}
           />
         )}
@@ -170,13 +170,15 @@ export function Stepper({
 
       <PressableSurface
         accessibilityLabel={`Aumentar ${label.toLowerCase()}`}
-        hitSlop={hitSlop}
-        onPress={() => onChange(clamp(round(value + step)), 'step')}
-        pressedOpacity={0.5}
+        hitSlop={BUTTON_SLOP}
+        onPress={plus.onPress}
+        onPressIn={plus.onPressIn}
+        onPressOut={plus.onPressOut}
+        feedback="control"
         borderRadius={radius.pill}
         style={styles.button}
       >
-        <PlusIcon size={16} color={colors.textSecondary} />
+        <PlusIcon size={18} color={colors.textPrimary} />
       </PressableSurface>
     </View>
   );
@@ -206,9 +208,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    // 44 e o alvo de toque minimo; sem isto as linhas colam uma na outra e
-    // errar o + de cima e acertar o - de baixo vira rotina.
-    minHeight: 44,
+    // Sem isto as linhas colam uma na outra e errar o + de cima e acertar o -
+    // de baixo vira rotina. 48 de alvo + o respiro de `layout.touchGap`.
+    minHeight: layout.touch + layout.touchGap,
   },
   label: {
     marginBottom: 6,
@@ -217,12 +219,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  /**
+   * Nivel 2 preenchido, nao so contorno: o contorno fino de antes desenhava um
+   * circulo que o olho lia menor do que era. Preenchido, a area que se toca e a
+   * area que se ve.
+   */
   button: {
     width: BUTTON_SIZE,
     height: BUTTON_SIZE,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: surfaces.control,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
@@ -247,7 +255,7 @@ const styles = StyleSheet.create({
   },
   value: {
     fontFamily: fonts.monoLight,
-    fontSize: fontSize.numberSm,
+    fontSize: fontSize.numberLine,
     color: colors.textPrimary,
   },
   suffix: {

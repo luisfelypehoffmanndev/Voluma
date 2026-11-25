@@ -65,3 +65,28 @@ export function grayHex(value: number): string {
     .toUpperCase();
   return `#${channel}${channel}${channel}`;
 }
+
+/**
+ * Luminancia relativa (WCAG 2.x) de um cinza de valor `value`, em 0–255.
+ *
+ * O app e neutro, entao um canal basta: R = G = B e a luminancia e a do canal
+ * linearizado.
+ */
+export function luminance(value: number): number {
+  const channel = value / 255;
+  return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+}
+
+/**
+ * Razao de contraste WCAG entre dois cinzas, de 1 (iguais) a 21 (preto e
+ * branco). Texto pede 4,5; texto grande (>= 24px, ou 19px medium) pede 3.
+ *
+ * Existe porque toda superficie aqui e translucida: o fundo real de um texto
+ * nao esta escrito em lugar nenhum, ele resulta da pilha de alphas sobre o
+ * campo de luz. Sem a conta, "o cinza parece legivel" era a unica garantia —
+ * e ele nao era (o `#8A8A8A` sobre a linha de serie dava 3,0:1).
+ */
+export function contrast(a: number, b: number): number {
+  const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (light + 0.05) / (dark + 0.05);
+}

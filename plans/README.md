@@ -25,6 +25,7 @@ como verificar. A ideia é resolver um de cada vez.
 | [13](13-ranking-amigos.md) | Aba Amigos: ranking de dias treinados na semana | feature | **feito** — v7 rodada; substituído por 14 e 15 |
 | [14](14-amigos-graficos.md) | Aba Amigos: 12 semanas, consistência e corrida | feature | **feito** — v8 rodada; evoluído na tela de amigo no item 15 |
 | [15](15-avatar-e-nomes.md) | Foto de perfil, nome de exibição, cor por amigo e refatoração dos gráficos | feature | **feito** — v9 e v10 rodadas, bucket avatars criado, teste 15-avatar.sql passando |
+| [16](16-redesign.md) | Reset visual, rotinas A/B/C, descanso e funcionalidades de treino (8 ondas com gate) | feature | **em andamento** — Onda 0 |
 
 ## Pendências fora do código
 

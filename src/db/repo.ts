@@ -845,6 +845,38 @@ export async function completeSession(id: string): Promise<void> {
 }
 
 /**
+ * "Treinar": o relogio do treino comeca agora — mas so se ele ainda nao
+ * comecou de verdade.
+ *
+ * `started_at` nasce quando a sessao e criada (`getOrCreateSessionForDate`), e
+ * a sessao pode ser criada muito antes do treino: abrir o dia para olhar, de
+ * manha, e treinar a noite. O tempo decorrido do HUD contaria o dia inteiro.
+ * Aqui ele volta para o instante do toque, desde que NADA tenha sido marcado e
+ * o treino nao tenha sido finalizado. Com uma serie marcada, o treino ja esta
+ * em andamento e o relogio nao pode voltar para zero no meio dele.
+ *
+ * `finished_at` nao mexe: a cascata (`lastPerformedTargets`) o le como "sessao
+ * existente", e nao como hora de fim.
+ */
+export async function startSession(id: string, when = new Date()): Promise<void> {
+  const db = await getDb();
+  const timestamp = now();
+  await db.withTransactionAsync(async () => {
+    const result = await db.runAsync(
+      `UPDATE sessions SET started_at = ?, updated_at = ?
+        WHERE id = ? AND completed_at IS NULL
+          AND NOT EXISTS (SELECT 1 FROM session_sets
+                           WHERE session_id = ? AND done = 1 AND deleted_at IS NULL)`,
+      when.toISOString(),
+      timestamp,
+      id,
+      id,
+    );
+    if (result.changes > 0) await enqueue(db, 'sessions', id);
+  });
+}
+
+/**
  * O volume do treino anterior a `dateKey` que caiu no mesmo dia da semana e
  * levantou alguma carga. `null` se nao houver nenhum.
  *

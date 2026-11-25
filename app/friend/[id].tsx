@@ -216,7 +216,7 @@ function GoalCard({
       ) : (
         <>
           <View style={[styles.section, styles.goalHead]}>
-            <StatNumber value={String(goal.count)} unit={`de ${goal.of}`} size={fontSize.numberMd} />
+            <StatNumber value={String(goal.count)} unit={`de ${goal.of}`} size={fontSize.numberDisplay} />
             <Meta>semanas com os {person.plannedDays} dias do Plano</Meta>
           </View>
           <View style={styles.section}>
@@ -317,7 +317,7 @@ function Versus({
       <StatNumber
         value={String(value)}
         unit={unit}
-        size={strong ? fontSize.numberMd : fontSize.numberSm}
+        size={strong ? fontSize.numberDisplay : fontSize.numberLine}
         color={strong ? colors.textPrimary : colors.textSecondary}
       />
       <Meta>{label}</Meta>

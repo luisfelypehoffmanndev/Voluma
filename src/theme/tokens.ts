@@ -24,7 +24,26 @@ export const colors = {
   /** borda um pouco mais visivel, para marcar estado sem mudar preenchimento */
   borderStrong: 'rgba(255,255,255,0.18)',
   textPrimary: '#F5F5F5',
+  /**
+   * Cinza de icone apagado, desabilitado e texto direto sobre o FUNDO.
+   *
+   * Nao serve para texto sobre card: sob o halo mais forte o card compoe em
+   * ~`#2D2D2D`, e `#8A8A8A` cai para 4,0:1 — abaixo dos 4,5 que texto pede. Por
+   * isso o texto auxiliar tem token proprio (`textAux`). Este continua aqui
+   * porque o icone inativo da tab bar e calibrado contra ele (`tabIcon`).
+   */
   textSecondary: '#8A8A8A',
+  /**
+   * Texto auxiliar — rotulo, metadado, linha de baixo — sobre qualquer
+   * superficie do app.
+   *
+   * Calibrado pela conta, nao a olho: a pior superficie onde ele aparece e a
+   * linha de serie (nivel 2 a 0,09) sobre um card (0,06) sobre o pico do campo
+   * de luz, que compoe em ~`#404040`. Ali `#ADADAD` da 4,6:1. O teste em
+   * `composite.test.ts` falha se alguem baixar este cinza ou subir um alpha a
+   * ponto de passar abaixo de 4,5:1.
+   */
+  textAux: '#ADADAD',
   /**
    * Texto sobre fundo accent solido. Preto puro, e nao o `bg` quase-preto: sobre
    * o laranja, qualquer cinza no lugar do preto vira marrom sujo.
@@ -401,29 +420,67 @@ export const fonts = {
   sansMedium: 'Inter_500Medium',
 } as const;
 
-/** label 12–13, corpo 15–16, numero de destaque 48–72. */
+/**
+ * A escala tipografica: oito papeis, cada tamanho com UM trabalho.
+ *
+ * Eram dez tamanhos, com dois pares quase iguais (12/13 e 15/16) que nenhuma
+ * tela conseguia usar de proposito — a diferenca de 1px nao se le como
+ * hierarquia, so como descuido. O reset (plano 16, Onda 0) fundiu os pares e
+ * deu nome de papel a cada degrau. Texto sobe ~1,25x por degrau (13 → 16 → 20
+ * → 28); numero sobe ~1,65x (20 → 34 → 56), porque numero e o protagonista e
+ * precisa de salto maior para se distinguir de texto ao redor.
+ */
 export const fontSize = {
+  /** Rotulo em caixa alta: "VOLUME", "SÉRIE 3". Nome de campo, nunca frase. */
   label: 12,
-  labelLg: 13,
-  body: 15,
-  bodyLg: 16,
   /**
-   * Titulo de secao dentro de uma tela — "Treino de hoje", "Progresso".
-   *
-   * Existe porque sem ele a tela inteira vivia entre 12 e 16: nada era
-   * manifestamente mais importante que o resto, e o olho nao tinha onde
-   * pousar primeiro. Dois degraus acima do corpo e o minimo para um titulo
-   * ler como titulo.
+   * Texto auxiliar: metadado, linha de baixo, o que explica o dado. Tambem o
+   * PISO da sessao de treino — abaixo disto nao se le com o celular longe do
+   * rosto, em pe e com luz forte.
    */
-  section: 19,
+  aux: 13,
+  /** Corpo: nome de exercicio, item de lista, rotulo de botao. */
+  body: 16,
+  /** Titulo de bloco dentro da tela — o nome do treino, o nome do exercicio. */
+  section: 20,
   /** Titulo de tela ("Hoje", "Plano"). O maior texto em sans do app. */
-  title: 30,
-  /** numero secundario (o "43" ao lado da hora) */
-  numberSm: 20,
-  numberMd: 34,
-  /** numero protagonista da tela */
-  numberLg: 56,
-  numberXl: 72,
+  title: 28,
+  /** Numero numa linha: alvo de serie, estatistica secundaria. */
+  numberLine: 20,
+  /** Numero de destaque dentro de um card: um total, uma leitura do painel. */
+  numberDisplay: 34,
+  /**
+   * O numero heroi: um por tela, o dado que responde a pergunta da tela. Na
+   * sessao, a carga da serie da vez.
+   */
+  numberHero: 56,
+} as const;
+
+/**
+ * Os papeis do espacamento, sobre a escala de `spacing`.
+ *
+ * A escala diz QUANTO; isto diz PARA QUE. Sem os papeis, cada tela escolhia um
+ * degrau de cabeca e o mesmo papel (a margem da tela, o vao entre cards) caia
+ * em valores diferentes de uma tela para outra — o que le como ritmo quebrado
+ * mesmo quando ninguem sabe dizer por que.
+ */
+export const layout = {
+  /** Margem lateral da tela. */
+  screen: 20,
+  /** Recuo interno do card. */
+  cardPadding: 20,
+  /** Vao entre cards irmaos. */
+  cardGap: 12,
+  /** Vao antes de um rotulo de secao: separa "agir" de "consultar". */
+  sectionGap: 28,
+  /**
+   * Alvo minimo de toque — 48dp, o Android; 44pt e o piso do iOS. A pesquisa de
+   * polegar (MS Research, MobileHCI) aponta ~9,2–9,6mm, o que da os mesmos
+   * 48dp num aparelho comum. Vale para TUDO que se toca durante o treino.
+   */
+  touch: 48,
+  /** Respiro minimo entre dois alvos de toque vizinhos. */
+  touchGap: 8,
 } as const;
 
 export const hitSlop = { top: 12, bottom: 12, left: 12, right: 12 } as const;

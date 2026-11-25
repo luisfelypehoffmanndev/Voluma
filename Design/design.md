@@ -29,25 +29,33 @@ Pense em painel de instrumento (velocímetro, equalizador, terminal), não em "a
 
 Regra dura: se você usar `--accent` em mais de um elemento na mesma tela, volte e remova um.
 
-### O accent da home é o botão de treino
+### Os donos do accent
 
-Na home, o elemento accent é o **botão principal** ("Começar treino · 5 exercícios" / "Continuar treino · 2 de 5"), não mais o card de volume de 7 dias. A home tem um trabalho só — colocar o usuário no treino de hoje em um toque — e o que ele precisa achar de relance é esse botão, não um número. O card de volume virou vidro normal.
+O limite é um elemento accent por tela. Desde o reset do plano 16 (Onda 0), cada tipo de tela tem o seu dono **fixo**:
 
-Quando o botão deixa de ser o próximo passo (treino já finalizado, dia de descanso), ele vira vidro sem cor e a home fica sem accent nenhum. Isso é permitido: o limite é *no máximo* um.
+| Onde | Quem é o accent | Por quê |
+|---|---|---|
+| **As quatro telas de aba** (Hoje, Plano, Progresso, Perfil) | o **botão "Treinar"** no centro da barra | É a ação que existe de qualquer lugar do app: começar ou voltar ao treino de hoje. Ele é sólido, com glow e sem texto; o estado do dia aparece no ícone (ponto = em andamento, concluído = dia fechado). |
+| **A sessão de treino** | o **contorno da série da vez** | É a resposta a "o que eu faço agora?", que a pessoa pergunta entre todas as séries. Ele fica no bloco herói da série, a carga em mono grande. |
+| **Telas empilhadas** (resultado, catálogo, amigos…) | no máximo um elemento, escolhido pela tela | Não há barra, então o botão central não está lá. |
 
-Botão accent é sólido com o mesmo glow do card accent, e texto em `--bg`. Nunca aparece numa tela com caixas de concluído (ver a exceção abaixo): o "Finalizar treino" da sessão é vidro.
+Consequências:
+
+- **Nenhuma tela de aba usa accent em outro elemento.** O botão da Hoje, que já foi o accent da tela, virou vidro (nível 2) e mantém o rótulo com o estado ("Continuar treino · 2 de 16"). O botão central não tem espaço para dizer isso.
+- **O dado de gráfico fica fora da conta** (§6): o seu dado veste o laranja e o de cada amigo, a cor dele. Um gráfico de Números na mesma tela do botão central não é um segundo accent, é identidade de pessoa num gráfico.
+- **Telas de aba sem treino continuam com o botão laranja.** O limite é *no máximo* um, e a ação de treinar existe mesmo em dia de descanso ("Treino livre").
+
+Botão accent é sólido com o mesmo glow do card accent, e texto ou ícone em preto (`textOnAccent`).
 
 Nada de segunda cor de acento (sem verde de "sucesso", sem vermelho de "erro" decorativo). Estado negativo pode ser comunicado com texto/ícone em branco, não com cor.
 
-### A única exceção: a caixa de concluído
+### A exceção que caiu: a caixa de concluído
 
-Há um caso, e só um, em que `--accent` aparece repetido na mesma tela: a **caixa de concluído** do registro de treino (`app/session/[id].tsx`), uma por exercício.
+Até o plano 16, a caixa de concluído do treino era laranja, uma por série. Era a única exceção do limite de um accent por tela: a cor marcava um estado binário que se repete, e a leitura útil era a agregada (quantas caixas acesas).
 
-A exceção se sustenta porque a cor ali não está fazendo o trabalho que a regra proíbe. A regra existe para impedir que dois elementos *disputem* a atenção — dois destaques concorrentes diluem os dois. A caixa não destaca um exercício entre os outros: ela marca **um estado binário que se repete**, e o que o laranja comunica é a leitura agregada — quanto do treino já foi feito, visível de relance pela quantidade de caixas acesas. Uma única caixa laranja no meio de caixas apagadas seria a leitura errada.
+**Ela caiu porque o laranja tinha um trabalho mais importante:** dizer qual é a próxima série. Com as caixas laranja, a próxima série só podia se destacar por luz, e a pessoa entre séries tinha de procurar onde estava. Agora a caixa marcada é **branca sólida**, com o ícone em `--bg`. Aceso e apagado na mesma matiz é exatamente o que §7 pede para estado, e a leitura agregada continua de relance: as caixas brancas são as feitas.
 
-O limite continua valendo do lado de fora: numa tela que tem caixas de concluído, **nenhum outro elemento** pode usar accent. Foi por isso que o botão fixo de "registrar treino" saiu da tela quando as caixas entraram — os dois juntos seriam exatamente a disputa que a regra impede. Quando o treino ganhou fim, a barra fixa voltou como **"Finalizar treino · 3 de 5" em vidro de nível 3, sem accent** — a ação existe, mas não disputa cor com as caixas.
-
-Isso **não** abre precedente para cor de estado (§2, parágrafo acima): não existe caixa verde de "ok" nem vermelha de "falhou". O par é aceso/apagado na mesma matiz, e "não concluído" continua sendo ausência de cor, não outra cor.
+Não existe mais exceção ao limite de um accent por tela.
 
 ## 3. Tipografia
 
@@ -56,7 +64,24 @@ Duas famílias, papéis bem definidos — não uma pilha de 4 fontes "pra variar
 - **Display / números grandes (hora, peso, séries):** uma mono geométrica com traço fino — `Space Mono`, `JetBrains Mono` ou similar. É o que dá o ar "instrumento", como o relógio "08:26" das refs. Números grandes ficam com contorno fino (font-weight 300–400), não bold gordo.
 - **UI / labels / corpo:** uma sans neutra e discreta — `Inter` ou `SF Pro`. Peso 400–500. Nunca itálico.
 
-Escala: label 12–13px (secondary), corpo 15–16px, **título de bloco 19px**, **título de tela 30px**, número de destaque 48–72px. Números secundários (o "43" ao lado da hora) ficam menores e alinhados pela base, não pelo centro.
+Escala (`fontSize` em `tokens.ts`): **oito papéis, um tamanho cada**. Eram dez tamanhos, com dois pares quase iguais (12/13, 15/16) que nenhuma tela usava de propósito. A diferença de 1px não se lê como hierarquia, só como descuido.
+
+| Papel | Tamanho | Uso |
+|---|---|---|
+| `label` | 12, caixa alta, medium, espaçamento 0,8 | nome de campo: "VOLUME", "SÉRIE 3" |
+| `aux` | 13 | metadado, linha de baixo; **piso da sessão de treino** |
+| `body` | 16 | nome de exercício, item de lista, rótulo de botão |
+| `section` | 20 | título de bloco: o treino do dia, o nome na sessão |
+| `title` | 28 | título de tela |
+| `numberLine` | 20, mono | número numa linha de tabela; leitura do HUD |
+| `numberDisplay` | 34, mono | número de destaque dentro de um card |
+| `numberHero` | 56, mono | **um por tela**: o número que responde a pergunta da tela |
+
+O texto sobe ~1,25x por degrau (13 → 16 → 20 → 28). O número sobe ~1,65x (20 → 34 → 56), porque número é o protagonista e precisa de salto maior para se separar do texto em volta. Números secundários ficam menores e alinhados pela base, não pelo centro.
+
+**Cor do texto auxiliar: `textAux` (`#ADADAD`), nunca `textSecondary`.** Toda superfície aqui é translúcida, e o fundo real de um texto é a pilha de alphas sobre o campo de luz. Sob o halo mais forte, o `#8A8A8A` de antes dava 3,0:1 na linha da série e 4,0:1 no card, abaixo dos 4,5:1 que texto pede. `textAux` foi calibrado pela conta (`contrast()` em `composite.ts`) para 4,6:1 na pior superfície do app, e o teste falha se alguém baixar o cinza ou subir um alpha. `textSecondary` continua para ícone apagado, desabilitado e texto direto sobre o fundo.
+
+**A fonte do sistema escala, com teto por papel** (`FONT_SCALE_CAP` em `Text.tsx`). O corpo é o que mais cresce (até 2x), porque quem pediu fonte grande precisa ler o nome do exercício. Rótulo, título e número em coluna crescem menos (1,2–1,6x). Leituras de painel e números grandes param em 1,2x, porque já são grandes e dividem a largura em colunas fixas. Sem teto, no maior tamanho do iOS (~310%) o nome virava "Su…" ao lado do alvo, o volume do HUD desmontava e o "Finalizar treino" era cortado.
 
 Os dois degraus do meio — `Section` (19) e `Title` (30) — entraram depois, e por um motivo registrado: sem eles o app inteiro vivia entre 12 e 16px, nada era manifestamente mais importante que o resto e nenhuma tela dizia por onde começar a ler. Hierarquia aqui é **tamanho e espaço**, não cor: o brief só tem uma cor para gastar, e ela já tem dono.
 
@@ -67,6 +92,9 @@ Cada tela de aba tem **um herói**: o treino do dia na Hoje, a semana no Plano. 
 - Cards com `border-radius` grande e consistente (20–28px), mas **não em tudo indiscriminadamente** — o raio deve ser o mesmo em toda a hierarquia de um mesmo nível (todos os cards de nível 1 com o mesmo raio).
 - Grid tipo bento: blocos de tamanhos diferentes conforme a importância do dado (ex: peso corporal grande, calendário de streak menor), como no print do app de treino.
 - Espaçamento generoso. Respiro > densidade. Se parece PDF de planilha, tem elemento demais na tela.
+- **O espaçamento tem papéis** (`layout` em `tokens.ts`), por cima da escala de 4 (`spacing`): margem da tela 20, recuo do card 20, vão entre cards 12, vão antes de um rótulo de seção 28. A escala diz *quanto*; o papel diz *para quê*. Sem os papéis, o mesmo vão caía em valores diferentes de tela para tela.
+- **Alvo de toque mínimo de 48dp, com 8dp de respiro** (`layout.touch`, `layout.touchGap`), em tudo o que se toca durante o treino. O desenho pode ser menor (a caixa marcável tem 32, o botão do stepper tem 44), mas o `hitSlop` completa até 48. Botão preenchido, não só contorno: o olho mira o que vê, e um círculo de contorno fino é lido menor do que é.
+- **Linha de tabela em vez de card dentro de card.** As séries que não são a da vez são linhas com divisor, sem caixa própria. Só a da vez ganha superfície (nível 2). Antes cada série era um card dentro do card, e quatro séries enchiam a tela.
 - Divisores são linhas de 1px em `--divider`, nunca sombra difusa simulando linha.
 - Ícones: outline, peso fino, monocromáticos (branco ou secondary), nunca preenchidos coloridos. Wi-fi/bluetooth como nas refs — puramente funcionais, sem badge, sem cor.
 
@@ -121,9 +149,9 @@ Duas grandezas do vidro de nível 3, porém, **não** podem ser as mesmas nas du
 Este é o ponto onde o app deve ser reconhecível. Baseado nas refs:
 
 - **Gráficos de evolução com a forma mais óbvia para o dado:** barra vertical para quantidade por período (volume por semana, dias por semana), linha com área em degradê para evolução (carga, peso) e barra horizontal sobre trilho para partes de um todo (volume por grupo). Todo gráfico tem a escala de números redondos à direita e o nome dos meses embaixo, e nenhum precisa de legenda explicando a leitura.
-- **O dado veste a cor de quem ele é, com glow:** o seu é o laranja da marca, e cada amigo tem a cor dele (`people` em `tokens.ts`). Só a moldura (grade, eixos, textos) fica em cinza. Isso vale para os gráficos; fora deles, o accent continua em no máximo um elemento por tela, e a grade de treinos da home continua cinza porque o laranja dali é do botão de treino.
+- **O dado veste a cor de quem ele é, com glow:** o seu é o laranja da marca, e cada amigo tem a cor dele (`people` em `tokens.ts`). Só a moldura (grade, eixos, textos) fica em cinza. Isso vale para os gráficos, e o dado de gráfico não conta como o accent da tela (§2). Fora deles, o accent continua em no máximo um elemento por tela, e a grade de treinos (dot-matrix) continua cinza.
 - **Grade de pontos (dot-matrix)** para histórico/streak de treino ao longo do mês — pontos pequenos, apagados quando não há treino, cheios/brancos quando há. Não usar heatmap colorido tipo GitHub; manter em escala de cinza + 1 ponto em destaque se for recorde.
-- Números sempre como protagonistas visuais (peso, volume levantado, horas de sono) — a cor de fundo do card pode inverter (fundo laranja sólido, texto preto) *apenas* no card que representa o dado mais importante da tela, como no card de sono, e só numa tela em que a ação principal não seja um botão accent (§2: na home o accent é do botão de treino). Isso é o "uso mínimo mas com contraste" que você pediu: em vez de accent como detalhe pequeno, ocasionalmente ele vira o fundo de UM card inteiro para chamar atenção. Esse é o único card que continua **sólido**: laranja translúcido perde o soco.
+- Números sempre como protagonistas visuais (peso, volume levantado, a carga da série da vez). Existia um card de fundo laranja sólido para o dado mais importante de uma tela (o "card de sono" das referências). Ele saiu no plano 16: nenhuma tela o usava, e com o accent das abas no botão central e o da sessão na série da vez, não sobrou tela onde ele pudesse existir sem ser o segundo laranja.
 
 ### Celula marcável
 
@@ -131,7 +159,7 @@ Toda superfície pequena que representa **um item marcável ou marcado** usa a m
 
 O que muda entre os estados é **preenchimento e borda, nunca a forma nem o tamanho**: o quadrado tem a mesma caixa em todos os estados, e a borda existe mesmo quando é transparente, senão o conteúdo anda 1px ao entrar e sair do estado marcado.
 
-Marcada, a célula é laranja **sólido** com glow (`--accent` + a mesma sombra de offset zero do card accent) e o ícone em `--bg`. O glow é o que faz o laranja ler como neon em vez de retângulo chapado, e precisa de um wrapper próprio: `overflow: hidden` na própria forma recorta a sombra junto.
+Marcada, a célula é **branca sólida** (`--text-primary`) com o ícone em `--bg`. Desmarcada, ela tem só a borda (`borderStrong`). Não tem glow nem cor: até o plano 16 ela era laranja, e a exceção que isso abria no §2 foi desfeita (ver "A exceção que caiu"). O desenho tem 32 de lado e o alvo de toque tem 48.
 
 ## 7. O que evitar (sinais de "AI slop")
 
@@ -142,7 +170,7 @@ Marcada, a célula é laranja **sólido** com glow (`--accent` + a mesma sombra 
 - Grão ou ruído como "textura" decorativa, à procura de vibe analógica. O único ruído permitido é o do campo de luz, hoje a ~2 níveis — ele existe para mascarar banding, e se aparecer como textura subiu demais. Se ~2 níveis ainda não bastarem, a resposta não é subir mais: é trocar a arquitetura do campo.
 - Emojis como substituto de ícone.
 - Sombra pesada (`box-shadow` grande e difusa) em todo card — usar no máximo uma sombra sutil e só quando o card realmente flutua.
-- Mais de uma cor de destaque na mesma tela (a caixa de concluído é a exceção documentada em §2 — e é a única).
+- Mais de uma cor de destaque na mesma tela. Não há exceção desde o plano 16. O dado de gráfico com a cor da pessoa (§6) não conta como destaque.
 - Cor de estado: verde de "ok", vermelho de "falhou". Estado se comunica por aceso/apagado na mesma matiz, ou por texto.
 - Cantos arredondados com raios diferentes e aleatórios entre elementos do mesmo nível.
 - Checkbox/toggle redondo. Célula marcável é quadrado de cantos arredondados (§6).
@@ -235,7 +263,10 @@ Um toque seco, do tipo que lê como interruptor mecânico. Nada da família de "
 
 ## 11. Checklist antes de finalizar uma tela
 
-- [ ] Só uma cor de destaque apareceu nesta tela? (Exceção única: as caixas de concluído do registro de treino, §2 — e nessa tela nada mais pode usar accent.)
+- [ ] Só uma cor de destaque apareceu nesta tela? Nas abas, ela é o botão central; na sessão, a série da vez (§2).
+- [ ] Todo texto auxiliar está em `textAux` (ou num papel de `Text.tsx` que já o usa), e não em `textSecondary` sobre card?
+- [ ] Tudo o que se toca tem alvo de 48dp com 8dp de respiro?
+- [ ] A tela aguenta a fonte do sistema no maior tamanho sem cortar, sobrepor ou empurrar alvo para fora da tela?
 - [ ] Toda célula marcável é quadrado de cantos arredondados, com a mesma caixa em todos os estados?
 - [ ] O fundo é quase-preto (não preto puro, não cinza-azulado)?
 - [ ] Os números grandes estão em mono, não em sans bold?
@@ -247,3 +278,14 @@ Um toque seco, do tipo que lê como interruptor mecânico. Nada da família de "
 - [ ] O copy é direto e usa dado real, sem frase de "app motivacional"?
 - [ ] Nenhuma animação desta tela muda forma ou tamanho? (§10)
 - [ ] Tudo que se move está atrás de "reduzir movimento", e o estado final continua correto sem ele? (§10)
+
+## 12. O HUD da sessão
+
+Durante o treino, a tela responde três perguntas **sem rolar**: o que eu faço agora, quanto falta e quanto já fiz.
+
+- **Topo fixo** (`SessionHud`): o nome do treino e uma linha de três leituras de painel, com o rótulo em cima e o número em mono embaixo: **SÉRIES** `8/14` · **VOLUME** `4250 kg` · **TEMPO** `32:15`. Ele **nasce compacto e não encolhe ao rolar**. O pedido original era um topo que compacta com a rolagem, mas isso é animar tamanho, e o §10 proíbe. O volume de 56px, que ocupava o primeiro quarto da tela, desceu para esta linha.
+- **O número herói é a carga da série da vez**, em mono de 56px, com as reps ao lado em 34. Ele é lido com o celular apoiado no banco, a um braço de distância. O número **é o campo**: tocar abre o teclado numérico (60 → 80 kg em duas interações), e os botões embaixo só têm − e +. Segurar repete e acelera, sem háptico. O contorno do bloco é o único accent da tela (§2).
+- **O relógio** conta a partir do toque em "Treinar" (`startSession` reinicia `started_at` enquanto nada foi marcado). Ele é sempre `agora − início`, nunca um contador somado, e por isso volta certo do segundo plano. Fica num componente isolado para a tela não renderizar a cada segundo.
+- **Rodapé fixo**: "Finalizar treino · N de M", em vidro. É também o lugar do cronômetro de descanso, que chega no plano 16, Onda 4.
+- **No meio**, só o exercício da vez fica aberto. As séries feitas e as que ainda vêm são linhas de tabela, e terminar um exercício fecha o card e rola até o próximo.
+

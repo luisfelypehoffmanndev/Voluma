@@ -12,12 +12,14 @@ import {
   trainedDates,
   type WeekExercise,
 } from '@/db/repo';
+import { currentStreak } from '@/domain/streak';
 import { dayTitle } from '@/domain/today';
 import type { Routine } from '@/domain/types';
 import { formatDistance, formatDuration } from '@/domain/run';
 import { formatVolume, formatWeight, totalVolume, volumeByExercise } from '@/domain/volume';
 import {
   fromDateKey,
+  lastNDays,
   monthGrid,
   monthLabel,
   routineForWeekday,
@@ -49,6 +51,9 @@ import { ChevronLeftIcon, ChevronRightIcon } from '@/ui/icons';
  * eram tres linguagens brigando na mesma grade (circulo no selecionado,
  * sublinhado no hoje, nada nos demais), e a grade lia como quebrada.
  */
+/** Quanto para tras a sequencia olha. Mais de um ano seguido e caso de comemorar a parte. */
+const STREAK_WINDOW_DAYS = 400;
+
 export function CalendarPanel() {
   const clearance = useTabBarClearance();
   const router = useRouter();
@@ -63,6 +68,19 @@ export function CalendarPanel() {
 
   const month = useQuery(
     useCallback(async () => ({ trained: await trainedDates(firstKey, lastKey) }), [firstKey, lastKey]),
+  );
+
+  /**
+   * A sequencia de dias seguidos. Morava na Hoje, no card de progresso que saiu
+   * no plano 16; veio para ca porque e aqui que dias seguidos se leem — o mesmo
+   * calendario mostra quais sao.
+   */
+  const streak = useQuery(
+    useCallback(async () => {
+      const now = new Date();
+      const window = lastNDays(now, STREAK_WINDOW_DAYS);
+      return currentStreak(await trainedDates(window[0], toDateKey(now)), now);
+    }, []),
   );
 
   const day = useQuery(
@@ -128,6 +146,11 @@ export function CalendarPanel() {
           onPress={() => shiftMonth(1)}
         />
       </View>
+      {streak.data ? (
+        <Meta style={styles.streak}>
+          {`sequência · ${streak.data} ${streak.data === 1 ? 'dia seguido' : 'dias seguidos'}`}
+        </Meta>
+      ) : null}
 
       <Card>
         <View style={styles.weekdays}>
@@ -280,6 +303,10 @@ const styles = StyleSheet.create({
   monthTitle: {
     alignItems: 'center',
   },
+  streak: {
+    textAlign: 'center',
+    paddingBottom: spacing.sm,
+  },
   weekdays: {
     flexDirection: 'row',
     marginBottom: spacing.sm,
@@ -323,7 +350,7 @@ const styles = StyleSheet.create({
   },
   dayNumber: {
     fontFamily: fonts.monoLight,
-    fontSize: fontSize.labelLg,
+    fontSize: fontSize.aux,
     color: colors.textPrimary,
     textAlign: 'center',
     // O Android reserva um respiro extra em volta da linha a partir das metricas

@@ -45,7 +45,7 @@ export function Segmented<T extends string>({ options, value, onChange }: Props<
 const styles = StyleSheet.create({
   track: {
     flexDirection: 'row',
-    padding: 3,
+    padding: spacing.xs,
     borderRadius: radius.pill,
     backgroundColor: surfaces.card,
     borderWidth: StyleSheet.hairlineWidth,
@@ -53,7 +53,8 @@ const styles = StyleSheet.create({
   },
   segment: {
     flex: 1,
-    height: 34,
+    // 40 + o recuo de 4 do trilho dos dois lados = 48, o alvo de toque.
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,

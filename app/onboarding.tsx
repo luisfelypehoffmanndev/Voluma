@@ -359,7 +359,7 @@ const styles = StyleSheet.create({
   },
   wordmark: {
     fontFamily: fonts.monoLight,
-    fontSize: fontSize.numberXl,
+    fontSize: fontSize.numberHero,
     color: colors.textPrimary,
   },
   lead: {
@@ -383,7 +383,7 @@ const styles = StyleSheet.create({
   },
   stepNumber: {
     fontFamily: fonts.monoLight,
-    fontSize: fontSize.numberSm,
+    fontSize: fontSize.numberLine,
     color: colors.textSecondary,
     width: 20,
   },

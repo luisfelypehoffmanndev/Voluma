@@ -1,18 +1,18 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { accentGlow, colors, radius, spacing, surfaces } from '@/theme/tokens';
+import { accentGlow, colors, fonts, radius, spacing, surfaces } from '@/theme/tokens';
 
 import { GlassSurface } from './GlassSurface';
 import { PressableSurface } from './PressableSurface';
-import { Body } from './Text';
+import { Body, FONT_SCALE_CAP } from './Text';
 
 type Props = {
   label: string;
   onPress: () => void;
   /**
    * `primary` e o accent da tela: fundo laranja solido, texto preto. No maximo
-   * UM por tela, e nunca numa tela que tenha caixa de concluido (§2).
+   * UM por tela (§2) — e as telas de aba e a sessao ja tem o seu dono.
    * `secondary` e vidro de nivel 3, sem cor.
    * `inline` e nivel 2, para a acao que ROLA com a pagina — ver abaixo.
    */
@@ -69,7 +69,11 @@ export function Button({
   const content = (
     <View style={styles.content}>
       {icon}
-      <Body numberOfLines={1} style={[styles.label, { color: textColor }]}>
+      <Body
+        numberOfLines={1}
+        maxFontSizeMultiplier={FONT_SCALE_CAP.button}
+        style={[styles.label, { color: textColor }]}
+      >
         {label}
       </Body>
     </View>
@@ -104,9 +108,17 @@ export function Button({
   );
 }
 
+/**
+ * Altura do botao. Exportada porque quem empilha coisas acima de uma barra de
+ * botao (o aviso de desfazer da sessao) precisa saber onde ela termina.
+ *
+ * 56 e nao 54: o multiplo de 4 da escala, e 8 acima do alvo minimo de toque.
+ */
+export const BUTTON_HEIGHT = 56;
+
 const styles = StyleSheet.create({
   box: {
-    height: 54,
+    height: BUTTON_HEIGHT,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
@@ -152,7 +164,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
+  /** Medium: o rotulo de uma acao e o texto mais forte da linha em que esta. */
   label: {
     textAlign: 'center',
+    fontFamily: fonts.sansMedium,
   },
 });

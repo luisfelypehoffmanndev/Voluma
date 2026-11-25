@@ -1,4 +1,4 @@
-import { alphaOf, grayHex, grayOf, over, overlayAlpha, stack } from '../composite';
+import { alphaOf, contrast, grayHex, grayOf, over, overlayAlpha, stack } from '../composite';
 import { ambient, colors, glass, surfaces, tabIcon } from '../tokens';
 
 const BG = grayOf(colors.bg);
@@ -232,5 +232,41 @@ describe('o campo de luz', () => {
         expect(point.weight).toBeGreaterThanOrEqual(0);
       }
     });
+  });
+});
+
+describe('contraste do texto sobre a superficie real', () => {
+  /**
+   * A pior superficie de cada nivel: a mais clara, porque o texto e claro.
+   * Todas no pico do campo de luz, onde o halo mais levanta o fundo.
+   */
+  const field = over(HALO_PEAK, BG);
+  const card = over(alphaOf(surfaces.card), field);
+  const raised = over(alphaOf(surfaces.raised), card);
+  // A serie da vez mora numa superficie de controle dentro do card.
+  const control = over(alphaOf(surfaces.control), card);
+  const worstSurface = Math.max(field, card, raised, control);
+
+  it('calcula a razao WCAG nos extremos', () => {
+    expect(contrast(255, 0)).toBeCloseTo(21, 5);
+    expect(contrast(128, 128)).toBe(1);
+  });
+
+  it('o texto auxiliar passa 4,5:1 em qualquer superficie do app', () => {
+    for (const surface of [field, card, raised, control]) {
+      expect(contrast(grayOf(colors.textAux), surface)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('o texto principal passa 7:1 (AAA) mesmo na superficie mais clara', () => {
+    expect(contrast(grayOf(colors.textPrimary), worstSurface)).toBeGreaterThanOrEqual(7);
+  });
+
+  it('o cinza antigo NAO serve para texto sobre card — e por isso existe textAux', () => {
+    // Trava o diagnostico: se alguem voltar a usar textSecondary como texto de
+    // card, a conta diz por que nao.
+    expect(contrast(grayOf(colors.textSecondary), control)).toBeLessThan(4.5);
+    // Direto no fundo, mesmo no pico do halo, ele ainda passa.
+    expect(contrast(grayOf(colors.textSecondary), field)).toBeGreaterThanOrEqual(4.5);
   });
 });

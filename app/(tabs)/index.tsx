@@ -1,103 +1,56 @@
-import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
-import {
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 
 import {
-  getOrCreateSessionForDate,
   getSessionByDate,
-  listBodyWeightLogs,
   listRoutines,
   listSessionSets,
   routineExerciseCounts,
   targetsForWeek,
-  volumeByDate,
   type WeekExercise,
 } from '@/db/repo';
 import { applyOrder } from '@/domain/order';
-import { buildDotMatrix, currentStreak } from '@/domain/streak';
 import { formatDistance, formatDuration } from '@/domain/run';
 import { dayTitle, workoutState, type WorkoutState } from '@/domain/today';
-import { formatVolume, formatWeight } from '@/domain/volume';
+import { formatWeight } from '@/domain/volume';
 import type { Routine, Weekday } from '@/domain/types';
-import {
-  daysSinceMonthStart,
-  lastNDays,
-  routineForWeekday,
-  toDateKey,
-  weekStartKey,
-  weekdayName,
-  weekdayOf,
-} from '@/domain/week';
-import { bumpData, useQuery } from '@/store/data';
-import { colors, fontSize, radius, spacing } from '@/theme/tokens';
+import { routineForWeekday, toDateKey, weekStartKey, weekdayName, weekdayOf } from '@/domain/week';
+import { useQuery } from '@/store/data';
+import { colors, fontSize, layout, spacing } from '@/theme/tokens';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
-import { DotMatrix } from '@/ui/DotMatrix';
-import { PressableSurface } from '@/ui/PressableSurface';
-import { ProgressRing } from '@/ui/ProgressRing';
 import { shortDate } from '@/ui/relative';
 import { LoadError } from '@/ui/LoadError';
 import { Header, Screen } from '@/ui/Screen';
+import { SetMeter } from '@/ui/SetMeter';
 import { Tour } from '@/ui/tour/Tour';
 import { TourTarget } from '@/ui/tour/TourTarget';
-import { StatNumber } from '@/ui/StatNumber';
 import { useTabBarClearance } from '@/ui/tabBar';
 import { Reveal } from '@/ui/Reveal';
 import { Body, Label, Meta, Mono, Section } from '@/ui/Text';
+import { useStartWorkout } from '@/ui/useStartWorkout';
 
 /**
- * Blocos de mes no dot-matrix da home: o mes corrente e os cinco anteriores.
+ * Hoje — um trabalho so: dizer qual e o treino do dia, em que pe ele esta, e
+ * levar ate ele em um toque.
  *
- * Seis meses, e nao tres, por geometria. Com tres meses sao ~14 colunas, que
- * nao preenchem a largura do card sem engordar a celula: ou a grade fica
- * centralizada com margens grandes nas pontas, ou cresce para ~130px de altura.
- * Com seis meses sao ~30 colunas, e a celula pequena preenche o card
- * naturalmente numa faixa baixa — que e a proporcao da referencia.
- */
-const MATRIX_MONTHS = 5;
-
-/**
- * Home — "Foco Unico": um trabalho so, te colocar no treino de hoje em um toque.
+ * **O que saiu** (plano 16, Onda 0): o card PROGRESSO, com peso, volume de 7
+ * dias, sequencia e o dot-matrix. Cada um desses dados ja morava em outro lugar
+ * (peso no Perfil, volume nos Numeros, a grade no Calendario), e a Hoje era a
+ * segunda casa de todos. Dado em dois lugares e o mesmo numero para manter
+ * sincronizado e uma tela a mais disputando o olho. A sequencia foi para o
+ * Calendario, que e onde dias seguidos se leem.
  *
- * O treino abria ao tocar no card "HOJE", que nao tinha cara de botao, no meio
- * de cinco cards disputando atencao. Agora a acao principal e um botao de
- * verdade, logo abaixo do card do dia, com o dado no rotulo ("Começar treino ·
- * 5 exercícios").
- *
- * Uma unica cor de destaque nesta tela: esse botao, quando ele e a acao
- * principal (comecar ou continuar). O card de volume de 7 dias, que era o card
- * accent solido, virou vidro normal — dois laranjas brigariam, e o que o
- * usuario precisa achar de relance e o botao, nao o numero. Treino ja
- * finalizado ou dia de descanso: o botao vira vidro e a tela fica sem accent.
- *
- * O dot-matrix continua com `showRecord={false}`: o ponto de recorde tambem e
- * accent.
+ * **O accent desta tela e o botao central da barra**, nao o botao daqui. Os
+ * dois fazem a mesma coisa (`useStartWorkout`); este existe porque carrega o
+ * estado do dia no rotulo ("Continuar treino · 2 de 16"), que o circulo da
+ * barra nao tem espaco para dizer. Por isso ele e vidro.
  */
 export default function HomeScreen() {
   const clearance = useTabBarClearance();
-  const router = useRouter();
-  const { width } = useWindowDimensions();
-
-  // Largura util dentro do card: tela menos as margens da tela e o padding do
-  // card dos dois lados.
-  const matrixWidth = width - spacing.xl * 4;
+  const openWorkout = useStartWorkout();
 
   const { data, loading, error, reload } = useQuery(useCallback(() => loadHome(), []));
-
-  // Um treino por data: abrir de novo cai no mesmo registro, com os numeros que
-  // ja foram gravados. "Comecar" e "continuar" abrem a mesma sessao; o que muda
-  // e so o rotulo, que diz em que pe o dia esta.
-  const openWorkout = async () => {
-    const session = await getOrCreateSessionForDate(new Date());
-    bumpData();
-    router.push(`/session/${session.id}`);
-  };
 
   if (error) {
     return (
@@ -117,15 +70,15 @@ export default function HomeScreen() {
     );
   }
 
-  const { today, upcoming, weekVolume, bodyWeight, dots, streak } = data;
+  const { today, upcoming } = data;
+  const hasPlan = today.exercises.length > 0;
 
   return (
     <Screen
       overlay={
         /* No `overlay` do `Screen`, e nao entre os filhos: ali a camada e irma
            do conteudo e cobre a tela inteira, nas mesmas coordenadas de janela
-           em que o alvo foi medido. Dentro do conteudo ela comecaria abaixo da
-           area segura e o recorte sairia deslocado. */
+           em que o alvo foi medido. */
         <Tour
           id="home"
           active
@@ -134,7 +87,7 @@ export default function HomeScreen() {
               target: 'home.action',
               // Uma frase que vale em todo estado do dia: em dia de descanso
               // nao ha numero nenhum no botao, e falar dele seria mentira.
-              text: 'O treino de hoje começa aqui.',
+              text: 'O treino de hoje começa aqui, ou no botão do meio da barra.',
             },
           ]}
         />
@@ -142,143 +95,100 @@ export default function HomeScreen() {
     >
       <Header title="Hoje" subtitle={todaySubtitle()} />
 
-      {/* O `Header` fica FORA do fade: ele ja estava na tela durante o
-          carregamento, e faze-lo acender de novo seria animar uma troca que
-          nao aconteceu. So o conteudo, que ate agora era um spinner, entra. */}
       <Reveal style={styles.reveal}>
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* O HEROI da tela: o treino de hoje, e so ele, com o nome em titulo de
-            secao e as series em mono grande. Tudo aqui era corpo de 16 no meio
-            de cinco cards do mesmo tamanho, e nada dizia por onde comecar.
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* O HEROI da tela: o treino de hoje. Tres andares, do mais para o
+              menos importante: o nome, em que pe o dia esta (o numero e o
+              medidor), e a lista do que tem. O card nao e tocavel — quem abre o
+              treino e o botao logo abaixo. */}
+          <Card>
+            <Label>{dayLabel(today.weekday, today.exercises.length)}</Label>
+            <Section numberOfLines={2} style={styles.todayName}>
+              {today.name}
+            </Section>
 
-            O card nao e tocavel: quem abre o treino e o botao logo abaixo. Um
-            card que as vezes e botao ensina a tocar em todo card, e os outros
-            daqui levam a outras telas. */}
-        <Card>
-          <View style={styles.todayHead}>
-            <View style={styles.todayText}>
-              <Label>{weekdayName(today.weekday).toUpperCase()}</Label>
-              <Section numberOfLines={1} style={styles.todayName}>
-                {today.name}
-              </Section>
-              {/* A orientacao da tela, em UMA linha: o que falta fazer hoje.
-                  Mais que isso vira parede de texto na tela que a pessoa abre
-                  dez vezes por semana. */}
-              <Meta numberOfLines={1}>{todayHint(today.state, today.sets)}</Meta>
-            </View>
-            {/* O anel mostra as series do dia: o numero e o total, e o arco, o
-                quanto ja foi marcado. Antes o arco so conhecia dois estados
-                (0 ou 1), entao ficava vazio durante o treino inteiro. */}
-            <ProgressRing
-              progress={today.sets.total > 0 ? today.sets.done / today.sets.total : 0}
-              value={String(today.sets.total)}
-            />
-          </View>
-
-          {today.exercises.slice(0, MAX_TODAY_ROWS).map((item) => (
-            <View key={item.id} style={styles.exerciseRow}>
-              <Body numberOfLines={1} style={styles.exerciseName}>
-                {item.exerciseName}
-              </Body>
-              <Mono style={styles.exerciseTargets}>{targetsLabel(item)}</Mono>
-            </View>
-          ))}
-
-          {today.exercises.length > MAX_TODAY_ROWS ? (
-            <Meta style={styles.moreRow}>
-              {`+${today.exercises.length - MAX_TODAY_ROWS} exercícios`}
-            </Meta>
-          ) : null}
-        </Card>
-
-        <TourTarget id="home.action">
-          <TodayAction state={today.state} sets={today.sets} onPress={openWorkout} />
-        </TourTarget>
-
-        {/* Daqui para baixo e consulta, nao acao: um titulo de secao separa, e
-            os numeros encolhem. Antes peso, volume e sequencia ocupavam tres
-            cards do mesmo tamanho do treino de hoje. */}
-        <Label style={styles.sectionLabel}>PROGRESSO</Label>
-
-        <Card>
-          <View style={styles.stats}>
-            <PressableSurface
-              feedback="raised"
-              borderRadius={radius.inner}
-              style={styles.stat}
-              onPress={() => router.push('/bodyweight')}
-              accessibilityLabel="Peso corporal"
-            >
-              <StatNumber
-                value={bodyWeight ? formatWeight(bodyWeight.weightKg) : '—'}
-                unit="kg"
-                size={fontSize.numberSm}
-              />
-              <Meta numberOfLines={1}>Peso</Meta>
-            </PressableSurface>
-
-            <View style={styles.statDivider} />
-
-            <PressableSurface
-              feedback="raised"
-              borderRadius={radius.inner}
-              style={styles.stat}
-              onPress={() => router.push('/history?view=numbers')}
-              accessibilityLabel="Volume dos últimos 7 dias"
-            >
-              <StatNumber value={formatVolume(weekVolume)} unit="kg" size={fontSize.numberSm} />
-              <Meta numberOfLines={1}>7 dias</Meta>
-            </PressableSurface>
-
-            <View style={styles.statDivider} />
-
-            <View style={styles.stat}>
-              <StatNumber value={String(streak)} size={fontSize.numberSm} />
-              <Meta numberOfLines={1}>{streak === 1 ? 'dia seguido' : 'dias seguidos'}</Meta>
-            </View>
-          </View>
-
-          <View style={styles.matrix}>
-            <DotMatrix dots={dots} width={matrixWidth} showRecord={false} />
-          </View>
-        </Card>
-
-        {upcoming.length > 0 ? (
-          <>
-            <Label style={styles.sectionLabel}>PRÓXIMOS</Label>
-            <Card>
-              {upcoming.map((day, index) => (
-                <View
-                  key={day.weekday}
-                  style={[styles.upcomingRow, index > 0 && styles.upcomingDivided]}
-                >
-                  <Body numberOfLines={1} style={styles.exerciseName}>
-                    {day.name}
-                  </Body>
-                  <Meta>{weekdayName(day.weekday)}</Meta>
+            {hasPlan || today.sets.total > 0 ? (
+              <View style={styles.readout}>
+                <View style={styles.readoutNumber}>
+                  <Mono style={styles.readoutDone}>{String(today.sets.done)}</Mono>
+                  <Mono style={styles.readoutTotal}>{`/${today.sets.total}`}</Mono>
+                  <Meta style={styles.readoutUnit}>séries</Meta>
                 </View>
-              ))}
-            </Card>
-          </>
-        ) : null}
-      </ScrollView>
+                <Meta numberOfLines={1}>{todayHint(today.state, today.sets)}</Meta>
+              </View>
+            ) : (
+              <Meta style={styles.restHint}>{todayHint(today.state, today.sets)}</Meta>
+            )}
+
+            <SetMeter done={today.sets.done} total={today.sets.total} />
+
+            {hasPlan ? (
+              <View style={styles.list}>
+                {today.exercises.slice(0, MAX_TODAY_ROWS).map((item) => {
+                  const finished = today.finishedIds.has(item.exerciseId);
+                  return (
+                    <View key={item.id} style={styles.exerciseRow}>
+                      {/* Duas linhas: com fonte grande o nome quebra em vez de
+                          virar "Su…" ao lado do alvo. */}
+                      <Body
+                        numberOfLines={2}
+                        style={[styles.exerciseName, finished && styles.finished]}
+                      >
+                        {item.exerciseName}
+                      </Body>
+                      <Mono style={styles.exerciseTargets}>
+                        {finished ? 'feito' : targetsLabel(item)}
+                      </Mono>
+                    </View>
+                  );
+                })}
+
+                {today.exercises.length > MAX_TODAY_ROWS ? (
+                  <Meta style={styles.moreRow}>
+                    {`+${today.exercises.length - MAX_TODAY_ROWS} exercícios`}
+                  </Meta>
+                ) : null}
+              </View>
+            ) : null}
+          </Card>
+
+          <TourTarget id="home.action">
+            <TodayAction state={today.state} sets={today.sets} onPress={() => void openWorkout()} />
+          </TourTarget>
+
+          {upcoming.length > 0 ? (
+            <>
+              <Label style={styles.sectionLabel}>PRÓXIMOS</Label>
+              <Card>
+                {upcoming.map((day, index) => (
+                  <View
+                    key={day.weekday}
+                    style={[styles.upcomingRow, index > 0 && styles.upcomingDivided]}
+                  >
+                    <Body numberOfLines={1} style={styles.exerciseName}>
+                      {day.name}
+                    </Body>
+                    <Meta>{weekdayName(day.weekday)}</Meta>
+                  </View>
+                ))}
+              </Card>
+            </>
+          ) : null}
+        </ScrollView>
       </Reveal>
     </Screen>
   );
 }
 
 /**
- * O botao principal da home, com o estado do dia no rotulo.
+ * O botao da Hoje, com o estado do dia no rotulo.
  *
- * Primario (accent) so quando ele e o proximo passo — comecar ou continuar.
- * Treino finalizado e dia de descanso ainda podem abrir a sessao, mas ai e
- * consulta ou extra, nao a acao do dia: nivel 2, sem cor.
- *
- * Nivel 2 e nao vidro porque este botao mora no `ScrollView` da home e rola com
- * ele — ver a nota de posicao em `Button.tsx`.
+ * Nivel 2 (`inline`) em todos os estados: ele rola com a pagina (ver a nota de
+ * posicao em `Button.tsx`), e o accent da tela e do botao central da barra.
+ * O que muda entre os estados e so o texto.
  */
 function TodayAction({
   state,
@@ -290,47 +200,44 @@ function TodayAction({
   sets: { done: number; total: number };
   onPress: () => void;
 }) {
-  switch (state.kind) {
-    case 'notStarted':
-      return (
-        <Button
-          variant="primary"
-          label={`Começar treino · ${sets.total} ${sets.total === 1 ? 'série' : 'séries'}`}
-          onPress={onPress}
-        />
-      );
-    case 'inProgress':
-      return (
-        <Button
-          variant="primary"
-          label={`Continuar treino · ${sets.done} de ${sets.total}`}
-          onPress={onPress}
-        />
-      );
-    case 'completed':
-      return <Button variant="inline" label="Ver treino de hoje" onPress={onPress} />;
-    case 'rest':
-      return <Button variant="inline" label="Treino livre" onPress={onPress} />;
-  }
+  const label = (() => {
+    switch (state.kind) {
+      case 'notStarted':
+        return `Começar treino · ${sets.total} ${sets.total === 1 ? 'série' : 'séries'}`;
+      case 'inProgress':
+        return `Continuar treino · ${sets.done} de ${sets.total}`;
+      case 'completed':
+        return 'Ver treino de hoje';
+      case 'rest':
+        return 'Treino livre';
+    }
+  })();
+  return <Button variant="inline" label={label} onPress={onPress} />;
+}
+
+/** "QUARTA · 5 EXERCÍCIOS" — o rotulo do card do dia. */
+function dayLabel(weekday: Weekday, exercises: number): string {
+  const day = weekdayName(weekday).toUpperCase();
+  if (exercises === 0) return day;
+  return `${day} · ${exercises} ${exercises === 1 ? 'EXERCÍCIO' : 'EXERCÍCIOS'}`;
 }
 
 /**
  * A orientacao da home, em UMA linha.
  *
  * Nao e frase motivacional (§7 proibe) nem tutorial: e o que falta fazer hoje,
- * dito com o dado que a tela ja tem. Uma linha, e no mesmo lugar sempre — a
- * pessoa abre esta tela dez vezes por semana e nao vai ler um paragrafo.
+ * dito com o dado que a tela ja tem.
  */
 function todayHint(state: WorkoutState, sets: { done: number; total: number }): string {
   switch (state.kind) {
     case 'notStarted':
-      return `${sets.total} ${sets.total === 1 ? 'série' : 'séries'} para hoje`;
+      return 'nada marcado ainda';
     case 'inProgress': {
       const left = Math.max(0, sets.total - sets.done);
-      return `faltam ${left} ${left === 1 ? 'série' : 'séries'}`;
+      return `faltam ${left}`;
     }
     case 'completed':
-      return 'treino de hoje finalizado';
+      return 'treino finalizado';
     case 'rest':
       return 'descanso no seu plano';
   }
@@ -344,24 +251,17 @@ function todaySubtitle(now = new Date()): string {
 async function loadHome() {
   const now = new Date();
   const todayKey = toDateKey(now);
-  // O mesmo numero alimenta a consulta e a grade: se divergirem, o dot-matrix
-  // pede dias que a query nunca buscou e eles aparecem como "sem treino".
-  const matrixDays = daysSinceMonthStart(now, MATRIX_MONTHS);
-  const window = lastNDays(now, matrixDays);
 
-  const [routines, volumes, counts, weights, session] = await Promise.all([
+  const [routines, counts, session] = await Promise.all([
     listRoutines(),
-    volumeByDate(window[0], todayKey),
     routineExerciseCounts(),
-    listBodyWeightLogs(1),
     getSessionByDate(todayKey),
   ]);
 
   const weekStart = weekStartKey(now);
   const todayRoutine = routineForWeekday(routines, weekdayOf(now));
   // Os numeros da semana, ja resolvidos: e o que o card de hoje mostra e o que
-  // a sessao vai materializar quando o usuario tocar em treinar. So depende das
-  // rotinas e da sessao, entao roda junto com as series de hoje.
+  // a sessao vai materializar quando o usuario tocar em treinar.
   const [todayExercises, sessionSets] = await Promise.all([
     todayRoutine ? targetsForWeek(weekStart, todayRoutine.id) : Promise.resolve<WeekExercise[]>([]),
     session ? listSessionSets(session.id) : Promise.resolve([]),
@@ -369,11 +269,8 @@ async function loadHome() {
   const plannedSets = todayExercises.reduce((sum, item) => sum + item.targets.sets, 0);
 
   /**
-   * O dia contado em SERIES, a mesma unidade da tela de treino.
-   *
-   * O botao dizia "Começar treino · 5 exercícios" e a sessao, depois de aberta,
-   * dizia "0 de 18 séries": dois numeros para o mesmo treino. Aqui o total e o
-   * do plano, com o que foi gravado por cima — series adicionadas a mais no dia
+   * O dia contado em SERIES, a mesma unidade da tela de treino: o total e o do
+   * plano, com o que foi gravado por cima — series adicionadas a mais no dia
    * entram, e um dia de treino livre (sem plano) conta as do que foi registrado.
    */
   const doneSets = sessionSets.filter((set) => set.done).length;
@@ -382,18 +279,26 @@ async function loadHome() {
     total: Math.max(plannedSets, sessionSets.length),
   };
 
-  const weekKeys = lastNDays(now, 7);
-  const weekVolume = weekKeys.reduce((sum, key) => sum + (volumes.get(key) ?? 0), 0);
+  // Exercicio terminado = toda serie gravada dele marcada. So os que tem serie
+  // gravada entram: o que nunca foi tocado hoje nao terminou.
+  const byExercise = new Map<string, boolean[]>();
+  for (const set of sessionSets) {
+    const list = byExercise.get(set.exerciseId) ?? [];
+    list.push(set.done);
+    byExercise.set(set.exerciseId, list);
+  }
+  const finishedIds = new Set(
+    [...byExercise].filter(([, done]) => done.every(Boolean)).map(([id]) => id),
+  );
 
   return {
     today: {
-      routineId: todayRoutine?.id ?? null,
       weekday: weekdayOf(now),
       name: dayTitle(todayRoutine?.name ?? '', todayExercises.length),
       // Na ordem que o usuario arrastou no treino de hoje, se arrastou.
       exercises: applyOrder(todayExercises, session?.exerciseOrder ?? [], (item) => item.exerciseId),
-      plannedSets,
       sets: todaySets,
+      finishedIds,
       state: workoutState({
         plannedExerciseIds: todayExercises.map((item) => item.exerciseId),
         sets: sessionSets,
@@ -402,24 +307,14 @@ async function loadHome() {
       }),
     },
     upcoming: nextDays(routines, counts, now, 3),
-    weekVolume,
-    bodyWeight: weights[0] ?? null,
-    dots: buildDotMatrix(volumes, now, matrixDays),
-    // `volumeByDate` ja devolve toda data com sessao (o LEFT JOIN mantem as de
-    // volume zero), que e exatamente o conjunto de dias treinados.
-    streak: currentStreak(new Set(volumes.keys()), now),
   };
 }
 
 /**
  * Quantos exercicios cabem no card de hoje antes de virar rolagem disfarcada.
- *
- * Cinco linhas mais o cabecalho ja empurram os outros cards para fora da
- * dobra num telefone comum. O resto vira uma linha de "+N", e a lista inteira
- * esta a um toque de distancia na tela do dia.
+ * O resto vira uma linha de "+N", e a lista inteira esta no treino.
  */
-const MAX_TODAY_ROWS = 5;
-
+const MAX_TODAY_ROWS = 6;
 
 /** "3 × 10 · 62,5 kg" ou "5 km · 28 min" — o alvo da semana, em mono. */
 function targetsLabel(item: WeekExercise): string {
@@ -469,46 +364,46 @@ const styles = StyleSheet.create({
   // igual ao que ele substitui no fluxo — sem isto o scroll fica sem altura.
   reveal: { flex: 1 },
   content: {
-    paddingHorizontal: spacing.xl,
-    gap: spacing.md,
-  },
-  todayHead: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: spacing.lg,
-    marginBottom: spacing.md,
-  },
-  todayText: {
-    flex: 1,
+    paddingHorizontal: layout.screen,
+    gap: layout.cardGap,
   },
   todayName: {
     marginTop: spacing.xs,
-    marginBottom: 2,
+  },
+  /** A leitura do dia: o numero feito em mono grande, o total colado nele. */
+  readout: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    marginTop: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  readoutNumber: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  readoutDone: {
+    fontSize: fontSize.numberDisplay,
+    lineHeight: fontSize.numberDisplay + 4,
+  },
+  readoutTotal: {
+    fontSize: fontSize.numberLine,
+    color: colors.textAux,
+  },
+  readoutUnit: {
+    marginLeft: spacing.sm,
+  },
+  restHint: {
+    marginTop: spacing.xs,
+  },
+  list: {
+    marginTop: spacing.lg,
   },
   /** Titulo de secao fora do card: e ele que separa acao de consulta. */
   sectionLabel: {
-    marginTop: spacing.lg,
+    marginTop: layout.sectionGap - layout.cardGap,
     marginLeft: spacing.xs,
-  },
-  stats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  stat: {
-    flex: 1,
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
-  },
-  statDivider: {
-    width: StyleSheet.hairlineWidth,
-    alignSelf: 'stretch',
-    marginVertical: spacing.xs,
-    backgroundColor: colors.divider,
-  },
-  matrix: {
-    marginTop: spacing.xl,
   },
   upcomingDivided: {
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -519,16 +414,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.lg,
-    paddingVertical: spacing.md,
+    minHeight: layout.touch,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.divider,
   },
   exerciseName: {
     flex: 1,
   },
+  /** Exercicio terminado: apaga, nao some — continua na lista, no lugar dele. */
+  finished: {
+    color: colors.textAux,
+  },
   exerciseTargets: {
-    fontSize: fontSize.label,
-    color: colors.textSecondary,
+    fontSize: fontSize.aux,
+    color: colors.textAux,
   },
   moreRow: {
     paddingTop: spacing.md,
@@ -538,29 +437,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.lg,
-    paddingVertical: spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  half: {
-    flex: 1,
-    justifyContent: 'space-between',
-  },
-  cardFoot: {
-    marginTop: spacing.lg,
-  },
-  matrixFoot: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginTop: spacing.xl,
-  },
-  matrixText: {
-    flex: 1,
-    gap: 2,
+    minHeight: layout.touch,
   },
 });

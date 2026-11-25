@@ -60,6 +60,15 @@ type Props = {
   hitSlop?: PressableProps['hitSlop'];
   style?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
+  accessibilityRole?: PressableProps['accessibilityRole'];
+  accessibilityState?: PressableProps['accessibilityState'];
+  /**
+   * Chamados junto com o feedback de toque, nunca no lugar dele. Existem para
+   * quem precisa saber que o dedo ESTA la — o stepper que repete enquanto ele
+   * fica pressionado.
+   */
+  onPressIn?: () => void;
+  onPressOut?: () => void;
 };
 
 /**
@@ -88,6 +97,10 @@ export function PressableSurface({
   hitSlop,
   style,
   accessibilityLabel,
+  accessibilityRole,
+  accessibilityState,
+  onPressIn,
+  onPressOut,
 }: Props) {
   const timing = useTiming();
   const pressed = useSharedValue(0);
@@ -154,8 +167,16 @@ export function PressableSurface({
       disabled={disabled}
       hitSlop={hitSlop}
       accessibilityLabel={accessibilityLabel}
-      onPressIn={() => press(1)}
-      onPressOut={() => press(0)}
+      accessibilityRole={accessibilityRole}
+      accessibilityState={accessibilityState}
+      onPressIn={() => {
+        press(1);
+        onPressIn?.();
+      }}
+      onPressOut={() => {
+        press(0);
+        onPressOut?.();
+      }}
       style={style}
     >
       {layer?.onTop === false ? overlay : null}

@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
   input: {
     marginTop: spacing.sm,
     fontFamily: 'Inter_400Regular',
-    fontSize: fontSize.bodyLg,
+    fontSize: fontSize.body,
     color: colors.textPrimary,
   },
   chips: {

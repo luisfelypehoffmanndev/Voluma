@@ -34,7 +34,7 @@ export function LearnVolume({
       <Meta>Monte o seu último supino e veja a conta.</Meta>
 
       <View style={styles.result}>
-        <CountingStat kg={volume} size={fontSize.numberLg} />
+        <CountingStat kg={volume} size={fontSize.numberHero} />
         <Mono style={styles.formula}>
           {`${value.sets} × ${value.reps} × ${formatWeight(value.weightKg)} kg`}
         </Mono>

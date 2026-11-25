@@ -89,7 +89,7 @@ export default function ResultScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.hero}>
-          <StatNumber value={formatVolume(volume)} unit="kg" size={fontSize.numberLg} />
+          <StatNumber value={formatVolume(volume)} unit="kg" size={fontSize.numberHero} />
           <Label>Volume levantado</Label>
           <Body style={styles.comparison}>
             {comparison

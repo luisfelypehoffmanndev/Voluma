@@ -158,6 +158,26 @@ export function PlayIcon(props: IconProps) {
   );
 }
 
+/**
+ * Aba Hoje: um dia do calendario, com o ponto do dia marcado.
+ *
+ * Era o play, quando a Hoje era quem comecava o treino. O play agora e do botao
+ * central da barra, e dois plays na mesma barra diriam que as duas coisas fazem
+ * o mesmo.
+ */
+export function TodayIcon(props: IconProps) {
+  const { size, common } = base(props);
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d="M6.5 5h11A2.5 2.5 0 0 1 20 7.5v10a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5v-10A2.5 2.5 0 0 1 6.5 5Z" {...common} />
+      <Line x1={4} y1={9.5} x2={20} y2={9.5} {...common} />
+      <Line x1={8.5} y1={3} x2={8.5} y2={6.5} {...common} />
+      <Line x1={15.5} y1={3} x2={15.5} y2={6.5} {...common} />
+      <Circle cx={12} cy={14.5} r={1.3} {...common} fill={props.color ?? colors.textPrimary} />
+    </Svg>
+  );
+}
+
 /** Aba Plano: a semana como lista de dias. */
 export function ListIcon(props: IconProps) {
   const { size, common } = base(props);

@@ -1,17 +1,28 @@
 import { Redirect, Tabs } from 'expo-router';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { useOnboarding } from '@/store/onboarding';
 import { colors, radius } from '@/theme/tokens';
 import { GlassSurface } from '@/ui/GlassSurface';
-import { ChartIcon, ListIcon, PersonIcon, PlayIcon } from '@/ui/icons';
+import { ChartIcon, ListIcon, PersonIcon, TodayIcon } from '@/ui/icons';
 import { tabTransitionSpec, useTabAnimation } from '@/ui/motion';
 import { TabIcon } from '@/ui/TabIcon';
 import { useTabBarGeometry } from '@/ui/tabBar';
+import { TRAIN_BUTTON_SIZE, TrainButton } from '@/ui/TrainButton';
+
+/**
+ * Quanto o botao central sobe acima do centro da barra. Com 12, a borda de
+ * cima dele passa 10dp do pill: le como uma peca a parte, a acao, e nao como
+ * mais um icone de aba.
+ */
+const TRAIN_LIFT = 12;
 
 /**
  * Tab bar flutuante — e o caso mais claro da regra do brief: ela paira sobre
  * conteudo rolavel, entao e vidro.
+ *
+ * No meio, um quinto lugar que NAO e aba: o botao "Treinar" (`TrainButton`),
+ * dono do accent das quatro telas de aba (design.md §2).
  *
  * Sem rotulos de texto: os quatro icones outline bastam, e texto embaixo de
  * icone e o visual generico que o brief manda evitar.
@@ -31,6 +42,7 @@ export default function TabsLayout() {
   if (onboarding === 'needed') return <Redirect href="/onboarding" />;
 
   return (
+    <View style={styles.root}>
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -93,7 +105,7 @@ export default function TabsLayout() {
           tabBarAccessibilityLabel: 'Hoje',
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused}>
-              <PlayIcon color={color} />
+              <TodayIcon color={color} />
             </TabIcon>
           ),
         }}
@@ -106,6 +118,26 @@ export default function TabsLayout() {
             <TabIcon focused={focused}>
               <ListIcon color={color} />
             </TabIcon>
+          ),
+        }}
+      />
+      {/*
+        O lugar do meio e um ESPACADOR, nao uma aba: ele so abre o vao entre
+        Plano e Histórico onde o botao "Treinar" pousa. O botao em si e irmao
+        do `<Tabs>`, logo abaixo, e nao o `tabBarButton` deste item — o
+        container da barra recorta o que passa da borda no Android, e o botao
+        sobe acima do pill.
+      */}
+      <Tabs.Screen
+        name="train"
+        options={{
+          tabBarButton: () => (
+            <View
+              style={styles.spacer}
+              pointerEvents="none"
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            />
           ),
         }}
       />
@@ -132,10 +164,35 @@ export default function TabsLayout() {
         }}
       />
     </Tabs>
+    {/* Telas empilhadas (sessao, resultado) sao do Stack raiz e cobrem este
+        layout inteiro, botao junto: ele so aparece com a barra. */}
+    <View
+      pointerEvents="box-none"
+      style={[
+        styles.train,
+        { bottom: bar.bottom + (bar.height - TRAIN_BUTTON_SIZE) / 2 + TRAIN_LIFT },
+      ]}
+    >
+      <TrainButton />
+    </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
+  spacer: {
+    flex: 1,
+  },
+  train: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
   bar: {
     position: 'absolute',
     borderRadius: radius.pill,

@@ -156,7 +156,7 @@ export function StatsPanel() {
             <StatNumber
               value={formatWeight(shownWeight.weightKg)}
               unit="kg"
-              size={fontSize.numberMd}
+              size={fontSize.numberDisplay}
             />
             <Meta>
               {weights.length > 1 && weightIndex === null
@@ -204,7 +204,7 @@ export function StatsPanel() {
             <StatNumber
               value={formatDistance(data.weekDistance)}
               unit="km"
-              size={fontSize.numberMd}
+              size={fontSize.numberDisplay}
             />
             <Meta>últimos 7 dias</Meta>
           </View>
@@ -272,7 +272,7 @@ function VolumeCard({ weeks, width }: { weeks: readonly WeekVolume[]; width: num
       <Label>Volume</Label>
 
       <View style={styles.chartHead}>
-        <StatNumber value={formatVolume(readout.value)} unit="kg" size={fontSize.numberLg} />
+        <StatNumber value={formatVolume(readout.value)} unit="kg" size={fontSize.numberHero} />
         <Meta>{readout.meta}</Meta>
       </View>
 
@@ -490,7 +490,7 @@ function ProgressCard({
                 <StatNumber
                   value={formatWeight(shown.weightKg)}
                   unit="kg"
-                  size={fontSize.numberMd}
+                  size={fontSize.numberDisplay}
                 />
                 <Meta>
                   {pointIndex === null

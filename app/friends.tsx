@@ -329,13 +329,13 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   at: {
-    fontSize: fontSize.bodyLg,
+    fontSize: fontSize.body,
     color: colors.textSecondary,
   },
   input: {
     flex: 1,
     fontFamily: 'Inter_400Regular',
-    fontSize: fontSize.bodyLg,
+    fontSize: fontSize.body,
     color: colors.textPrimary,
   },
   row: {
