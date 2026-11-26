@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
  */
 
 /** Altura util da barra, acima da area segura. */
-export const TAB_BAR_HEIGHT = 52;
+export const TAB_BAR_HEIGHT = 58;
 
 /** Ar entre o fim do conteudo rolavel e o topo da barra. */
 const CONTENT_BREATHING_ROOM = 24;

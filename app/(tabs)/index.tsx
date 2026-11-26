@@ -9,10 +9,8 @@ import {
   trainedDates,
   type WeekExercise,
 } from '@/db/repo';
-import { formatDistance, formatDuration } from '@/domain/run';
 import { currentStreak } from '@/domain/streak';
 import { dayTitle, workoutState, type WorkoutState } from '@/domain/today';
-import { formatWeight } from '@/domain/volume';
 import { lastNDays, routineForWeekday, toDateKey, weekStartKey, weekdayName, weekdayOf } from '@/domain/week';
 import { useQuery } from '@/store/data';
 import { fonts, layout, shape, spacing, theme } from '@/theme/tokens';
@@ -24,6 +22,7 @@ import { Header, Screen } from '@/ui/Screen';
 import { useTabBarClearance } from '@/ui/tabBar';
 import { Reveal } from '@/ui/Reveal';
 import { Body, Label, Meta } from '@/ui/Text';
+import { CheckIcon } from '@/ui/icons';
 import { useStartWorkout } from '@/ui/useStartWorkout';
 
 /**
@@ -70,11 +69,9 @@ export default function HomeScreen() {
             <Text style={styles.heroName} maxFontSizeMultiplier={1.3}>
               {hasPlan ? today.name : 'Dia de descanso'}
             </Text>
-            <Meta style={styles.heroMeta}>
-              {hasPlan
-                ? `${today.exercises.length} ${today.exercises.length === 1 ? 'exercício' : 'exercícios'} · cerca de ${estimateMinutes(today.sets.total)} min`
-                : 'Nada no seu plano para hoje. Se quiser, faça um treino livre.'}
-            </Meta>
+            {!hasPlan ? (
+              <Meta style={styles.heroMeta}>Nada no seu plano para hoje.</Meta>
+            ) : null}
 
             {today.state.kind === 'inProgress' ? (
               <View style={styles.track} accessibilityLabel={`${today.sets.done} de ${today.sets.total} séries`}>
@@ -98,16 +95,25 @@ export default function HomeScreen() {
 
           <Label style={styles.section}>SEMANA</Label>
           <View style={styles.week}>
+            {/* A letra do dia DENTRO do circulo. Treinou: verde com ✓ (cor so com
+                significado: feito). Hoje: contorno. O resto: cinza apagado. */}
             {week.map((day, index) => (
-              <View key={index} style={styles.day}>
-                <View
-                  style={[
-                    styles.circle,
-                    day.trained && styles.circleDone,
-                    day.today && !day.trained && styles.circleToday,
-                  ]}
-                />
-                <Meta style={day.today ? styles.dayToday : undefined}>{day.letter}</Meta>
+              <View
+                key={index}
+                style={[
+                  styles.circle,
+                  day.trained && styles.circleDone,
+                  day.today && !day.trained && styles.circleToday,
+                ]}
+                accessibilityLabel={`${day.letter}${day.trained ? ', treinou' : ''}${day.today ? ', hoje' : ''}`}
+              >
+                {day.trained ? (
+                  <CheckIcon size={18} color={theme.onPrimary} />
+                ) : (
+                  <Text style={[styles.dayLetter, day.today && styles.dayLetterToday]}>
+                    {day.letter}
+                  </Text>
+                )}
               </View>
             ))}
           </View>
@@ -118,15 +124,9 @@ export default function HomeScreen() {
               <Card style={styles.list}>
                 {today.exercises.map((item, index) => (
                   <View key={item.id} style={[styles.row, index > 0 && styles.rowDivided]}>
-                    <View style={styles.rowText}>
-                      <Body numberOfLines={2} style={styles.rowName}>
-                        {item.exerciseName}
-                      </Body>
-                      <Meta>{setsLabel(item)}</Meta>
-                    </View>
-                    <Text style={styles.rowLoad} maxFontSizeMultiplier={1.3}>
-                      {loadLabel(item)}
-                    </Text>
+                    <Body numberOfLines={2} style={styles.rowName}>
+                      {item.exerciseName}
+                    </Body>
                   </View>
                 ))}
               </Card>
@@ -156,24 +156,8 @@ function actionLabel(
   }
 }
 
-/** Uns 2 min por serie (execucao + descanso), arredondado de 5 em 5. */
-function estimateMinutes(sets: number): number {
-  return Math.max(5, Math.round((sets * 2) / 5) * 5);
-}
 
-function setsLabel(item: WeekExercise): string {
-  if (item.exerciseKind === 'run') return 'corrida';
-  return `${item.targets.sets} séries × ${item.targets.reps} reps`;
-}
 
-function loadLabel(item: WeekExercise): string {
-  const { weightKg, distanceKm, durationMin } = item.targets;
-  if (item.exerciseKind === 'run') {
-    const km = `${formatDistance(distanceKm)} km`;
-    return durationMin > 0 ? `${km} · ${formatDuration(durationMin)}` : km;
-  }
-  return weightKg > 0 ? `${formatWeight(weightKg)} kg` : '';
-}
 
 function todaySubtitle(now = new Date()): string {
   return `${weekdayName(weekdayOf(now))}, ${shortDate(now, now)}`;
@@ -284,13 +268,23 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   circle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: theme.surfaceContainerHigh,
   },
   circleDone: {
-    backgroundColor: theme.primaryContainer,
+    backgroundColor: theme.success,
+  },
+  dayLetter: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 14,
+    color: theme.outline,
+  },
+  dayLetterToday: {
+    color: theme.onSurface,
   },
   circleToday: {
     borderWidth: 2,

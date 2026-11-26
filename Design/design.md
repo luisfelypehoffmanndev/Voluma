@@ -26,7 +26,7 @@ Tema escuro é o padrão; os tokens do claro já estão prontos (`palette` e `us
 | `surfaceContainerHighest` | `#2c2c2e` | `#cececb` | trilho de progresso, divisor forte |
 | `surfaceBright` | `#3a3a3c` | `#f1f1ee` | pressionado, botão − e + dentro do bloco da série |
 | `primary` | `#c9c9c9` | `#111111` | texto de destaque, ícone ativo |
-| `primaryContainer` | `#bdbdbd` | `#111111` | **botão principal**, chip ativo, progresso, dia treinado |
+| `primaryContainer` | `#9a9a9a` | `#111111` | **botão principal**, chip ativo, progresso, selo HOJE (era `#bdbdbd`, que estourava como branco neon) |
 | `onPrimary` | `#000000` | `#f7f7f5` | texto sobre `primaryContainer` |
 | `onSurface` | `#c9c9c9` | `#111111` | texto principal |
 | `onSurfaceVariant` | `#a1a1aa` | `#52525b` | texto auxiliar, metadado, rótulo |
@@ -73,7 +73,7 @@ Rótulo de seção em caixa alta só onde ajuda a escanear ("SEMANA", "EXERCÍCI
 - **Stepper de carga e reps** (bloco da série da vez): número grande no centro (Jakarta 800, tabular), botões − e + de 48, toque longo acelera, toque no número abre o teclado.
 - **Chip e Segmented**: pílula; ativo em `primaryContainer` com texto `onPrimary`, inativo em `surfaceContainerHigh`.
 - **Célula marcável**: quadrado arredondado; marcada em `success` com check.
-- **Barra de abas**: largura cheia, opaca (`background`, divisor de 1px em cima), colada no fundo, Ionicons **sem rótulo**, 26, contorno quando inativo (`outline`) e preenchido quando ativo (`onSurface`), 52 + área segura. **Sem botão central**: começar o treino é o botão principal da aba Hoje.
+- **Barra de abas**: largura cheia, opaca (`background`, divisor de 1px em cima), colada no fundo, Ionicons 24 **com o nome da aba embaixo** (só ícone não dizia o que era cada aba), contorno quando inativo (`outline`) e preenchido quando ativo (`onSurface`), 58 + área segura. **Sem botão central**: começar o treino é o botão principal da aba Hoje.
 - **Sheet e modal**: fundo `surfaceContainer`, fundo atrás escurecido. Ação destrutiva em `error`, sempre com confirmação ou desfazer.
 - **Estado vazio**: ícone de contorno, uma frase do que fazer e um botão que resolve.
 - **Ícones**: Ionicons em todo o app (`src/ui/icons.tsx`), contorno por padrão, preenchido para ativo, monocromáticos.
@@ -88,10 +88,10 @@ Rótulo de seção em caixa alta só onde ajuda a escanear ("SEMANA", "EXERCÍCI
 
 ## 7. Telas
 
-- **Hoje**: o treino do dia como herói (nome em Jakarta 800 3xl, exercícios e tempo estimado), botão primary largo "Começar treino (N exercícios)" ou "Continuar treino · 5 de 16 séries" com barra fina. Abaixo, a semana em 7 círculos (treinados em `primaryContainer`) e os exercícios do dia em linhas.
+- **Hoje**: o treino do dia como herói (nome em Jakarta 800 3xl, exercícios e tempo estimado), botão primary largo "Começar treino (N exercícios)" ou "Continuar treino · 5 de 16 séries" com barra fina. Abaixo, a semana em 7 círculos com a letra do dia dentro: treinado em verde `success` com ✓, hoje com contorno, o resto apagado. Depois, só os nomes dos exercícios do dia, sem números.
 - **Sessão**: no topo, o exercício da vez (2xl) e "Série 3 de 4". O bloco da série da vez em `surfaceContainerHigh`, com os steppers de carga e reps já preenchidos e o botão primary largo "Concluir série". Séries feitas com check verde, futuras em `onSurfaceVariant`. Rodapé fixo com o progresso e "Finalizar treino".
 - **Resultado**: todo número com comparação ("+6% sobre a última segunda-feira"); recorde com selo verde; botão "Concluir".
-- **Plano**: os 7 dias em lista, com o nome do treino e quantos exercícios, ou "Descanso".
+- **Plano**: os 7 dias em lista, com o nome do treino e quantos exercícios, ou "Descanso". O dia de hoje tem o selo **HOJE** cheio e a linha um degrau mais clara.
 - **Histórico**: Segmented (Calendário, Números, Amigos); calendário em grade estilo mapa de atividade em tons de cinza.
 - **Perfil**: lista agrupada em cards, cada linha com ícone de contorno à esquerda e chevron à direita.
 - **Onboarding**: curto, com o modelo Push/Pull/Legs pré-selecionado.
@@ -118,6 +118,7 @@ Rótulo de seção em caixa alta só onde ajuda a escanear ("SEMANA", "EXERCÍCI
 - [ ] Títulos e números grandes em Plus Jakarta Sans; números que mudam com `tabular-nums`?
 - [ ] Raios 18 (card), 14 (botão e input) e pílula, sem variação?
 - [ ] Uma coisa grande por tela, e um botão principal que diz o que fazer?
+- [ ] Pouco número e pouco texto: só o que a pessoa precisa para agir agora?
 - [ ] Alvos de toque de 44 (48 no treino)?
 - [ ] Nenhum travessão em texto visível?
 - [ ] Nada cortado ou sobreposto, inclusive com a fonte do sistema no máximo?

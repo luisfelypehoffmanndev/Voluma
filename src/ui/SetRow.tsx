@@ -47,13 +47,10 @@ export function SetRow(props: Props) {
   return props.mode === 'hero' ? <HeroSet {...props} /> : <TableSet {...props} />;
 }
 
-function TableSet({ index, reps, weightKg, done, onToggle }: Props) {
+function TableSet({ index, done, onToggle }: Props) {
   return (
     <View style={styles.row}>
       <Body style={[styles.rowLabel, !done && styles.future]}>{`Série ${index}`}</Body>
-      <Text style={[styles.rowValue, !done && styles.future]} maxFontSizeMultiplier={1.3}>
-        {`${formatWeight(weightKg)} kg × ${reps}`}
-      </Text>
       <CheckCell
         checked={done}
         onPress={onToggle}
@@ -64,8 +61,6 @@ function TableSet({ index, reps, weightKg, done, onToggle }: Props) {
 }
 
 function HeroSet({
-  index,
-  total,
   reps,
   weightKg,
   accent = false,
@@ -79,8 +74,6 @@ function HeroSet({
 
   return (
     <View style={styles.hero}>
-      <Label style={styles.heroLabel}>{`SÉRIE ${index} DE ${total}`}</Label>
-
       {previous ? (
         <Pressable onPress={onCopyPrevious} disabled={!onCopyPrevious} accessibilityRole="button">
           <Meta style={styles.center}>

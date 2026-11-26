@@ -59,11 +59,11 @@ export const colors = {
    *
    * O que faz ler como neon nao e so a matiz: e o `accentGlow` em volta.
    */
-  accent: '#bdbdbd',
+  accent: '#9a9a9a',
   /** pontos apagados do dot-matrix (dias sem treino) */
   dotEmpty: '#2c2c2e',
   /** pontos cheios do dot-matrix (dias com treino) */
-  dotFilled: '#bdbdbd',
+  dotFilled: '#9a9a9a',
   /**
    * Rampa do dot-matrix: um passo por faixa de carga do dia, do vazio ao mais
    * pesado da janela. Escala de cinza, nunca heatmap colorido — o brief e
@@ -503,7 +503,7 @@ export const simple = {
   blockPressed: '#1c1c1e',
   radius: 18,
   radiusSmall: 14,
-  pill: '#bdbdbd',
+  pill: '#9a9a9a',
   pillText: '#000000',
 } as const;
 
@@ -521,7 +521,9 @@ export const palette = {
     surfaceContainerHighest: '#2c2c2e',
     surfaceBright: '#3a3a3c',
     primary: '#c9c9c9',
-    primaryContainer: '#bdbdbd',
+    // Mais escuro que o primeiro valor (#bdbdbd), que estourava como branco
+    // neon nos botoes e nos circulos. Preto sobre ele ainda passa 7:1.
+    primaryContainer: '#9a9a9a',
     onPrimary: '#000000',
     onSurface: '#c9c9c9',
     onSurfaceVariant: '#a1a1aa',

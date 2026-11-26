@@ -6,7 +6,7 @@ import { listExercises, listRoutines, routineExerciseCounts } from '@/db/repo';
 import type { Weekday } from '@/domain/types';
 import { weekPlan, weekdayName, weekdayOf } from '@/domain/week';
 import { useQuery } from '@/store/data';
-import { colors, spacing } from '@/theme/tokens';
+import { colors, fonts, spacing, theme } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
 import { PressableSurface } from '@/ui/PressableSurface';
 import { LoadError } from '@/ui/LoadError';
@@ -71,14 +71,18 @@ export default function PlanScreen() {
               <PressableSurface
                 key={weekday}
                 feedback="solid"
-                style={[styles.row, weekday > 0 && styles.rowDivided]}
+                style={[styles.row, weekday > 0 && styles.rowDivided, isToday && styles.rowToday]}
                 onPress={() => router.push({ pathname: '/day/[weekday]', params: { weekday } })}
                 accessibilityLabel={`Editar ${weekdayName(weekday as Weekday)}${isToday ? ', hoje' : ''}`}
               >
                 <View style={styles.rowText}>
                   <View style={styles.dayLine}>
                     <Section numberOfLines={1}>{weekdayName(weekday as Weekday)}</Section>
-                    {isToday ? <Label style={styles.todayTag}>HOJE</Label> : null}
+                    {isToday ? (
+                      <View style={styles.todayBadge}>
+                        <Label style={styles.todayTag}>HOJE</Label>
+                      </View>
+                    ) : null}
                   </View>
                   <Meta>{daySummary(day?.name ?? '', count)}</Meta>
                 </View>
@@ -153,8 +157,22 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   /** O unico accent da tela: onde o usuario esta na semana. */
+  // Hoje em destaque: selo cheio e a linha um degrau mais clara.
+  todayBadge: {
+    backgroundColor: theme.primaryContainer,
+    borderRadius: 999,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+  },
   todayTag: {
-    color: colors.accent,
+    color: theme.onPrimary,
+    fontFamily: fonts.sansSemiBold,
+  },
+  rowToday: {
+    backgroundColor: theme.surfaceContainerHigh,
+    marginHorizontal: -spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: 14,
   },
   rowText: {
     flex: 1,

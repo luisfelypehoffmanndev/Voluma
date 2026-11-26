@@ -2,7 +2,7 @@ import { Redirect, Tabs } from 'expo-router';
 import { StyleSheet } from 'react-native';
 
 import { useOnboarding } from '@/store/onboarding';
-import { theme } from '@/theme/tokens';
+import { fonts, theme } from '@/theme/tokens';
 import { ChartIcon, ListIcon, PersonIcon, TodayIcon, type IconProps } from '@/ui/icons';
 import { tabTransitionSpec, useTabAnimation } from '@/ui/motion';
 import { useTabBarGeometry } from '@/ui/tabBar';
@@ -23,9 +23,10 @@ export default function TabsLayout() {
   if (onboarding === 'needed') return <Redirect href="/onboarding" />;
 
   const tab = (label: string, Icon: (props: IconProps) => React.ReactElement) => ({
+    title: label,
     tabBarAccessibilityLabel: label,
     tabBarIcon: ({ focused }: { focused: boolean }) => (
-      <Icon size={26} filled={focused} color={focused ? theme.onSurface : theme.outline} />
+      <Icon size={24} filled={focused} color={focused ? theme.onSurface : theme.outline} />
     ),
   });
 
@@ -33,7 +34,12 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarShowLabel: false,
+        // Com o nome embaixo de cada icone: so o icone nao dizia o que era cada
+        // aba para quem abre o app pela primeira vez.
+        tabBarShowLabel: true,
+        tabBarActiveTintColor: theme.onSurface,
+        tabBarInactiveTintColor: theme.outline,
+        tabBarLabelStyle: { fontFamily: fonts.sansSemiBold, fontSize: 11 },
         animation: tabAnimation,
         transitionSpec: tabAnimation === 'fade' ? tabTransitionSpec : undefined,
         tabBarStyle: [styles.bar, { height: bar.height }],
