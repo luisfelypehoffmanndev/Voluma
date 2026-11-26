@@ -104,7 +104,7 @@ export default function CatalogScreen() {
           <Label>Biblioteca</Label>
           <View style={styles.commonText}>
             <Body>{`${MOVEMENT_LIBRARY.length} movimentos`}</Body>
-            <Meta>com grupo, equipamento e figura — escolha em vez de digitar</Meta>
+            <Meta>com grupo, equipamento e figura. Escolha em vez de digitar.</Meta>
           </View>
         </Card>
 

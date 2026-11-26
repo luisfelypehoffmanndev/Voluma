@@ -110,8 +110,8 @@ export default function OnboardingScreen() {
   const footer = (() => {
     switch (step) {
       case 0:
-        // Vidro, nao laranja: nesta tela o accent e a barra de hoje.
-        return <Button label="Começar" onPress={() => setStep(1)} />;
+        // Botao principal (linguagem Blink): e o unico passo da tela.
+        return <Button variant="primary" label="Começar" onPress={() => setStep(1)} />;
       case 1:
         return <Button variant="primary" label="Continuar" onPress={() => setStep(2)} />;
       case 2:

@@ -3,9 +3,9 @@ import { StyleSheet, TextInput, View } from 'react-native';
 
 import { NAME_MAX } from '@/domain/friends';
 import { HANDLE_MAX, HANDLE_MIN, isValidHandle, normalizeHandle } from '@/domain/handle';
-import { colors, fontSize, radius, spacing, surfaces } from '@/theme/tokens';
+import { colors, fontSize, spacing } from '@/theme/tokens';
 
-import { PressableSurface } from '../PressableSurface';
+import { Button } from '../Button';
 import { Stepper } from '../Stepper';
 import { Body, Label, Meta } from '../Text';
 
@@ -151,15 +151,7 @@ export function ProfileForm({
         onChange={(next, source) => setYears(land(years, next, YEARS_START, 0, source))}
       />
 
-      <PressableSurface
-        disabled={busy}
-        onPress={submit}
-        pressedOpacity={0.8}
-        borderRadius={radius.pill}
-        style={styles.submit}
-      >
-        <Body>{submitLabel}</Body>
-      </PressableSurface>
+      <Button variant="primary" label={submitLabel} disabled={busy} onPress={submit} />
     </View>
   );
 }
@@ -221,14 +213,5 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     fontSize: fontSize.body,
     color: colors.textPrimary,
-  },
-  submit: {
-    height: 54,
-    borderRadius: radius.pill,
-    backgroundColor: surfaces.raised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });

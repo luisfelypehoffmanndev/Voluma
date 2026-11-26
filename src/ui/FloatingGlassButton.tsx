@@ -1,10 +1,8 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { radius, spacing } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
 
-import { GlassSurface } from './GlassSurface';
-import { PressableSurface } from './PressableSurface';
-import { Body } from './Text';
+import { Button } from './Button';
 
 type Props = {
   label: string;
@@ -22,19 +20,11 @@ type Props = {
  * mesma tela tambem sao vidro, mas de nivel 1 — muda a densidade, nao a materia.
  */
 export function FloatingGlassButton({ label, onPress, bottom }: Props) {
+  // Linguagem Blink: a acao que flutua no rodape e o botao principal da tela.
   return (
-    // O raio acompanha o do GlassSurface: sem ele a camada de toque seria um
-    // retangulo com quinas para fora do pill.
-    <PressableSurface
-      onPress={onPress}
-      pressedOpacity={0.8}
-      borderRadius={radius.pill}
-      style={[styles.floating, { bottom }]}
-    >
-      <GlassSurface style={styles.floatingSurface}>
-        <Body>{label}</Body>
-      </GlassSurface>
-    </PressableSurface>
+    <View style={[styles.floating, { bottom }]}>
+      <Button variant="primary" label={label} onPress={onPress} />
+    </View>
   );
 }
 
@@ -43,10 +33,5 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: spacing.xl,
     right: spacing.xl,
-  },
-  floatingSurface: {
-    height: 54,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });
