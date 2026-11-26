@@ -4,6 +4,19 @@ Registro de decisões de produto/arquitetura que ainda não viraram código.
 Serve pra não perder o contexto de "por que decidimos assim" entre uma
 conversa e outra.
 
+## Sem tutorial: a tela se explica sozinha
+
+**Data:** 2026-11-26
+**Status:** implementado (plano 16, ajuste de clareza)
+
+Um primeiro usuario (o professor) se perdeu, e o tutorial cortava a tela. A
+dica de primeira visita (`Tour`) saiu da Hoje, do Plano e da Sessao. No lugar:
+nomes embaixo dos icones da barra, um botao grande com verbo por tela ("Começar
+meu treino", "Pronto, fiz a série 3"), a instrucao da serie em frase ("Faça
+agora: 8 repetições com 62,5 kg") e menos numeros — o topo da sessao perdeu
+series/volume/tempo e mostra so "Passo 3 de 16 · Supino reto". O §9 do
+`design.md` (tour) fica sem uso ate decidirmos apaga-lo.
+
 ## Reset visual e o dono do accent
 
 **Data:** 2026-11-25

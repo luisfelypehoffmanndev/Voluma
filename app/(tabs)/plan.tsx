@@ -11,7 +11,6 @@ import { Card } from '@/ui/Card';
 import { PressableSurface } from '@/ui/PressableSurface';
 import { LoadError } from '@/ui/LoadError';
 import { Header, Screen } from '@/ui/Screen';
-import { Tour } from '@/ui/tour/Tour';
 import { TourTarget } from '@/ui/tour/TourTarget';
 import { useTabBarClearance } from '@/ui/tabBar';
 import { Label, Meta, Section } from '@/ui/Text';
@@ -49,23 +48,7 @@ export default function PlanScreen() {
   const today = weekdayOf(new Date());
 
   return (
-    <Screen
-      overlay={
-        /* O Plano e a tela que ninguem adivinha: o dia da semana e que guarda
-           os exercicios, e e tocando nele que se monta o treino. Vai no
-           `overlay` pelo mesmo motivo da Hoje — coordenadas de janela. */
-        <Tour
-          id="plan"
-          active={data != null}
-          steps={[
-            {
-              target: 'plan.day',
-              text: 'Toque num dia para escolher os exercícios dele. Vale para toda semana.',
-            },
-          ]}
-        />
-      }
-    >
+    <Screen>
       <Header title="Plano" />
 
       {error ? <LoadError error={error} onRetry={reload} /> : (

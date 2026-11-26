@@ -11,9 +11,7 @@ import {
   type WeekExercise,
 } from '@/db/repo';
 import { applyOrder } from '@/domain/order';
-import { formatDistance, formatDuration } from '@/domain/run';
 import { dayTitle, workoutState, type WorkoutState } from '@/domain/today';
-import { formatWeight } from '@/domain/volume';
 import type { Routine, Weekday } from '@/domain/types';
 import { routineForWeekday, toDateKey, weekStartKey, weekdayName, weekdayOf } from '@/domain/week';
 import { useQuery } from '@/store/data';
@@ -25,11 +23,10 @@ import { LoadError } from '@/ui/LoadError';
 import { ChartIcon, ListIcon, PlayIcon } from '@/ui/icons';
 import { Header, Screen } from '@/ui/Screen';
 import { SetMeter } from '@/ui/SetMeter';
-import { Tour } from '@/ui/tour/Tour';
 import { TourTarget } from '@/ui/tour/TourTarget';
 import { useTabBarClearance } from '@/ui/tabBar';
 import { Reveal } from '@/ui/Reveal';
-import { Body, Label, Meta, Mono, Section } from '@/ui/Text';
+import { Body, Label, Meta, Section } from '@/ui/Text';
 import { useStartWorkout } from '@/ui/useStartWorkout';
 
 /**
@@ -73,29 +70,11 @@ export default function HomeScreen() {
     );
   }
 
-  const { today, upcoming } = data;
+  const { today } = data;
   const hasPlan = today.exercises.length > 0;
 
   return (
-    <Screen
-      overlay={
-        /* No `overlay` do `Screen`, e nao entre os filhos: ali a camada e irma
-           do conteudo e cobre a tela inteira, nas mesmas coordenadas de janela
-           em que o alvo foi medido. */
-        <Tour
-          id="home"
-          active
-          steps={[
-            {
-              target: 'home.action',
-              // Uma frase que vale em todo estado do dia: em dia de descanso
-              // nao ha numero nenhum no botao, e falar dele seria mentira.
-              text: 'O treino de hoje começa aqui, ou no botão do meio da barra.',
-            },
-          ]}
-        />
-      }
-    >
+    <Screen>
       <Header title="Hoje" subtitle={todaySubtitle()} />
 
       <Reveal style={styles.reveal}>
@@ -113,11 +92,7 @@ export default function HomeScreen() {
               {today.name}
             </Section>
 
-            <Meta style={styles.restHint}>
-              {hasPlan
-                ? `${today.exercises.length} ${today.exercises.length === 1 ? 'exercício' : 'exercícios'} · ${today.sets.total} séries`
-                : todayHint(today.state, today.sets)}
-            </Meta>
+            {!hasPlan ? <Meta style={styles.restHint}>{todayHint(today.state, today.sets)}</Meta> : null}
 
             {today.sets.total > 0 ? (
               <View style={styles.progress}>
@@ -151,9 +126,7 @@ export default function HomeScreen() {
                       >
                         {item.exerciseName}
                       </Body>
-                      <Mono style={styles.exerciseTargets}>
-                        {finished ? 'feito' : targetsLabel(item)}
-                      </Mono>
+                      {finished ? <Meta>pronto ✓</Meta> : null}
                     </View>
                   );
                 })}
@@ -183,24 +156,6 @@ export default function HomeScreen() {
             />
           </View>
 
-          {upcoming.length > 0 ? (
-            <>
-              <Label style={styles.sectionLabel}>PRÓXIMOS DIAS DE TREINO</Label>
-              <Card>
-                {upcoming.map((day, index) => (
-                  <View
-                    key={day.weekday}
-                    style={[styles.upcomingRow, index > 0 && styles.upcomingDivided]}
-                  >
-                    <Body numberOfLines={1} style={styles.exerciseName}>
-                      {day.name}
-                    </Body>
-                    <Meta>{weekdayName(day.weekday)}</Meta>
-                  </View>
-                ))}
-              </Card>
-            </>
-          ) : null}
         </ScrollView>
       </Reveal>
     </Screen>
@@ -372,18 +327,6 @@ async function loadHome() {
  */
 const MAX_TODAY_ROWS = 6;
 
-/** "3 × 10 · 62,5 kg" ou "5 km · 28 min" — o alvo da semana, em mono. */
-function targetsLabel(item: WeekExercise): string {
-  const { sets, reps, weightKg, distanceKm, durationMin } = item.targets;
-
-  if (item.exerciseKind === 'run') {
-    const km = `${formatDistance(distanceKm)} km`;
-    return durationMin > 0 ? `${km} · ${formatDuration(durationMin)}` : km;
-  }
-
-  if (weightKg === 0) return `${sets} × ${reps}`;
-  return `${sets} × ${reps} · ${formatWeight(weightKg)} kg`;
-}
 
 /**
  * Os proximos dias com treino, olhando ate uma semana a frente.

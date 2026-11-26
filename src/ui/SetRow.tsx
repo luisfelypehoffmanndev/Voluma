@@ -58,13 +58,11 @@ export function SetRow(props: Props) {
   return props.mode === 'hero' ? <HeroSet {...props} /> : <TableSet {...props} />;
 }
 
-function TableSet({ index, reps, weightKg, done, previous, onToggle, onCopyPrevious }: Props) {
+function TableSet({ index, done, previous, onToggle, onCopyPrevious }: Props) {
   return (
     <View style={styles.row}>
       <View style={styles.rowText}>
-        <Body style={done ? undefined : styles.pending}>
-          {`Série ${index} · ${reps} × ${formatWeight(weightKg)} kg`}
-        </Body>
+        <Body style={done ? undefined : styles.pending}>{`Série ${index}`}</Body>
         {previous !== undefined ? <Previous previous={previous} onCopy={onCopyPrevious} /> : null}
       </View>
       <Meta style={done ? styles.doneTag : undefined}>{done ? 'feita' : 'falta'}</Meta>
@@ -104,7 +102,6 @@ function HeroSet({
       {previous !== undefined ? <Previous previous={previous} onCopy={onCopyPrevious} /> : null}
 
       <View style={styles.adjust}>
-        <Meta>Se precisar, ajuste aqui:</Meta>
         <NumberLine
           label="Peso"
           unit="kg"
@@ -310,13 +307,13 @@ const styles = StyleSheet.create({
   },
   /** A instrucao: grande, em frase, com os numeros em destaque. */
   instruction: {
-    fontSize: 26,
-    lineHeight: 32,
+    fontSize: 22,
+    lineHeight: 30,
     color: colors.textAux,
   },
   instructionStrong: {
-    fontSize: 26,
-    lineHeight: 32,
+    fontSize: 22,
+    lineHeight: 30,
     fontFamily: fonts.sansMedium,
     color: colors.textPrimary,
   },

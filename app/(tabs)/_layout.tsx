@@ -52,7 +52,6 @@ export default function TabsLayout() {
         tabBarLabelStyle: {
           fontFamily: fonts.sansMedium,
           fontSize: 11,
-          marginBottom: 8,
         },
         /*
           A troca de aba e um cross-fade do proprio navegador: as duas cenas se
@@ -84,7 +83,7 @@ export default function TabsLayout() {
             end: bar.sideInset,
           },
         ],
-        tabBarItemStyle: { height: bar.height },
+        tabBarItemStyle: { height: bar.height, paddingVertical: 6 },
         // Centraliza o icone na vertical. O item interno do BottomTabItem usa
         // `justifyContent: 'flex-start'` num container de coluna que ocupa a
         // altura toda do pill — pensado para deixar espaco ao label embaixo.
@@ -94,7 +93,7 @@ export default function TabsLayout() {
         // unico prop mesclado no wrapper do icone. Com `flex: 1` o wrapper
         // deixa de ter altura fixa de 28px e passa a ocupar a caixa inteira,
         // onde o icone ja se centraliza sozinho.
-        tabBarIconStyle: { marginTop: 8 },
+        tabBarIconStyle: { marginTop: 4 },
         // No Android o vidro so borra se estiver FORA da sub-arvore que ele le
         // (ver `src/ui/blurTarget.tsx`). Aqui isso sai de graca: o
         // `tabBarBackground` mora na barra, e a barra e irma das telas dentro

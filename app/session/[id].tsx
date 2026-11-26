@@ -38,9 +38,8 @@ import {
 import type { ExerciseKind, SessionSet, Targets } from '@/domain/types';
 import { applyOrder } from '@/domain/order';
 import { formatDistance, formatDuration, runTargetsFromSets } from '@/domain/run';
-import { allDone, countSets, nextSetIndex, type SetDraft, sameSetDrafts, summarizeSets } from '@/domain/sets';
+import { allDone, countSets, nextSetIndex, type SetDraft, sameSetDrafts } from '@/domain/sets';
 import { sameTargets, targetsFromSets } from '@/domain/targets';
-import { formatVolume, formatWeight } from '@/domain/volume';
 import { everyWeekday, fromDateKey, weekStartKey, weekdayName, weekdayOf } from '@/domain/week';
 import { bumpData, useQuery } from '@/store/data';
 import { useAuth } from '@/sync/auth';
@@ -59,7 +58,6 @@ import { EmptyState } from '@/ui/EmptyState';
 import { LoadError } from '@/ui/LoadError';
 import { Header, Screen } from '@/ui/Screen';
 import { SessionHud } from '@/ui/session/SessionHud';
-import { Tour } from '@/ui/tour/Tour';
 import { TourTarget } from '@/ui/tour/TourTarget';
 import { SetRow } from '@/ui/SetRow';
 import { COMMIT_DELAY, TargetsEditor } from '@/ui/TargetsEditor';
@@ -234,16 +232,6 @@ export default function SessionScreen() {
     () => (loaded && localOrder ? applyOrder(loaded, localOrder, exerciseKey) : loaded),
     [loaded, localOrder],
   );
-  const sessionVolume = useMemo(() => {
-    if (!items) return undefined;
-    return items.reduce(
-      (sum, item) =>
-        sum +
-        (drafts[item.exerciseId]?.volume ??
-          draftVolume(item.exerciseKind, item.done, item.rows, item.targets)),
-      0,
-    );
-  }, [items, drafts]);
 
   /**
    * O treino contado em SERIES, com o rascunho da tela na frente do banco.
@@ -406,19 +394,6 @@ export default function SessionScreen() {
             bottom={footerBottom + BUTTON_HEIGHT + spacing.md}
           />
 
-          {/* A marcacao por serie e o conceito novo do app: a dica aponta a
-              serie da vez, uma vez so, e explica o que a caixa faz. Mora no
-              `overlay` para medir nas mesmas coordenadas do alvo. */}
-          <Tour
-            id="session"
-            active={exercises.length > 0}
-            steps={[
-              {
-                target: 'session.next',
-                text: 'Faça a série indicada e depois toque em “Pronto, fiz a série”.',
-              },
-            ]}
-          />
         </>
       }
     >
@@ -428,9 +403,6 @@ export default function SessionScreen() {
         title={data.title}
         done={counts.done}
         total={counts.total}
-        volume={sessionVolume ?? undefined}
-        startedAt={session.startedAt}
-        completedAt={session.completedAt}
         current={exercises.find((item) => exerciseKey(item) === currentKey)?.exerciseName ?? null}
       />
 
@@ -1340,7 +1312,7 @@ function StrengthExerciseCard(props: CardProps) {
           <View style={styles.itemText}>
             <Body numberOfLines={1}>{item.exerciseName}</Body>
             <Meta numberOfLines={1}>
-              {`${setsLabel(rows, done, item.source)} · ${strengthSummary(rows)}`}
+              {setsLabel(rows, done)}
             </Meta>
           </View>
           <Animated.View style={chevronStyle}>
@@ -1426,11 +1398,11 @@ function StrengthExerciseCard(props: CardProps) {
  * marcado ainda a origem do numero (`SOURCE_LABEL`) importa — ali o que esta na
  * tela e previsao, nao registro.
  */
-function setsLabel(rows: readonly SetDraft[], done: boolean, source: ItemSource): string {
-  if (done) return 'concluído';
+function setsLabel(rows: readonly SetDraft[], done: boolean): string {
+  if (done) return 'pronto ✓';
   const doneSets = rows.filter((row) => row.done).length;
-  if (doneSets === 0) return SOURCE_LABEL[source];
-  return `${doneSets} de ${rows.length} séries`;
+  if (doneSets === 0) return `${rows.length} ${rows.length === 1 ? 'série' : 'séries'}`;
+  return `${doneSets} de ${rows.length} séries feitas`;
 }
 
 /** "5 km · 28 min" — o que a corrida do dia vale. */
@@ -1438,26 +1410,6 @@ function runSummary(targets: Targets): string {
   return `${formatDistance(targets.distanceKm)} km · ${formatDuration(targets.durationMin)}`;
 }
 
-/**
- * "3 × 10 · 62,5 kg · 1.875 kg" quando as series sao iguais, ou
- * "3 séries · 60–70 kg · 1.950 kg" quando a carga varia entre elas.
- *
- * O volume (`formatVolume`) continua bem definido nos dois casos — e sempre a
- * soma de reps × peso de cada serie, divergente ou nao.
- */
-function strengthSummary(rows: readonly SetDraft[]): string {
-  const { uniform, reps, weightRange, volume } = summarizeSets(rows);
-  const [min, max] = weightRange;
-
-  if (uniform) {
-    return `${rows.length} × ${reps} · ${formatWeight(min)} kg · ${formatVolume(volume)} kg`;
-  }
-
-  const weightPart =
-    min === max ? `${formatWeight(min)} kg` : `${formatWeight(min)}–${formatWeight(max)} kg`;
-  const repsPart = reps !== null ? ` · ${reps} reps` : '';
-  return `${rows.length} séries${repsPart} · ${weightPart} · ${formatVolume(volume)} kg`;
-}
 
 /**
  * O que a tela mostra: o plano da semana daquela data, com o que ja foi
