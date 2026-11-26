@@ -5,6 +5,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 // os pesos e o bundler acaba embarcando ~2 MB de TTF que o app nunca usa.
 import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
 import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
+import { Inter_700Bold } from '@expo-google-fonts/inter/700Bold';
 import { JetBrainsMono_300Light } from '@expo-google-fonts/jetbrains-mono/300Light';
 import { JetBrainsMono_400Regular } from '@expo-google-fonts/jetbrains-mono/400Regular';
 import { useFonts } from 'expo-font';
@@ -31,6 +32,7 @@ export default function RootLayout() {
   const [ready] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
+    Inter_700Bold,
     JetBrainsMono_300Light,
     JetBrainsMono_400Regular,
   });

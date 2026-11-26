@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { formatWeight } from '@/domain/volume';
 import { colors, fontSize, fonts, layout, radius, spacing, surfaces } from '@/theme/tokens';
 
-import { Button } from './Button';
+import { Pill } from './simple';
 import { CheckCell } from './CheckCell';
 import { CheckIcon, MinusIcon, PlusIcon } from './icons';
 import { PressableSurface } from './PressableSurface';
@@ -94,9 +94,9 @@ function HeroSet({
       {/* A instrucao em frase: o numero sozinho ("62,5 × 8") pede que a pessoa
           saiba ler a notacao; a frase nao pede nada. */}
       <Body style={styles.instruction} maxFontSizeMultiplier={1.6}>
-        <Body style={styles.instructionStrong}>{`${reps} repetições`}</Body>
+        <Body style={styles.instructionStrong}>{`${reps}\u00A0repetições`}</Body>
         {` com `}
-        <Body style={styles.instructionStrong}>{`${formatWeight(weightKg)} kg`}</Body>
+        <Body style={styles.instructionStrong}>{`${formatWeight(weightKg)}\u00A0kg`}</Body>
       </Body>
 
       {previous !== undefined ? <Previous previous={previous} onCopy={onCopyPrevious} /> : null}
@@ -130,10 +130,11 @@ function HeroSet({
 
       {/* O lugar de tocar. Accent so na serie da vez do exercicio da vez: e o
           unico "toque aqui" da tela. */}
-      <Button
-        variant={accent ? 'primary' : 'inline'}
+      <Pill
+        full
+        tone={accent ? 'accent' : 'light'}
         label={`Pronto, fiz a série ${index}`}
-        icon={<CheckIcon size={20} color={accent ? colors.textOnAccent : colors.textPrimary} />}
+        icon={<CheckIcon size={20} color={colors.textOnAccent} strokeWidth={2.2} />}
         onPress={onToggle}
       />
     </View>
@@ -291,10 +292,10 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   hero: {
-    backgroundColor: surfaces.control,
-    borderRadius: radius.inner,
+    backgroundColor: colors.bg,
+    borderRadius: radius.card - 4,
     borderWidth: 1.5,
-    borderColor: colors.borderStrong,
+    borderColor: 'transparent',
     padding: spacing.lg,
     marginVertical: spacing.sm,
     gap: spacing.md,
@@ -303,18 +304,20 @@ const styles = StyleSheet.create({
     borderColor: colors.textPrimary,
   },
   now: {
-    color: colors.textPrimary,
+    color: colors.textAux,
+    textAlign: 'center',
   },
   /** A instrucao: grande, em frase, com os numeros em destaque. */
   instruction: {
-    fontSize: 22,
-    lineHeight: 30,
+    fontSize: 26,
+    lineHeight: 32,
     color: colors.textAux,
+    textAlign: 'center',
   },
   instructionStrong: {
-    fontSize: 22,
-    lineHeight: 30,
-    fontFamily: fonts.sansMedium,
+    fontSize: 26,
+    lineHeight: 32,
+    fontFamily: fonts.sansBold,
     color: colors.textPrimary,
   },
   adjust: {

@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import Animated from 'react-native-reanimated';
 
-import { layout, radius, surfaces } from '@/theme/tokens';
+import { layout, simple } from '@/theme/tokens';
 import { useListMotion } from './motion';
 import { PressableSurface } from './PressableSurface';
 
@@ -63,24 +63,19 @@ export function Card({
   ) : (
     // O card de vidro *acende*: baixar a opacidade de uma superficie
     // translucida apagaria o texto junto com ela e o card quase sumiria.
-    <PressableSurface onPress={onPress} feedback="card" style={surface}>
+    <PressableSurface onPress={onPress} feedback="raised" style={surface}>
       {children}
     </PressableSurface>
   );
 }
 
 const styles = StyleSheet.create({
+  // Bloco solido da linguagem simples (plano 16, ajuste de clareza): sem vidro
+  // e sem borda especular — o card se le como um bloco que se toca.
   card: {
-    borderRadius: radius.card,
+    borderRadius: simple.radius,
     padding: layout.cardPadding,
     overflow: 'hidden',
-    backgroundColor: surfaces.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    // A luz tem direcao: clara na quina de cima, sumindo ao descer. E o que
-    // separa material fisico de retangulo translucido.
-    borderTopColor: surfaces.specularTop,
-    borderLeftColor: surfaces.specularSide,
-    borderRightColor: surfaces.specularSide,
-    borderBottomColor: surfaces.specularBottom,
+    backgroundColor: simple.block,
   },
 });

@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   title: {
-    fontFamily: fonts.sansMedium,
+    fontFamily: fonts.sansBold,
     fontSize: fontSize.title,
     color: colors.textPrimary,
     // Sans medium grande com entrelinha padrao corta acento maiusculo em
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   section: {
-    fontFamily: fonts.sansMedium,
+    fontFamily: fonts.sansBold,
     fontSize: fontSize.section,
     color: colors.textPrimary,
     letterSpacing: -0.2,

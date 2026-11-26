@@ -418,6 +418,8 @@ export const fonts = {
   mono: 'JetBrainsMono_400Regular',
   sans: 'Inter_400Regular',
   sansMedium: 'Inter_500Medium',
+  /** Titulos no estilo simples (plano 16, ajuste de clareza): grandes e em negrito. */
+  sansBold: 'Inter_700Bold',
 } as const;
 
 /**
@@ -481,6 +483,26 @@ export const layout = {
   touch: 48,
   /** Respiro minimo entre dois alvos de toque vizinhos. */
   touchGap: 8,
+} as const;
+
+/**
+ * A linguagem simples (ajuste de clareza do plano 16, com o app Stoic como
+ * referencia de forma): blocos solidos e arredondados, botoes em pilula, um
+ * card de destaque por tela. Cores do Voluma: fundo quase preto, blocos cinza
+ * escuro, o laranja no destaque.
+ */
+export const simple = {
+  /** Bloco solido (card, atalho, escolha). */
+  block: '#1C1C1E',
+  /** Bloco tocado / selecionado de leve. */
+  blockPressed: '#2A2A2D',
+  /** Raio dos blocos grandes. */
+  radius: 24,
+  /** Raio dos blocos pequenos (atalho, dia). */
+  radiusSmall: 16,
+  /** Botao pilula padrao: claro sobre o fundo escuro, texto escuro. */
+  pill: '#F5F5F5',
+  pillText: '#0A0A0A',
 } as const;
 
 export const hitSlop = { top: 12, bottom: 12, left: 12, right: 12 } as const;

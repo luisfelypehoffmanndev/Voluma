@@ -8,42 +8,30 @@ import {
   listSessionSets,
   routineExerciseCounts,
   targetsForWeek,
+  trainedDates,
   type WeekExercise,
 } from '@/db/repo';
-import { applyOrder } from '@/domain/order';
+import { currentStreak } from '@/domain/streak';
 import { dayTitle, workoutState, type WorkoutState } from '@/domain/today';
 import type { Routine, Weekday } from '@/domain/types';
-import { routineForWeekday, toDateKey, weekStartKey, weekdayName, weekdayOf } from '@/domain/week';
+import { lastNDays, routineForWeekday, toDateKey, weekStartKey, weekdayName, weekdayOf } from '@/domain/week';
 import { useQuery } from '@/store/data';
-import { colors, fontSize, fonts, layout, spacing } from '@/theme/tokens';
-import { Button } from '@/ui/Button';
-import { Card } from '@/ui/Card';
-import { shortDate } from '@/ui/relative';
+import { colors, layout, spacing } from '@/theme/tokens';
+import { ChartIcon, ListIcon, PersonIcon, PlayIcon } from '@/ui/icons';
 import { LoadError } from '@/ui/LoadError';
-import { ChartIcon, ListIcon, PlayIcon } from '@/ui/icons';
-import { Header, Screen } from '@/ui/Screen';
-import { SetMeter } from '@/ui/SetMeter';
-import { TourTarget } from '@/ui/tour/TourTarget';
+import { Screen } from '@/ui/Screen';
+import { Big, Block, Pill, Small, Tile, WeekStrip } from '@/ui/simple';
 import { useTabBarClearance } from '@/ui/tabBar';
 import { Reveal } from '@/ui/Reveal';
-import { Body, Label, Meta, Section } from '@/ui/Text';
 import { useStartWorkout } from '@/ui/useStartWorkout';
 
 /**
- * Hoje — um trabalho so: dizer qual e o treino do dia, em que pe ele esta, e
- * levar ate ele em um toque.
+ * Hoje — tao simples que nao precisa de tutorial.
  *
- * **O que saiu** (plano 16, Onda 0): o card PROGRESSO, com peso, volume de 7
- * dias, sequencia e o dot-matrix. Cada um desses dados ja morava em outro lugar
- * (peso no Perfil, volume nos Numeros, a grade no Calendario), e a Hoje era a
- * segunda casa de todos. Dado em dois lugares e o mesmo numero para manter
- * sincronizado e uma tela a mais disputando o olho. A sequencia foi para o
- * Calendario, que e onde dias seguidos se leem.
- *
- * **O accent desta tela e o botao central da barra**, nao o botao daqui. Os
- * dois fazem a mesma coisa (`useStartWorkout`); este existe porque carrega o
- * estado do dia no rotulo ("Continuar treino · 2 de 16"), que o circulo da
- * barra nao tem espaco para dizer. Por isso ele e vidro.
+ * Forma do app Stoic (plano 16, ajuste de clareza): uma saudacao em negrito, a
+ * semana numa faixa, dois cards grandes lado a lado — o treino de hoje (o
+ * destaque, em laranja, com o botao) e o proximo — e atalhos quadrados para o
+ * resto. Quem abre o app pela primeira vez ve um botao que diz o que fazer.
  */
 export default function HomeScreen() {
   const clearance = useTabBarClearance();
@@ -55,7 +43,6 @@ export default function HomeScreen() {
   if (error) {
     return (
       <Screen>
-        <Header title="Hoje" subtitle={todaySubtitle()} />
         <LoadError error={error} onRetry={reload} />
       </Screen>
     );
@@ -64,252 +51,150 @@ export default function HomeScreen() {
   if (loading || !data) {
     return (
       <Screen>
-        <Header title="Hoje" subtitle={todaySubtitle()} />
-        <ActivityIndicator color={colors.textSecondary} />
+        <ActivityIndicator color={colors.textSecondary} style={styles.loading} />
       </Screen>
     );
   }
 
-  const { today } = data;
-  const hasPlan = today.exercises.length > 0;
+  const { today, next, week, streak } = data;
+  const hasPlan = today.exerciseCount > 0;
 
   return (
     <Screen>
-      <Header title="Hoje" subtitle={todaySubtitle()} />
-
       <Reveal style={styles.reveal}>
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
           showsVerticalScrollIndicator={false}
         >
-          {/* O HEROI da tela: o treino de hoje. Tres andares, do mais para o
-              menos importante: o nome, em que pe o dia esta (o numero e o
-              medidor), e a lista do que tem. O card nao e tocavel — quem abre o
-              treino e o botao logo abaixo. */}
-          <Card>
-            <Label>{hasPlan ? 'HOJE É DIA DE' : weekdayName(today.weekday).toUpperCase()}</Label>
-            <Section numberOfLines={2} style={styles.todayName}>
-              {today.name}
-            </Section>
+          <Big center>{greeting()}</Big>
 
-            {!hasPlan ? <Meta style={styles.restHint}>{todayHint(today.state, today.sets)}</Meta> : null}
+          <WeekStrip days={week} />
 
-            {today.sets.total > 0 ? (
-              <View style={styles.progress}>
-                <SetMeter done={today.sets.done} total={today.sets.total} />
-                <Body>{progressSentence(today.state, today.sets)}</Body>
-              </View>
-            ) : null}
-
-            {/* O lugar de tocar, dentro do proprio card do treino: grande, com
-                verbo, e no laranja. Quem abre o app pela primeira vez acha aqui
-                o que fazer sem procurar. */}
-            <TourTarget id="home.action">
-              <TodayAction
-                state={today.state}
-                sets={today.sets}
+          <View style={styles.pair}>
+            {/* O destaque: o treino de hoje, com o botao. */}
+            <Block tone="accent" style={styles.bigCard}>
+              <Small style={styles.onAccentSmall}>{hasPlan ? 'Treino de hoje' : 'Hoje'}</Small>
+              <Big style={styles.onAccentBig}>{hasPlan ? today.name : 'Dia de descanso'}</Big>
+              <Small style={styles.onAccentSmall}>{todayLine(today.state, today.sets)}</Small>
+              <View style={styles.spacer} />
+              <Pill
+                tone="dark"
+                label={actionLabel(today.state)}
+                icon={<PlayIcon size={16} color={colors.textPrimary} strokeWidth={2} />}
                 onPress={() => void openWorkout()}
               />
-            </TourTarget>
+            </Block>
 
-            {hasPlan ? (
-              <View style={styles.list}>
-                {today.exercises.slice(0, MAX_TODAY_ROWS).map((item) => {
-                  const finished = today.finishedIds.has(item.exerciseId);
-                  return (
-                    <View key={item.id} style={styles.exerciseRow}>
-                      {/* Duas linhas: com fonte grande o nome quebra em vez de
-                          virar "Su…" ao lado do alvo. */}
-                      <Body
-                        numberOfLines={2}
-                        style={[styles.exerciseName, finished && styles.finished]}
-                      >
-                        {item.exerciseName}
-                      </Body>
-                      {finished ? <Meta>pronto ✓</Meta> : null}
-                    </View>
-                  );
-                })}
-
-                {today.exercises.length > MAX_TODAY_ROWS ? (
-                  <Meta style={styles.moreRow}>
-                    {`+${today.exercises.length - MAX_TODAY_ROWS} exercícios`}
-                  </Meta>
-                ) : null}
-              </View>
-            ) : null}
-          </Card>
-
-          <Label style={styles.sectionLabel}>O QUE VOCÊ PODE FAZER</Label>
-          <View style={styles.shortcuts}>
-            <Shortcut
-              icon={<ListIcon size={24} />}
-              title="Meu plano"
-              text="Veja e mude os treinos da semana"
+            <Block
+              style={styles.bigCard}
               onPress={() => router.push('/plan')}
-            />
-            <Shortcut
-              icon={<ChartIcon size={24} />}
-              title="Meu progresso"
-              text="Veja quanto você já evoluiu"
-              onPress={() => router.push('/history')}
-            />
+              accessibilityLabel="Ver meu plano"
+            >
+              <Small>{next ? `Próximo · ${next.day}` : 'Próximo'}</Small>
+              <Big style={styles.sideBig}>{next ? next.name : 'Nada marcado'}</Big>
+              <View style={styles.spacer} />
+              <Pill label="Ver plano" onPress={() => router.push('/plan')} />
+            </Block>
           </View>
 
+          {streak > 1 ? <Small center>{`Você treinou ${streak} dias seguidos.`}</Small> : null}
+
+          <Big style={styles.section}>Atalhos</Big>
+          <View style={styles.tiles}>
+            <Tile icon={<ListIcon size={28} />} label="Meu plano" onPress={() => router.push('/plan')} />
+            <Tile
+              icon={<ChartIcon size={28} />}
+              label="Meu progresso"
+              onPress={() => router.push('/history')}
+            />
+            <Tile
+              icon={<PersonIcon size={28} />}
+              label="Meu perfil"
+              onPress={() => router.push('/profile')}
+            />
+          </View>
         </ScrollView>
       </Reveal>
     </Screen>
   );
 }
 
-/**
- * O botao da Hoje, com o estado do dia no rotulo.
- *
- * Nivel 2 (`inline`) em todos os estados: ele rola com a pagina (ver a nota de
- * posicao em `Button.tsx`), e o accent da tela e do botao central da barra.
- * O que muda entre os estados e so o texto.
- */
-function TodayAction({
-  state,
-  sets,
-  onPress,
-}: {
-  state: WorkoutState;
-  /** O dia em series — a mesma unidade que a tela de treino conta. */
-  sets: { done: number; total: number };
-  onPress: () => void;
-}) {
-  const label = (() => {
-    switch (state.kind) {
-      case 'notStarted':
-        return 'Começar meu treino';
-      case 'inProgress':
-        return 'Continuar meu treino';
-      case 'completed':
-        return 'Ver o treino de hoje';
-      case 'rest':
-        return 'Fazer um treino livre';
-    }
-  })();
-  // Laranja quando treinar e o proximo passo; feito ou descanso, vidro.
-  const next = state.kind === 'notStarted' || state.kind === 'inProgress';
-  return (
-    <Button
-      variant={next ? 'primary' : 'inline'}
-      label={label}
-      icon={<PlayIcon size={20} color={next ? colors.textOnAccent : colors.textPrimary} />}
-      onPress={onPress}
-    />
-  );
+/** "bom dia." / "boa tarde." / "boa noite." — minusculo e com ponto. */
+function greeting(now = new Date()): string {
+  const hour = now.getHours();
+  if (hour < 12) return 'bom dia.';
+  if (hour < 18) return 'boa tarde.';
+  return 'boa noite.';
 }
 
-/** A frase de progresso do dia, para quem nao le o medidor. */
-function progressSentence(state: WorkoutState, sets: { done: number; total: number }): string {
-  if (state.kind === 'completed') return 'Treino de hoje concluído. Bom trabalho!';
-  if (sets.done === 0) return `Você ainda não começou: são ${sets.total} séries.`;
-  return `Você já fez ${sets.done} de ${sets.total} séries.`;
-}
-
-/** Um atalho grande: icone, nome e uma linha dizendo o que ha la. */
-function Shortcut({
-  icon,
-  title,
-  text,
-  onPress,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  text: string;
-  onPress: () => void;
-}) {
-  return (
-    <View style={styles.shortcut}>
-      <Card onPress={onPress} style={styles.shortcutCard}>
-        {icon}
-        <Body style={styles.shortcutTitle}>{title}</Body>
-        <Meta>{text}</Meta>
-      </Card>
-    </View>
-  );
-}
-
-/**
- * A orientacao da home, em UMA linha.
- *
- * Nao e frase motivacional (§7 proibe) nem tutorial: e o que falta fazer hoje,
- * dito com o dado que a tela ja tem.
- */
-function todayHint(state: WorkoutState, sets: { done: number; total: number }): string {
+function actionLabel(state: WorkoutState): string {
   switch (state.kind) {
     case 'notStarted':
-      return 'nada marcado ainda';
-    case 'inProgress': {
-      const left = Math.max(0, sets.total - sets.done);
-      return `faltam ${left}`;
-    }
+      return 'Começar';
+    case 'inProgress':
+      return 'Continuar';
     case 'completed':
-      return 'treino finalizado';
+      return 'Ver treino';
     case 'rest':
-      return 'descanso no seu plano';
+      return 'Treino livre';
   }
 }
 
-/** "Segunda · 14 set" — o dado no lugar do "Bem-vindo de volta" (§7). */
-function todaySubtitle(now = new Date()): string {
-  return `${weekdayName(weekdayOf(now))} · ${shortDate(now, now)}`;
+function todayLine(state: WorkoutState, sets: { done: number; total: number }): string {
+  switch (state.kind) {
+    case 'notStarted':
+      return `${sets.total} séries para fazer`;
+    case 'inProgress':
+      return `Faltam ${Math.max(0, sets.total - sets.done)} séries`;
+    case 'completed':
+      return 'Feito! Bom trabalho.';
+    case 'rest':
+      return 'Descanse ou faça um treino livre.';
+  }
 }
+
+const LETTERS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
 async function loadHome() {
   const now = new Date();
   const todayKey = toDateKey(now);
 
-  const [routines, counts, session] = await Promise.all([
+  // A semana de domingo a sabado, como no calendario de parede.
+  const sunday = new Date(now);
+  sunday.setDate(now.getDate() - now.getDay());
+  const weekKeys = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(sunday);
+    date.setDate(sunday.getDate() + index);
+    return toDateKey(date);
+  });
+
+  const streakWindow = lastNDays(now, 400);
+  const [routines, counts, session, trainedWeek, trainedAll] = await Promise.all([
     listRoutines(),
     routineExerciseCounts(),
     getSessionByDate(todayKey),
+    trainedDates(weekKeys[0], weekKeys[6]),
+    trainedDates(streakWindow[0], todayKey),
   ]);
 
-  const weekStart = weekStartKey(now);
   const todayRoutine = routineForWeekday(routines, weekdayOf(now));
-  // Os numeros da semana, ja resolvidos: e o que o card de hoje mostra e o que
-  // a sessao vai materializar quando o usuario tocar em treinar.
   const [todayExercises, sessionSets] = await Promise.all([
-    todayRoutine ? targetsForWeek(weekStart, todayRoutine.id) : Promise.resolve<WeekExercise[]>([]),
+    todayRoutine
+      ? targetsForWeek(weekStartKey(now), todayRoutine.id)
+      : Promise.resolve<WeekExercise[]>([]),
     session ? listSessionSets(session.id) : Promise.resolve([]),
   ]);
   const plannedSets = todayExercises.reduce((sum, item) => sum + item.targets.sets, 0);
-
-  /**
-   * O dia contado em SERIES, a mesma unidade da tela de treino: o total e o do
-   * plano, com o que foi gravado por cima — series adicionadas a mais no dia
-   * entram, e um dia de treino livre (sem plano) conta as do que foi registrado.
-   */
-  const doneSets = sessionSets.filter((set) => set.done).length;
-  const todaySets = {
-    done: doneSets,
+  const sets = {
+    done: sessionSets.filter((set) => set.done).length,
     total: Math.max(plannedSets, sessionSets.length),
   };
 
-  // Exercicio terminado = toda serie gravada dele marcada. So os que tem serie
-  // gravada entram: o que nunca foi tocado hoje nao terminou.
-  const byExercise = new Map<string, boolean[]>();
-  for (const set of sessionSets) {
-    const list = byExercise.get(set.exerciseId) ?? [];
-    list.push(set.done);
-    byExercise.set(set.exerciseId, list);
-  }
-  const finishedIds = new Set(
-    [...byExercise].filter(([, done]) => done.every(Boolean)).map(([id]) => id),
-  );
-
   return {
     today: {
-      weekday: weekdayOf(now),
       name: dayTitle(todayRoutine?.name ?? '', todayExercises.length),
-      // Na ordem que o usuario arrastou no treino de hoje, se arrastou.
-      exercises: applyOrder(todayExercises, session?.exerciseOrder ?? [], (item) => item.exerciseId),
-      sets: todaySets,
-      finishedIds,
+      exerciseCount: todayExercises.length,
+      sets,
       state: workoutState({
         plannedExerciseIds: todayExercises.map((item) => item.exerciseId),
         sets: sessionSets,
@@ -317,121 +202,79 @@ async function loadHome() {
         completed: session?.completedAt != null,
       }),
     },
-    upcoming: nextDays(routines, counts, now, 3),
+    next: nextDay(routines, counts, now),
+    week: weekKeys.map((key, index) => ({
+      letter: LETTERS[index],
+      trained: trainedWeek.has(key),
+      today: key === todayKey,
+      future: key > todayKey,
+    })),
+    streak: currentStreak(trainedAll, now),
   };
 }
 
-/**
- * Quantos exercicios cabem no card de hoje antes de virar rolagem disfarcada.
- * O resto vira uma linha de "+N", e a lista inteira esta no treino.
- */
-const MAX_TODAY_ROWS = 6;
-
-
-/**
- * Os proximos dias com treino, olhando ate uma semana a frente.
- *
- * Nunca conta hoje — hoje ja tem o card grande. E pula dia sem exercicio: com
- * os sete dias sempre existindo, "tem rotina" deixou de significar "treina
- * nesse dia", e so a contagem de exercicios distingue treino de descanso.
- */
-function nextDays(
+/** O proximo dia com treino, olhando ate uma semana a frente. */
+function nextDay(
   routines: readonly Routine[],
   counts: ReadonlyMap<string, number>,
   from: Date,
-  count: number,
-): { weekday: Weekday; name: string }[] {
-  const found: { weekday: Weekday; name: string }[] = [];
-
-  for (let daysAhead = 1; daysAhead <= 7 && found.length < count; daysAhead += 1) {
+): { day: string; name: string } | null {
+  for (let ahead = 1; ahead <= 7; ahead += 1) {
     const date = new Date(from);
-    date.setDate(date.getDate() + daysAhead);
-    const weekday = weekdayOf(date);
-
+    date.setDate(date.getDate() + ahead);
+    const weekday = weekdayOf(date) as Weekday;
     const routine = routineForWeekday(routines, weekday);
-    const exerciseCount = routine ? (counts.get(routine.id) ?? 0) : 0;
-    if (!routine || exerciseCount === 0) continue;
-
-    found.push({ weekday, name: dayTitle(routine.name, exerciseCount) });
+    const count = routine ? (counts.get(routine.id) ?? 0) : 0;
+    if (routine && count > 0) {
+      return {
+        day: ahead === 1 ? 'amanhã' : weekdayName(weekday).toLowerCase(),
+        name: dayTitle(routine.name, count),
+      };
+    }
   }
-
-  return found;
+  return null;
 }
 
 const styles = StyleSheet.create({
-  // O `Reveal` entra entre o `Screen` e o `ScrollView`, entao precisa esticar
-  // igual ao que ele substitui no fluxo — sem isto o scroll fica sem altura.
   reveal: { flex: 1 },
+  loading: { marginTop: 80 },
   content: {
     paddingHorizontal: layout.screen,
-    gap: layout.cardGap,
+    paddingTop: spacing.xl,
+    gap: spacing.xl,
   },
-  todayName: {
-    marginTop: spacing.xs,
-  },
-  restHint: {
-    marginTop: spacing.xs,
-  },
-  progress: {
-    gap: spacing.sm,
-    marginTop: spacing.lg,
-    marginBottom: spacing.lg,
-  },
-  shortcuts: {
+  pair: {
     flexDirection: 'row',
     gap: layout.cardGap,
   },
-  shortcut: {
+  bigCard: {
     flex: 1,
-  },
-  shortcutCard: {
+    minHeight: 220,
     gap: spacing.xs,
-    minHeight: 132,
   },
-  shortcutTitle: {
-    fontFamily: fonts.sansMedium,
-    marginTop: spacing.sm,
-  },
-  list: {
-    marginTop: spacing.lg,
-  },
-  /** Titulo de secao fora do card: e ele que separa acao de consulta. */
-  sectionLabel: {
-    marginTop: layout.sectionGap - layout.cardGap,
-    marginLeft: spacing.xs,
-  },
-  upcomingDivided: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
-  },
-  exerciseRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.lg,
-    minHeight: layout.touch,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
-  },
-  exerciseName: {
+  spacer: {
     flex: 1,
+    minHeight: spacing.md,
   },
-  /** Exercicio terminado: apaga, nao some — continua na lista, no lugar dele. */
-  finished: {
-    color: colors.textAux,
+  onAccentSmall: {
+    color: 'rgba(0,0,0,0.65)',
   },
-  exerciseTargets: {
-    fontSize: fontSize.aux,
-    color: colors.textAux,
+  onAccentBig: {
+    color: colors.textOnAccent,
+    fontSize: 22,
+    lineHeight: 27,
   },
-  moreRow: {
-    paddingTop: spacing.md,
+  sideBig: {
+    fontSize: 22,
+    lineHeight: 27,
   },
-  upcomingRow: {
+  section: {
+    fontSize: 20,
+    lineHeight: 26,
+    marginBottom: -spacing.sm,
+  },
+  tiles: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.lg,
-    minHeight: layout.touch,
+    gap: layout.cardGap,
   },
 });
