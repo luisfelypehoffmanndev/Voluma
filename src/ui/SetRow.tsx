@@ -3,11 +3,12 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { formatWeight } from '@/domain/volume';
 import { colors, fontSize, fonts, layout, radius, spacing, surfaces } from '@/theme/tokens';
 
+import { Button } from './Button';
 import { CheckCell } from './CheckCell';
-import { MinusIcon, PlusIcon } from './icons';
+import { CheckIcon, MinusIcon, PlusIcon } from './icons';
 import { PressableSurface } from './PressableSurface';
 import { STEP_BUTTON_SIZE } from './Stepper';
-import { FONT_SCALE_CAP, Label, Meta, Mono } from './Text';
+import { Body, FONT_SCALE_CAP, Label, Meta, Mono } from './Text';
 import { useNumberDraft, useRepeatPress } from './useNumberInput';
 
 /** O passo de carga por toque. Segurar repete e acelera (`useRepeatPress`). */
@@ -18,21 +19,19 @@ const WEIGHT_MAX = 999;
 type Props = {
   /** 1-based, so para exibir — a posicao no array, nao o `setIndex` guardado. */
   index: number;
-  /** Quantas series o exercicio tem, para o "SÉRIE 3 DE 4" do bloco da vez. */
+  /** Quantas series o exercicio tem. */
   total: number;
   reps: number;
   weightKg: number;
   done: boolean;
   /**
-   * `hero`: a serie da vez — numero grande, controles, e a unica que se edita.
-   * `row`: uma linha de tabela, para as feitas e as que ainda vem.
+   * `hero`: a serie da vez — a instrucao, os ajustes e o botao de concluir.
+   * `row`: uma linha que diz se a serie esta feita ou falta.
    */
   mode: 'row' | 'hero';
   /**
-   * A serie da vez do EXERCICIO da vez: o contorno laranja, o unico accent da
-   * tela de treino (design.md §2). Um card aberto fora de ordem tambem mostra a
-   * propria serie da vez como bloco, mas sem cor — o laranja diz "e aqui",
-   * e so pode dizer isso de um lugar.
+   * A serie da vez do EXERCICIO da vez. So ela ganha o botao laranja: e o
+   * "toque aqui" da tela, e so pode existir em um lugar.
    */
   accent?: boolean;
   /** O que foi feito nesta serie no ultimo treino deste exercicio. */
@@ -47,20 +46,13 @@ type Props = {
 /**
  * Uma serie do exercicio.
  *
- * **A serie da vez e o heroi da tela.** O numero grande da sessao era o volume
- * do dia, que muda a cada toque e nao responde nada que a pessoa pergunte entre
- * series. A pergunta e "o que eu faco agora?", e a resposta e a carga desta
- * serie — em mono de 56px, legivel com o celular apoiado no banco a um braco
- * de distancia. As reps vem ao lado, um degrau abaixo.
+ * **Clareza antes de minimalismo** (plano 16, ajuste pos-Onda 0). Um primeiro
+ * usuario abriu o treino e nao sabia o que fazer: a tela tinha numeros e uma
+ * caixinha, e nada dizia "faca isto, depois toque aqui". Agora a serie da vez
+ * diz as duas coisas com palavras — "Faça agora: 8 repetições com 62,5 kg" — e
+ * o lugar de tocar e um botao largo com verbo: "Pronto, fiz esta série".
  *
- * As outras series sao linhas de tabela, sem caixa propria: antes cada serie
- * era um card dentro do card, e quatro series enchiam a tela. Agora a tabela e
- * densa e so a da vez ocupa espaco.
- *
- * O numero grande nao aparece duas vezes. Antes a serie da vez mostrava
- * "8 × 62,5" na linha e de novo dentro de cada stepper; agora o numero grande
- * E o campo: tocar nele abre o teclado numerico (60 → 80 em duas interacoes), e
- * os botoes embaixo so tem − e +.
+ * As outras series sao linhas que dizem em texto o estado: "feita" ou "falta".
  */
 export function SetRow(props: Props) {
   return props.mode === 'hero' ? <HeroSet {...props} /> : <TableSet {...props} />;
@@ -69,25 +61,17 @@ export function SetRow(props: Props) {
 function TableSet({ index, reps, weightKg, done, previous, onToggle, onCopyPrevious }: Props) {
   return (
     <View style={styles.row}>
-      {/* Coluna de largura fixa: cresce pouco, para "SÉRIE 12" nao quebrar
-          em duas linhas e desalinhar a tabela. */}
-      <Label
-        maxFontSizeMultiplier={FONT_SCALE_CAP.readout}
-        style={[styles.index, done && styles.indexDone]}
-      >{`SÉRIE ${index}`}</Label>
-
-      <View style={styles.rowValues}>
-        <Mono style={[styles.rowValue, !done && styles.pending]}>
-          {`${reps} × ${formatWeight(weightKg)}`}
-        </Mono>
-        <Label style={styles.unit}>kg</Label>
+      <View style={styles.rowText}>
+        <Body style={done ? undefined : styles.pending}>
+          {`Série ${index} · ${reps} × ${formatWeight(weightKg)} kg`}
+        </Body>
         {previous !== undefined ? <Previous previous={previous} onCopy={onCopyPrevious} /> : null}
       </View>
-
+      <Meta style={done ? styles.doneTag : undefined}>{done ? 'feita' : 'falta'}</Meta>
       <CheckCell
         checked={done}
         onPress={onToggle}
-        accessibilityLabel={`Série ${index}, ${reps} por ${formatWeight(weightKg)} quilos`}
+        accessibilityLabel={`Série ${index}, ${done ? 'feita, tocar para desmarcar' : 'marcar como feita'}`}
       />
     </View>
   );
@@ -95,10 +79,8 @@ function TableSet({ index, reps, weightKg, done, previous, onToggle, onCopyPrevi
 
 function HeroSet({
   index,
-  total,
   reps,
   weightKg,
-  done,
   accent = false,
   previous,
   onToggle,
@@ -106,153 +88,136 @@ function HeroSet({
   onChangeWeight,
   onCopyPrevious,
 }: Props) {
-  const weight = useNumberDraft({
-    value: weightKg,
-    format: formatWeight,
-    integer: false,
-    clamp: (value) => Math.min(WEIGHT_MAX, Math.max(0, value)),
-    onCommit: onChangeWeight,
-  });
-  const repsDraft = useNumberDraft({
-    value: reps,
-    format: String,
-    integer: true,
-    clamp: (value) => Math.min(REPS_MAX, Math.max(1, value)),
-    onCommit: onChangeReps,
-  });
-
   const round = (value: number) => Math.round(value * 100) / 100;
-  const weightMinus = useRepeatPress(
-    weightKg,
-    (v) => Math.max(0, round(v - WEIGHT_STEP)),
-    onChangeWeight,
-  );
-  const weightPlus = useRepeatPress(
-    weightKg,
-    (v) => Math.min(WEIGHT_MAX, round(v + WEIGHT_STEP)),
-    onChangeWeight,
-  );
-  const repsMinus = useRepeatPress(reps, (v) => Math.max(1, v - 1), onChangeReps);
-  const repsPlus = useRepeatPress(reps, (v) => Math.min(REPS_MAX, v + 1), onChangeReps);
 
   return (
     <View style={[styles.hero, accent && styles.heroAccent]}>
-      <View style={styles.heroHead}>
-        <Label style={styles.heroLabel}>{`SÉRIE ${index} DE ${total}`}</Label>
-        <CheckCell
-          checked={done}
-          onPress={onToggle}
-          accessibilityLabel={`Concluir série ${index}, ${reps} por ${formatWeight(weightKg)} quilos`}
-        />
-      </View>
-
-      {/* O numero e o campo. `adjustsFontSizeToFit` porque "102,5" a 56px
-          passa da largura de um telefone estreito ao lado das reps. */}
-      <View style={styles.heroNumbers}>
-        <Pressable
-          onPress={weight.start}
-          disabled={weight.draft !== null}
-          accessibilityLabel={`Carga, ${formatWeight(weightKg)} quilos. Tocar para digitar`}
-          style={styles.heroWeight}
-        >
-          <View style={styles.field}>
-            {weight.draft === null ? (
-              <Mono
-                style={styles.heroValue}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                maxFontSizeMultiplier={1}
-              >
-                {formatWeight(weightKg)}
-              </Mono>
-            ) : (
-              <TextInput
-                value={weight.draft}
-                onChangeText={weight.change}
-                onBlur={weight.commit}
-                onSubmitEditing={weight.commit}
-                keyboardType="decimal-pad"
-                returnKeyType="done"
-                selectTextOnFocus
-                autoFocus
-                maxFontSizeMultiplier={1}
-                style={[styles.heroValue, styles.input]}
-              />
-            )}
-          </View>
-          <Label style={styles.heroUnit}>kg</Label>
-        </Pressable>
-
-        <Pressable
-          onPress={repsDraft.start}
-          disabled={repsDraft.draft !== null}
-          accessibilityLabel={`${reps} repetições. Tocar para digitar`}
-          style={styles.heroReps}
-        >
-          <Mono style={styles.times} maxFontSizeMultiplier={1}>
-            ×
-          </Mono>
-          <View style={styles.field}>
-            {repsDraft.draft === null ? (
-              <Mono style={styles.repsValue} maxFontSizeMultiplier={1}>
-                {String(reps)}
-              </Mono>
-            ) : (
-              <TextInput
-                value={repsDraft.draft}
-                onChangeText={repsDraft.change}
-                onBlur={repsDraft.commit}
-                onSubmitEditing={repsDraft.commit}
-                keyboardType="number-pad"
-                returnKeyType="done"
-                selectTextOnFocus
-                autoFocus
-                maxFontSizeMultiplier={1}
-                style={[styles.repsValue, styles.input]}
-              />
-            )}
-          </View>
-        </Pressable>
-      </View>
+      <Label style={styles.now}>FAÇA AGORA</Label>
+      {/* A instrucao em frase: o numero sozinho ("62,5 × 8") pede que a pessoa
+          saiba ler a notacao; a frase nao pede nada. */}
+      <Body style={styles.instruction} maxFontSizeMultiplier={1.6}>
+        <Body style={styles.instructionStrong}>{`${reps} repetições`}</Body>
+        {` com `}
+        <Body style={styles.instructionStrong}>{`${formatWeight(weightKg)} kg`}</Body>
+      </Body>
 
       {previous !== undefined ? <Previous previous={previous} onCopy={onCopyPrevious} /> : null}
 
-      <View style={styles.controls}>
-        <StepGroup label="PESO" name="carga" minus={weightMinus} plus={weightPlus} />
-        <StepGroup label="REPS" name="repetições" minus={repsMinus} plus={repsPlus} />
+      <View style={styles.adjust}>
+        <Meta>Se precisar, ajuste aqui:</Meta>
+        <NumberLine
+          label="Peso"
+          unit="kg"
+          value={weightKg}
+          format={formatWeight}
+          integer={false}
+          min={0}
+          max={WEIGHT_MAX}
+          minus={(v) => Math.max(0, round(v - WEIGHT_STEP))}
+          plus={(v) => Math.min(WEIGHT_MAX, round(v + WEIGHT_STEP))}
+          onChange={onChangeWeight}
+        />
+        <NumberLine
+          label="Reps"
+          unit=""
+          value={reps}
+          format={String}
+          integer
+          min={1}
+          max={REPS_MAX}
+          minus={(v) => Math.max(1, v - 1)}
+          plus={(v) => Math.min(REPS_MAX, v + 1)}
+          onChange={onChangeReps}
+        />
       </View>
+
+      {/* O lugar de tocar. Accent so na serie da vez do exercicio da vez: e o
+          unico "toque aqui" da tela. */}
+      <Button
+        variant={accent ? 'primary' : 'inline'}
+        label={`Pronto, fiz a série ${index}`}
+        icon={<CheckIcon size={20} color={accent ? colors.textOnAccent : colors.textPrimary} />}
+        onPress={onToggle}
+      />
+    </View>
+  );
+}
+
+/** "Peso  [−]  62,5 kg  [+]": o numero no meio e tocavel para digitar. */
+function NumberLine({
+  label,
+  unit,
+  value,
+  format,
+  integer,
+  min,
+  max,
+  minus,
+  plus,
+  onChange,
+}: {
+  label: string;
+  unit: string;
+  value: number;
+  format: (value: number) => string;
+  integer: boolean;
+  min: number;
+  max: number;
+  minus: (value: number) => number;
+  plus: (value: number) => number;
+  onChange: (value: number) => void;
+}) {
+  const draft = useNumberDraft({
+    value,
+    format,
+    integer,
+    clamp: (next) => Math.min(max, Math.max(min, next)),
+    onCommit: onChange,
+  });
+  const down = useRepeatPress(value, minus, onChange);
+  const up = useRepeatPress(value, plus, onChange);
+  const name = label.toLowerCase();
+
+  return (
+    <View style={styles.line}>
+      <Body style={styles.lineLabel}>{label}</Body>
+      <StepButton repeat={down} accessibilityLabel={`Diminuir ${name}`}>
+        <MinusIcon size={20} color={colors.textPrimary} />
+      </StepButton>
+      <Pressable
+        onPress={draft.start}
+        disabled={draft.draft !== null}
+        accessibilityLabel={`${label}, ${format(value)} ${unit}. Tocar para digitar`}
+        style={styles.valueBox}
+      >
+        {draft.draft === null ? (
+          <Mono style={styles.value} maxFontSizeMultiplier={FONT_SCALE_CAP.readout}>
+            {format(value)}
+          </Mono>
+        ) : (
+          <TextInput
+            value={draft.draft}
+            onChangeText={draft.change}
+            onBlur={draft.commit}
+            onSubmitEditing={draft.commit}
+            keyboardType={integer ? 'number-pad' : 'decimal-pad'}
+            returnKeyType="done"
+            selectTextOnFocus
+            autoFocus
+            maxFontSizeMultiplier={FONT_SCALE_CAP.readout}
+            style={[styles.value, styles.input]}
+          />
+        )}
+        {unit ? <Label style={styles.unit}>{unit}</Label> : null}
+      </Pressable>
+      <StepButton repeat={up} accessibilityLabel={`Aumentar ${name}`}>
+        <PlusIcon size={20} color={colors.textPrimary} />
+      </StepButton>
     </View>
   );
 }
 
 type Repeat = ReturnType<typeof useRepeatPress>;
-
-/** "PESO  [−] [+]": o rotulo e os dois botoes. O valor ja esta grande em cima. */
-function StepGroup({
-  label,
-  name,
-  minus,
-  plus,
-}: {
-  label: string;
-  name: string;
-  minus: Repeat;
-  plus: Repeat;
-}) {
-  return (
-    <View style={styles.group}>
-      <Label>{label}</Label>
-      <View style={styles.buttons}>
-        <StepButton repeat={minus} accessibilityLabel={`Diminuir ${name}`}>
-          <MinusIcon size={18} color={colors.textPrimary} />
-        </StepButton>
-        <StepButton repeat={plus} accessibilityLabel={`Aumentar ${name}`}>
-          <PlusIcon size={18} color={colors.textPrimary} />
-        </StepButton>
-      </View>
-    </View>
-  );
-}
 
 const STEP_SLOP = (layout.touch - STEP_BUTTON_SIZE) / 2;
 
@@ -310,10 +275,6 @@ function Previous({
 }
 
 const styles = StyleSheet.create({
-  /**
-   * Linha de tabela: sem caixa, so o divisor em cima. 48 de altura, o alvo de
-   * toque, para a caixa de marcar nunca ficar espremida entre duas linhas.
-   */
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -322,34 +283,16 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.divider,
   },
-  index: {
-    width: 64,
-  },
-  indexDone: {
-    color: colors.textPrimary,
-  },
-  rowValues: {
+  rowText: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    flexWrap: 'wrap',
-    columnGap: 3,
   },
-  rowValue: {
-    fontFamily: fonts.monoLight,
-    fontSize: fontSize.numberLine,
-  },
-  /** Serie que ainda vem: o numero e previsao, nao registro — um degrau abaixo. */
+  /** Serie que ainda vem: previsao, nao registro — um degrau abaixo. */
   pending: {
     color: colors.textAux,
   },
-  unit: {
-    marginRight: spacing.md,
+  doneTag: {
+    color: colors.textPrimary,
   },
-  /**
-   * O bloco da vez: nivel 2 dentro do card. A borda existe sempre (transparente
-   * sem accent) para o conteudo nao andar 1px ao ganhar o contorno (§6).
-   */
   hero: {
     backgroundColor: surfaces.control,
     borderRadius: radius.inner,
@@ -357,84 +300,66 @@ const styles = StyleSheet.create({
     borderColor: colors.borderStrong,
     padding: spacing.lg,
     marginVertical: spacing.sm,
-    gap: spacing.sm,
+    gap: spacing.md,
   },
   heroAccent: {
-    borderColor: colors.accent,
+    borderColor: colors.textPrimary,
   },
-  heroHead: {
+  now: {
+    color: colors.textPrimary,
+  },
+  /** A instrucao: grande, em frase, com os numeros em destaque. */
+  instruction: {
+    fontSize: 26,
+    lineHeight: 32,
+    color: colors.textAux,
+  },
+  instructionStrong: {
+    fontSize: 26,
+    lineHeight: 32,
+    fontFamily: fonts.sansMedium,
+    color: colors.textPrimary,
+  },
+  adjust: {
+    gap: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.divider,
+  },
+  line: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: spacing.md,
+    minHeight: layout.touch,
   },
-  heroLabel: {
-    color: colors.textPrimary,
+  lineLabel: {
+    width: 56,
   },
-  heroNumbers: {
+  valueBox: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: spacing.lg,
-  },
-  heroWeight: {
-    flexShrink: 1,
-    flexDirection: 'row',
-    alignItems: 'baseline',
-  },
-  heroValue: {
-    fontFamily: fonts.monoLight,
-    fontSize: fontSize.numberHero,
-    lineHeight: fontSize.numberHero * 1.08,
-    color: colors.textPrimary,
-  },
-  /** Afordancia minima de campo: o sublinhado diz que o numero aceita toque. */
-  field: {
-    flexShrink: 1,
+    justifyContent: 'center',
+    minHeight: layout.touch,
+    paddingTop: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderStrong,
   },
-  heroUnit: {
-    marginLeft: spacing.xs,
-  },
-  heroReps: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: spacing.sm,
-  },
-  times: {
-    fontFamily: fonts.monoLight,
-    fontSize: fontSize.numberLine,
-    color: colors.textAux,
-  },
-  repsValue: {
-    fontFamily: fonts.monoLight,
-    fontSize: fontSize.numberDisplay,
+  value: {
+    fontFamily: fonts.mono,
+    fontSize: fontSize.numberLine + 4,
     color: colors.textPrimary,
   },
   input: {
-    // O TextInput do Android vem com padding proprio; sem zerar, o numero pula
-    // alguns px ao entrar em edicao.
     padding: 0,
     minWidth: 56,
+    textAlign: 'center',
+  },
+  unit: {
+    marginLeft: spacing.xs,
   },
   previous: {
     paddingVertical: spacing.xs,
-  },
-  /** Quebra em duas linhas com fonte grande, em vez de empurrar o + para fora. */
-  controls: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginTop: spacing.xs,
-    gap: spacing.md,
-  },
-  group: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  buttons: {
-    flexDirection: 'row',
-    gap: layout.touchGap,
   },
   stepButton: {
     width: STEP_BUTTON_SIZE,

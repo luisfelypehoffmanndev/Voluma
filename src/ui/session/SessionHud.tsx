@@ -7,7 +7,8 @@ import { colors, fontSize, fonts, layout, spacing } from '@/theme/tokens';
 import { CountingStat } from '@/ui/CountingStat';
 import { ArrowLeftIcon } from '@/ui/icons';
 import { RoundButton } from '@/ui/Screen';
-import { FONT_SCALE_CAP, Label, Mono, Section } from '@/ui/Text';
+import { Body, FONT_SCALE_CAP, Label, Mono, Section } from '@/ui/Text';
+import { SetMeter } from '@/ui/SetMeter';
 
 type Props = {
   /** O nome do treino — a rotina do dia, ou o dia da semana se ela nao tem nome. */
@@ -18,6 +19,8 @@ type Props = {
   volume: number | undefined;
   startedAt: string;
   completedAt: string | null;
+  /** O exercicio da vez, para o "Passo 3 de 16 · Supino reto". */
+  current: string | null;
 };
 
 /**
@@ -33,7 +36,7 @@ type Props = {
  * heroi da sessao agora e a carga da serie da vez, que e o que a pessoa le
  * entre series. O volume grande continua na tela de resultado.
  */
-export function SessionHud({ title, done, total, volume, startedAt, completedAt }: Props) {
+export function SessionHud({ title, done, total, volume, startedAt, completedAt, current }: Props) {
   const router = useRouter();
 
   return (
@@ -69,6 +72,17 @@ export function SessionHud({ title, done, total, volume, startedAt, completedAt 
         <Readout label="TEMPO">
           <ElapsedClock startedAt={startedAt} completedAt={completedAt} />
         </Readout>
+      </View>
+
+      {/* Onde a pessoa esta, em palavras: o passo e o exercicio. A barra mostra
+          o mesmo de relance — cada traco e uma serie. */}
+      <View style={styles.step}>
+        <Body numberOfLines={1}>
+          {done >= total
+            ? 'Tudo feito! Agora toque em Finalizar treino.'
+            : `Passo ${done + 1} de ${total}${current ? ` · ${current}` : ''}`}
+        </Body>
+        <SetMeter done={done} total={total} />
       </View>
     </View>
   );
@@ -127,6 +141,9 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.lg,
     gap: spacing.lg,
+  },
+  step: {
+    gap: spacing.sm,
   },
   titleRow: {
     flexDirection: 'row',

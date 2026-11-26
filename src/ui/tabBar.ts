@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
  */
 
 /** Altura do pill. */
-export const TAB_BAR_HEIGHT = 60;
+export const TAB_BAR_HEIGHT = 64;
 
 /** Recuo lateral do pill ate a borda da tela. */
 export const TAB_BAR_SIDE_INSET = 20;

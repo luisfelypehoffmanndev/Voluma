@@ -1,8 +1,8 @@
 import { Redirect, Tabs } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { useOnboarding } from '@/store/onboarding';
-import { colors, radius } from '@/theme/tokens';
+import { colors, fonts, radius } from '@/theme/tokens';
 import { GlassSurface } from '@/ui/GlassSurface';
 import { ChartIcon, ListIcon, PersonIcon, TodayIcon } from '@/ui/icons';
 import { tabTransitionSpec, useTabAnimation } from '@/ui/motion';
@@ -15,7 +15,7 @@ import { TRAIN_BUTTON_SIZE, TrainButton } from '@/ui/TrainButton';
  * cima dele passa 10dp do pill: le como uma peca a parte, a acao, e nao como
  * mais um icone de aba.
  */
-const TRAIN_LIFT = 12;
+const TRAIN_LIFT = 22;
 
 /**
  * Tab bar flutuante — e o caso mais claro da regra do brief: ela paira sobre
@@ -46,7 +46,14 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarShowLabel: false,
+        // Com nome embaixo de cada icone: so icone deixou quem abria o app pela
+        // primeira vez sem saber o que era cada aba (ajuste de clareza, plano 16).
+        tabBarShowLabel: true,
+        tabBarLabelStyle: {
+          fontFamily: fonts.sansMedium,
+          fontSize: 11,
+          marginBottom: 8,
+        },
         /*
           A troca de aba e um cross-fade do proprio navegador: as duas cenas se
           sobrepoem, uma apagando enquanto a outra acende. Ver `useTabAnimation`.
@@ -87,7 +94,7 @@ export default function TabsLayout() {
         // unico prop mesclado no wrapper do icone. Com `flex: 1` o wrapper
         // deixa de ter altura fixa de 28px e passa a ocupar a caixa inteira,
         // onde o icone ja se centraliza sozinho.
-        tabBarIconStyle: { flex: 1 },
+        tabBarIconStyle: { marginTop: 8 },
         // No Android o vidro so borra se estiver FORA da sub-arvore que ele le
         // (ver `src/ui/blurTarget.tsx`). Aqui isso sai de graca: o
         // `tabBarBackground` mora na barra, e a barra e irma das telas dentro
@@ -102,6 +109,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
+          title: 'Hoje',
           tabBarAccessibilityLabel: 'Hoje',
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused}>
@@ -113,6 +121,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="plan"
         options={{
+          title: 'Plano',
           tabBarAccessibilityLabel: 'Plano',
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused}>
@@ -137,13 +146,17 @@ export default function TabsLayout() {
               pointerEvents="none"
               accessibilityElementsHidden
               importantForAccessibility="no-hide-descendants"
-            />
+            >
+              {/* O nome do botao do meio, no mesmo lugar dos nomes das abas. */}
+              <Text style={styles.trainLabel}>Treinar</Text>
+            </View>
           ),
         }}
       />
       <Tabs.Screen
         name="history"
         options={{
+          title: 'Histórico',
           tabBarAccessibilityLabel: 'Histórico',
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused}>
@@ -155,6 +168,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="profile"
         options={{
+          title: 'Perfil',
           tabBarAccessibilityLabel: 'Perfil',
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused}>
@@ -186,6 +200,14 @@ const styles = StyleSheet.create({
   },
   spacer: {
     flex: 1,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingBottom: 8,
+  },
+  trainLabel: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 11,
+    color: colors.accent,
   },
   train: {
     position: 'absolute',

@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 
@@ -16,11 +17,12 @@ import { formatWeight } from '@/domain/volume';
 import type { Routine, Weekday } from '@/domain/types';
 import { routineForWeekday, toDateKey, weekStartKey, weekdayName, weekdayOf } from '@/domain/week';
 import { useQuery } from '@/store/data';
-import { colors, fontSize, layout, spacing } from '@/theme/tokens';
+import { colors, fontSize, fonts, layout, spacing } from '@/theme/tokens';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { shortDate } from '@/ui/relative';
 import { LoadError } from '@/ui/LoadError';
+import { ChartIcon, ListIcon, PlayIcon } from '@/ui/icons';
 import { Header, Screen } from '@/ui/Screen';
 import { SetMeter } from '@/ui/SetMeter';
 import { Tour } from '@/ui/tour/Tour';
@@ -49,6 +51,7 @@ import { useStartWorkout } from '@/ui/useStartWorkout';
 export default function HomeScreen() {
   const clearance = useTabBarClearance();
   const openWorkout = useStartWorkout();
+  const router = useRouter();
 
   const { data, loading, error, reload } = useQuery(useCallback(() => loadHome(), []));
 
@@ -105,25 +108,34 @@ export default function HomeScreen() {
               medidor), e a lista do que tem. O card nao e tocavel — quem abre o
               treino e o botao logo abaixo. */}
           <Card>
-            <Label>{dayLabel(today.weekday, today.exercises.length)}</Label>
+            <Label>{hasPlan ? 'HOJE É DIA DE' : weekdayName(today.weekday).toUpperCase()}</Label>
             <Section numberOfLines={2} style={styles.todayName}>
               {today.name}
             </Section>
 
-            {hasPlan || today.sets.total > 0 ? (
-              <View style={styles.readout}>
-                <View style={styles.readoutNumber}>
-                  <Mono style={styles.readoutDone}>{String(today.sets.done)}</Mono>
-                  <Mono style={styles.readoutTotal}>{`/${today.sets.total}`}</Mono>
-                  <Meta style={styles.readoutUnit}>séries</Meta>
-                </View>
-                <Meta numberOfLines={1}>{todayHint(today.state, today.sets)}</Meta>
-              </View>
-            ) : (
-              <Meta style={styles.restHint}>{todayHint(today.state, today.sets)}</Meta>
-            )}
+            <Meta style={styles.restHint}>
+              {hasPlan
+                ? `${today.exercises.length} ${today.exercises.length === 1 ? 'exercício' : 'exercícios'} · ${today.sets.total} séries`
+                : todayHint(today.state, today.sets)}
+            </Meta>
 
-            <SetMeter done={today.sets.done} total={today.sets.total} />
+            {today.sets.total > 0 ? (
+              <View style={styles.progress}>
+                <SetMeter done={today.sets.done} total={today.sets.total} />
+                <Body>{progressSentence(today.state, today.sets)}</Body>
+              </View>
+            ) : null}
+
+            {/* O lugar de tocar, dentro do proprio card do treino: grande, com
+                verbo, e no laranja. Quem abre o app pela primeira vez acha aqui
+                o que fazer sem procurar. */}
+            <TourTarget id="home.action">
+              <TodayAction
+                state={today.state}
+                sets={today.sets}
+                onPress={() => void openWorkout()}
+              />
+            </TourTarget>
 
             {hasPlan ? (
               <View style={styles.list}>
@@ -155,13 +167,25 @@ export default function HomeScreen() {
             ) : null}
           </Card>
 
-          <TourTarget id="home.action">
-            <TodayAction state={today.state} sets={today.sets} onPress={() => void openWorkout()} />
-          </TourTarget>
+          <Label style={styles.sectionLabel}>O QUE VOCÊ PODE FAZER</Label>
+          <View style={styles.shortcuts}>
+            <Shortcut
+              icon={<ListIcon size={24} />}
+              title="Meu plano"
+              text="Veja e mude os treinos da semana"
+              onPress={() => router.push('/plan')}
+            />
+            <Shortcut
+              icon={<ChartIcon size={24} />}
+              title="Meu progresso"
+              text="Veja quanto você já evoluiu"
+              onPress={() => router.push('/history')}
+            />
+          </View>
 
           {upcoming.length > 0 ? (
             <>
-              <Label style={styles.sectionLabel}>PRÓXIMOS</Label>
+              <Label style={styles.sectionLabel}>PRÓXIMOS DIAS DE TREINO</Label>
               <Card>
                 {upcoming.map((day, index) => (
                   <View
@@ -203,23 +227,55 @@ function TodayAction({
   const label = (() => {
     switch (state.kind) {
       case 'notStarted':
-        return `Começar treino · ${sets.total} ${sets.total === 1 ? 'série' : 'séries'}`;
+        return 'Começar meu treino';
       case 'inProgress':
-        return `Continuar treino · ${sets.done} de ${sets.total}`;
+        return 'Continuar meu treino';
       case 'completed':
-        return 'Ver treino de hoje';
+        return 'Ver o treino de hoje';
       case 'rest':
-        return 'Treino livre';
+        return 'Fazer um treino livre';
     }
   })();
-  return <Button variant="inline" label={label} onPress={onPress} />;
+  // Laranja quando treinar e o proximo passo; feito ou descanso, vidro.
+  const next = state.kind === 'notStarted' || state.kind === 'inProgress';
+  return (
+    <Button
+      variant={next ? 'primary' : 'inline'}
+      label={label}
+      icon={<PlayIcon size={20} color={next ? colors.textOnAccent : colors.textPrimary} />}
+      onPress={onPress}
+    />
+  );
 }
 
-/** "QUARTA · 5 EXERCÍCIOS" — o rotulo do card do dia. */
-function dayLabel(weekday: Weekday, exercises: number): string {
-  const day = weekdayName(weekday).toUpperCase();
-  if (exercises === 0) return day;
-  return `${day} · ${exercises} ${exercises === 1 ? 'EXERCÍCIO' : 'EXERCÍCIOS'}`;
+/** A frase de progresso do dia, para quem nao le o medidor. */
+function progressSentence(state: WorkoutState, sets: { done: number; total: number }): string {
+  if (state.kind === 'completed') return 'Treino de hoje concluído. Bom trabalho!';
+  if (sets.done === 0) return `Você ainda não começou: são ${sets.total} séries.`;
+  return `Você já fez ${sets.done} de ${sets.total} séries.`;
+}
+
+/** Um atalho grande: icone, nome e uma linha dizendo o que ha la. */
+function Shortcut({
+  icon,
+  title,
+  text,
+  onPress,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  text: string;
+  onPress: () => void;
+}) {
+  return (
+    <View style={styles.shortcut}>
+      <Card onPress={onPress} style={styles.shortcutCard}>
+        {icon}
+        <Body style={styles.shortcutTitle}>{title}</Body>
+        <Meta>{text}</Meta>
+      </Card>
+    </View>
+  );
 }
 
 /**
@@ -370,32 +426,28 @@ const styles = StyleSheet.create({
   todayName: {
     marginTop: spacing.xs,
   },
-  /** A leitura do dia: o numero feito em mono grande, o total colado nele. */
-  readout: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    marginTop: spacing.lg,
-    marginBottom: spacing.md,
-  },
-  readoutNumber: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-  },
-  readoutDone: {
-    fontSize: fontSize.numberDisplay,
-    lineHeight: fontSize.numberDisplay + 4,
-  },
-  readoutTotal: {
-    fontSize: fontSize.numberLine,
-    color: colors.textAux,
-  },
-  readoutUnit: {
-    marginLeft: spacing.sm,
-  },
   restHint: {
     marginTop: spacing.xs,
+  },
+  progress: {
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  shortcuts: {
+    flexDirection: 'row',
+    gap: layout.cardGap,
+  },
+  shortcut: {
+    flex: 1,
+  },
+  shortcutCard: {
+    gap: spacing.xs,
+    minHeight: 132,
+  },
+  shortcutTitle: {
+    fontFamily: fonts.sansMedium,
+    marginTop: spacing.sm,
   },
   list: {
     marginTop: spacing.lg,

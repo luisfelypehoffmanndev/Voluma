@@ -415,7 +415,7 @@ export default function SessionScreen() {
             steps={[
               {
                 target: 'session.next',
-                text: 'A série da vez fica em destaque. Toque no número para ajustar e marque a caixa ao terminar.',
+                text: 'Faça a série indicada e depois toque em “Pronto, fiz a série”.',
               },
             ]}
           />
@@ -431,6 +431,7 @@ export default function SessionScreen() {
         volume={sessionVolume ?? undefined}
         startedAt={session.startedAt}
         completedAt={session.completedAt}
+        current={exercises.find((item) => exerciseKey(item) === currentKey)?.exerciseName ?? null}
       />
 
       <Reveal style={styles.reveal}>
