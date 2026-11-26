@@ -1,48 +1,44 @@
-import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import {
   getSessionByDate,
   listRoutines,
   listSessionSets,
-  routineExerciseCounts,
   targetsForWeek,
   trainedDates,
   type WeekExercise,
 } from '@/db/repo';
+import { formatDistance, formatDuration } from '@/domain/run';
 import { currentStreak } from '@/domain/streak';
 import { dayTitle, workoutState, type WorkoutState } from '@/domain/today';
-import type { Routine, Weekday } from '@/domain/types';
+import { formatWeight } from '@/domain/volume';
 import { lastNDays, routineForWeekday, toDateKey, weekStartKey, weekdayName, weekdayOf } from '@/domain/week';
 import { useQuery } from '@/store/data';
-import { colors, layout, spacing } from '@/theme/tokens';
-import { ChartIcon, ListIcon, PersonIcon, PlayIcon } from '@/ui/icons';
+import { fonts, layout, shape, spacing, theme } from '@/theme/tokens';
+import { Button } from '@/ui/Button';
+import { Card } from '@/ui/Card';
 import { LoadError } from '@/ui/LoadError';
-import { Screen } from '@/ui/Screen';
-import { Big, Block, Pill, Small, Tile, WeekStrip } from '@/ui/simple';
+import { shortDate } from '@/ui/relative';
+import { Header, Screen } from '@/ui/Screen';
 import { useTabBarClearance } from '@/ui/tabBar';
 import { Reveal } from '@/ui/Reveal';
+import { Body, Label, Meta } from '@/ui/Text';
 import { useStartWorkout } from '@/ui/useStartWorkout';
 
 /**
- * Hoje — tao simples que nao precisa de tutorial.
- *
- * Forma do app Stoic (plano 16, ajuste de clareza): uma saudacao em negrito, a
- * semana numa faixa, dois cards grandes lado a lado — o treino de hoje (o
- * destaque, em laranja, com o botao) e o proximo — e atalhos quadrados para o
- * resto. Quem abre o app pela primeira vez ve um botao que diz o que fazer.
+ * Hoje (Design/design.md §7): o heroi e o treino do dia, com um botao largo que
+ * diz o que fazer. Embaixo, a semana em sete circulos e os exercicios do dia.
  */
 export default function HomeScreen() {
   const clearance = useTabBarClearance();
   const openWorkout = useStartWorkout();
-  const router = useRouter();
-
   const { data, loading, error, reload } = useQuery(useCallback(() => loadHome(), []));
 
   if (error) {
     return (
       <Screen>
+        <Header title="Hoje" subtitle={todaySubtitle()} />
         <LoadError error={error} onRetry={reload} />
       </Screen>
     );
@@ -51,106 +47,136 @@ export default function HomeScreen() {
   if (loading || !data) {
     return (
       <Screen>
-        <ActivityIndicator color={colors.textSecondary} style={styles.loading} />
+        <Header title="Hoje" subtitle={todaySubtitle()} />
+        <ActivityIndicator color={theme.outline} />
       </Screen>
     );
   }
 
-  const { today, next, week, streak } = data;
-  const hasPlan = today.exerciseCount > 0;
+  const { today, week, streak, trainedToday } = data;
+  const hasPlan = today.exercises.length > 0;
+  const progress = today.sets.total > 0 ? today.sets.done / today.sets.total : 0;
 
   return (
     <Screen>
+      <Header title="Hoje" subtitle={todaySubtitle()} />
       <Reveal style={styles.reveal}>
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
           showsVerticalScrollIndicator={false}
         >
-          <Big center>{greeting()}</Big>
+          <Card>
+            <Label>{hasPlan ? 'TREINO DE HOJE' : 'HOJE'}</Label>
+            <Text style={styles.heroName} maxFontSizeMultiplier={1.3}>
+              {hasPlan ? today.name : 'Dia de descanso'}
+            </Text>
+            <Meta style={styles.heroMeta}>
+              {hasPlan
+                ? `${today.exercises.length} ${today.exercises.length === 1 ? 'exercício' : 'exercícios'} · cerca de ${estimateMinutes(today.sets.total)} min`
+                : 'Nada no seu plano para hoje. Se quiser, faça um treino livre.'}
+            </Meta>
 
-          <WeekStrip days={week} />
+            {today.state.kind === 'inProgress' ? (
+              <View style={styles.track} accessibilityLabel={`${today.sets.done} de ${today.sets.total} séries`}>
+                <View style={[styles.fill, { width: `${Math.round(progress * 100)}%` }]} />
+              </View>
+            ) : null}
 
-          <View style={styles.pair}>
-            {/* O destaque: o treino de hoje, com o botao. */}
-            <Block tone="accent" style={styles.bigCard}>
-              <Small style={styles.onAccentSmall}>{hasPlan ? 'Treino de hoje' : 'Hoje'}</Small>
-              <Big style={styles.onAccentBig}>{hasPlan ? today.name : 'Dia de descanso'}</Big>
-              <Small style={styles.onAccentSmall}>{todayLine(today.state, today.sets)}</Small>
-              <View style={styles.spacer} />
-              <Pill
-                tone="dark"
-                label={actionLabel(today.state)}
-                icon={<PlayIcon size={16} color={colors.textPrimary} strokeWidth={2} />}
-                onPress={() => void openWorkout()}
-              />
-            </Block>
+            <Button
+              variant={today.state.kind === 'completed' || today.state.kind === 'rest' ? 'inline' : 'primary'}
+              label={actionLabel(today.state, today.sets, today.exercises.length)}
+              onPress={() => void openWorkout()}
+              style={styles.action}
+            />
+          </Card>
 
-            <Block
-              style={styles.bigCard}
-              onPress={() => router.push('/plan')}
-              accessibilityLabel="Ver meu plano"
-            >
-              <Small>{next ? `Próximo · ${next.day}` : 'Próximo'}</Small>
-              <Big style={styles.sideBig}>{next ? next.name : 'Nada marcado'}</Big>
-              <View style={styles.spacer} />
-              <Pill label="Ver plano" onPress={() => router.push('/plan')} />
-            </Block>
+          {streak > 0 && !trainedToday && hasPlan ? (
+            <Meta style={styles.streak}>
+              {`Treine hoje para não perder a sequência de ${streak} ${streak === 1 ? 'dia' : 'dias'}.`}
+            </Meta>
+          ) : null}
+
+          <Label style={styles.section}>SEMANA</Label>
+          <View style={styles.week}>
+            {week.map((day, index) => (
+              <View key={index} style={styles.day}>
+                <View
+                  style={[
+                    styles.circle,
+                    day.trained && styles.circleDone,
+                    day.today && !day.trained && styles.circleToday,
+                  ]}
+                />
+                <Meta style={day.today ? styles.dayToday : undefined}>{day.letter}</Meta>
+              </View>
+            ))}
           </View>
 
-          {streak > 1 ? <Small center>{`Você treinou ${streak} dias seguidos.`}</Small> : null}
-
-          <Big style={styles.section}>Atalhos</Big>
-          <View style={styles.tiles}>
-            <Tile icon={<ListIcon size={28} />} label="Meu plano" onPress={() => router.push('/plan')} />
-            <Tile
-              icon={<ChartIcon size={28} />}
-              label="Meu progresso"
-              onPress={() => router.push('/history')}
-            />
-            <Tile
-              icon={<PersonIcon size={28} />}
-              label="Meu perfil"
-              onPress={() => router.push('/profile')}
-            />
-          </View>
+          {hasPlan ? (
+            <>
+              <Label style={styles.section}>EXERCÍCIOS</Label>
+              <Card style={styles.list}>
+                {today.exercises.map((item, index) => (
+                  <View key={item.id} style={[styles.row, index > 0 && styles.rowDivided]}>
+                    <View style={styles.rowText}>
+                      <Body numberOfLines={2} style={styles.rowName}>
+                        {item.exerciseName}
+                      </Body>
+                      <Meta>{setsLabel(item)}</Meta>
+                    </View>
+                    <Text style={styles.rowLoad} maxFontSizeMultiplier={1.3}>
+                      {loadLabel(item)}
+                    </Text>
+                  </View>
+                ))}
+              </Card>
+            </>
+          ) : null}
         </ScrollView>
       </Reveal>
     </Screen>
   );
 }
 
-/** "bom dia." / "boa tarde." / "boa noite." — minusculo e com ponto. */
-function greeting(now = new Date()): string {
-  const hour = now.getHours();
-  if (hour < 12) return 'bom dia.';
-  if (hour < 18) return 'boa tarde.';
-  return 'boa noite.';
-}
-
-function actionLabel(state: WorkoutState): string {
+/** Microtexto especifico (§8): o botao diz o que acontece. */
+function actionLabel(
+  state: WorkoutState,
+  sets: { done: number; total: number },
+  exercises: number,
+): string {
   switch (state.kind) {
     case 'notStarted':
-      return 'Começar';
+      return `Começar treino (${exercises} ${exercises === 1 ? 'exercício' : 'exercícios'})`;
     case 'inProgress':
-      return 'Continuar';
+      return `Continuar treino · ${sets.done} de ${sets.total} séries`;
     case 'completed':
-      return 'Ver treino';
+      return 'Ver treino de hoje';
     case 'rest':
-      return 'Treino livre';
+      return 'Fazer treino livre';
   }
 }
 
-function todayLine(state: WorkoutState, sets: { done: number; total: number }): string {
-  switch (state.kind) {
-    case 'notStarted':
-      return `${sets.total} séries para fazer`;
-    case 'inProgress':
-      return `Faltam ${Math.max(0, sets.total - sets.done)} séries`;
-    case 'completed':
-      return 'Feito! Bom trabalho.';
-    case 'rest':
-      return 'Descanse ou faça um treino livre.';
+/** Uns 2 min por serie (execucao + descanso), arredondado de 5 em 5. */
+function estimateMinutes(sets: number): number {
+  return Math.max(5, Math.round((sets * 2) / 5) * 5);
+}
+
+function setsLabel(item: WeekExercise): string {
+  if (item.exerciseKind === 'run') return 'corrida';
+  return `${item.targets.sets} séries × ${item.targets.reps} reps`;
+}
+
+function loadLabel(item: WeekExercise): string {
+  const { weightKg, distanceKm, durationMin } = item.targets;
+  if (item.exerciseKind === 'run') {
+    const km = `${formatDistance(distanceKm)} km`;
+    return durationMin > 0 ? `${km} · ${formatDuration(durationMin)}` : km;
   }
+  return weightKg > 0 ? `${formatWeight(weightKg)} kg` : '';
+}
+
+function todaySubtitle(now = new Date()): string {
+  return `${weekdayName(weekdayOf(now))}, ${shortDate(now, now)}`;
 }
 
 const LETTERS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
@@ -159,7 +185,6 @@ async function loadHome() {
   const now = new Date();
   const todayKey = toDateKey(now);
 
-  // A semana de domingo a sabado, como no calendario de parede.
   const sunday = new Date(now);
   sunday.setDate(now.getDate() - now.getDay());
   const weekKeys = Array.from({ length: 7 }, (_, index) => {
@@ -169,9 +194,8 @@ async function loadHome() {
   });
 
   const streakWindow = lastNDays(now, 400);
-  const [routines, counts, session, trainedWeek, trainedAll] = await Promise.all([
+  const [routines, session, trainedWeek, trainedAll] = await Promise.all([
     listRoutines(),
-    routineExerciseCounts(),
     getSessionByDate(todayKey),
     trainedDates(weekKeys[0], weekKeys[6]),
     trainedDates(streakWindow[0], todayKey),
@@ -185,16 +209,13 @@ async function loadHome() {
     session ? listSessionSets(session.id) : Promise.resolve([]),
   ]);
   const plannedSets = todayExercises.reduce((sum, item) => sum + item.targets.sets, 0);
-  const sets = {
-    done: sessionSets.filter((set) => set.done).length,
-    total: Math.max(plannedSets, sessionSets.length),
-  };
+  const doneSets = sessionSets.filter((set) => set.done).length;
 
   return {
     today: {
       name: dayTitle(todayRoutine?.name ?? '', todayExercises.length),
-      exerciseCount: todayExercises.length,
-      sets,
+      exercises: todayExercises,
+      sets: { done: doneSets, total: Math.max(plannedSets, sessionSets.length) },
       state: workoutState({
         plannedExerciseIds: todayExercises.map((item) => item.exerciseId),
         sets: sessionSets,
@@ -202,79 +223,107 @@ async function loadHome() {
         completed: session?.completedAt != null,
       }),
     },
-    next: nextDay(routines, counts, now),
     week: weekKeys.map((key, index) => ({
       letter: LETTERS[index],
-      trained: trainedWeek.has(key),
+      // Hoje so conta com serie marcada: abrir o treino nao e ter treinado.
+      trained: key === todayKey ? doneSets > 0 : trainedWeek.has(key),
       today: key === todayKey,
-      future: key > todayKey,
     })),
     streak: currentStreak(trainedAll, now),
+    trainedToday: doneSets > 0,
   };
-}
-
-/** O proximo dia com treino, olhando ate uma semana a frente. */
-function nextDay(
-  routines: readonly Routine[],
-  counts: ReadonlyMap<string, number>,
-  from: Date,
-): { day: string; name: string } | null {
-  for (let ahead = 1; ahead <= 7; ahead += 1) {
-    const date = new Date(from);
-    date.setDate(date.getDate() + ahead);
-    const weekday = weekdayOf(date) as Weekday;
-    const routine = routineForWeekday(routines, weekday);
-    const count = routine ? (counts.get(routine.id) ?? 0) : 0;
-    if (routine && count > 0) {
-      return {
-        day: ahead === 1 ? 'amanhã' : weekdayName(weekday).toLowerCase(),
-        name: dayTitle(routine.name, count),
-      };
-    }
-  }
-  return null;
 }
 
 const styles = StyleSheet.create({
   reveal: { flex: 1 },
-  loading: { marginTop: 80 },
   content: {
     paddingHorizontal: layout.screen,
-    paddingTop: spacing.xl,
-    gap: spacing.xl,
-  },
-  pair: {
-    flexDirection: 'row',
     gap: layout.cardGap,
   },
-  bigCard: {
-    flex: 1,
-    minHeight: 220,
-    gap: spacing.xs,
+  heroName: {
+    fontFamily: fonts.display,
+    fontSize: 30,
+    lineHeight: 36,
+    letterSpacing: -0.6,
+    color: theme.onSurface,
+    marginTop: spacing.sm,
   },
-  spacer: {
-    flex: 1,
-    minHeight: spacing.md,
+  heroMeta: {
+    marginTop: spacing.xs,
   },
-  onAccentSmall: {
-    color: 'rgba(0,0,0,0.65)',
+  track: {
+    height: 6,
+    borderRadius: shape.pill,
+    backgroundColor: theme.surfaceContainerHighest,
+    marginTop: spacing.lg,
+    overflow: 'hidden',
   },
-  onAccentBig: {
-    color: colors.textOnAccent,
-    fontSize: 22,
-    lineHeight: 27,
+  fill: {
+    height: '100%',
+    borderRadius: shape.pill,
+    backgroundColor: theme.primaryContainer,
   },
-  sideBig: {
-    fontSize: 22,
-    lineHeight: 27,
+  action: {
+    marginTop: spacing.lg,
+  },
+  streak: {
+    textAlign: 'center',
+    color: theme.onSurface,
   },
   section: {
-    fontSize: 20,
-    lineHeight: 26,
-    marginBottom: -spacing.sm,
+    marginTop: layout.sectionGap - layout.cardGap,
+    marginLeft: spacing.xs,
   },
-  tiles: {
+  week: {
     flexDirection: 'row',
-    gap: layout.cardGap,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xs,
+  },
+  day: {
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  circle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: theme.surfaceContainerHigh,
+  },
+  circleDone: {
+    backgroundColor: theme.primaryContainer,
+  },
+  circleToday: {
+    borderWidth: 2,
+    borderColor: theme.primaryContainer,
+  },
+  dayToday: {
+    color: theme.onSurface,
+  },
+  list: {
+    paddingVertical: spacing.xs,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    minHeight: 56,
+    paddingVertical: spacing.sm,
+  },
+  rowDivided: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.outlineVariant,
+  },
+  rowText: {
+    flex: 1,
+    gap: 2,
+  },
+  rowName: {
+    fontFamily: fonts.sansSemiBold,
+  },
+  rowLoad: {
+    fontFamily: fonts.displayBold,
+    fontSize: 16,
+    color: theme.onSurface,
+    fontVariant: ['tabular-nums'],
   },
 });

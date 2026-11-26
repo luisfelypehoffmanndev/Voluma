@@ -1,71 +1,59 @@
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { formatWeight } from '@/domain/volume';
-import { colors, fontSize, fonts, layout, radius, spacing, surfaces } from '@/theme/tokens';
+import { fonts, layout, shape, spacing, theme } from '@/theme/tokens';
 
-import { Pill } from './simple';
+import { Button } from './Button';
 import { CheckCell } from './CheckCell';
-import { CheckIcon, MinusIcon, PlusIcon } from './icons';
+import { MinusIcon, PlusIcon } from './icons';
 import { PressableSurface } from './PressableSurface';
-import { STEP_BUTTON_SIZE } from './Stepper';
-import { Body, FONT_SCALE_CAP, Label, Meta, Mono } from './Text';
+import { Body, Label, Meta } from './Text';
 import { useNumberDraft, useRepeatPress } from './useNumberInput';
 
 /** O passo de carga por toque. Segurar repete e acelera (`useRepeatPress`). */
 const WEIGHT_STEP = 2.5;
 const REPS_MAX = 100;
 const WEIGHT_MAX = 999;
+/** Alvo de toque durante o treino (Design/design.md §4): a mao esta cansada. */
+const STEP_SIZE = 48;
 
 type Props = {
-  /** 1-based, so para exibir — a posicao no array, nao o `setIndex` guardado. */
+  /** 1-based, so para exibir. */
   index: number;
-  /** Quantas series o exercicio tem. */
   total: number;
   reps: number;
   weightKg: number;
   done: boolean;
-  /**
-   * `hero`: a serie da vez — a instrucao, os ajustes e o botao de concluir.
-   * `row`: uma linha que diz se a serie esta feita ou falta.
-   */
+  /** `hero`: a serie da vez, com os steppers e o botao. `row`: uma linha. */
   mode: 'row' | 'hero';
-  /**
-   * A serie da vez do EXERCICIO da vez. So ela ganha o botao laranja: e o
-   * "toque aqui" da tela, e so pode existir em um lugar.
-   */
+  /** A serie da vez do exercicio da vez: so ela ganha o botao principal. */
   accent?: boolean;
   /** O que foi feito nesta serie no ultimo treino deste exercicio. */
   previous?: { reps: number; weightKg: number } | null;
   onToggle: () => void;
   onChangeReps: (reps: number) => void;
   onChangeWeight: (weightKg: number) => void;
-  /** Copia o que foi feito na ultima vez para esta serie. */
   onCopyPrevious?: () => void;
 };
 
 /**
- * Uma serie do exercicio.
+ * Uma serie do exercicio, na linguagem Blink (Design/design.md §7, Sessao).
  *
- * **Clareza antes de minimalismo** (plano 16, ajuste pos-Onda 0). Um primeiro
- * usuario abriu o treino e nao sabia o que fazer: a tela tinha numeros e uma
- * caixinha, e nada dizia "faca isto, depois toque aqui". Agora a serie da vez
- * diz as duas coisas com palavras — "Faça agora: 8 repetições com 62,5 kg" — e
- * o lugar de tocar e um botao largo com verbo: "Pronto, fiz esta série".
- *
- * As outras series sao linhas que dizem em texto o estado: "feita" ou "falta".
+ * A serie da vez e um bloco com dois steppers grandes — carga e reps, ja
+ * preenchidos com o valor previsto — e o botao largo "Concluir série". As
+ * outras sao linhas: feitas com o check verde, futuras apagadas.
  */
 export function SetRow(props: Props) {
   return props.mode === 'hero' ? <HeroSet {...props} /> : <TableSet {...props} />;
 }
 
-function TableSet({ index, done, previous, onToggle, onCopyPrevious }: Props) {
+function TableSet({ index, reps, weightKg, done, onToggle }: Props) {
   return (
     <View style={styles.row}>
-      <View style={styles.rowText}>
-        <Body style={done ? undefined : styles.pending}>{`Série ${index}`}</Body>
-        {previous !== undefined ? <Previous previous={previous} onCopy={onCopyPrevious} /> : null}
-      </View>
-      <Meta style={done ? styles.doneTag : undefined}>{done ? 'feita' : 'falta'}</Meta>
+      <Body style={[styles.rowLabel, !done && styles.future]}>{`Série ${index}`}</Body>
+      <Text style={[styles.rowValue, !done && styles.future]} maxFontSizeMultiplier={1.3}>
+        {`${formatWeight(weightKg)} kg × ${reps}`}
+      </Text>
       <CheckCell
         checked={done}
         onPress={onToggle}
@@ -77,6 +65,7 @@ function TableSet({ index, done, previous, onToggle, onCopyPrevious }: Props) {
 
 function HeroSet({
   index,
+  total,
   reps,
   weightKg,
   accent = false,
@@ -89,21 +78,20 @@ function HeroSet({
   const round = (value: number) => Math.round(value * 100) / 100;
 
   return (
-    <View style={[styles.hero, accent && styles.heroAccent]}>
-      <Label style={styles.now}>FAÇA AGORA</Label>
-      {/* A instrucao em frase: o numero sozinho ("62,5 × 8") pede que a pessoa
-          saiba ler a notacao; a frase nao pede nada. */}
-      <Body style={styles.instruction} maxFontSizeMultiplier={1.6}>
-        <Body style={styles.instructionStrong}>{`${reps}\u00A0repetições`}</Body>
-        {` com `}
-        <Body style={styles.instructionStrong}>{`${formatWeight(weightKg)}\u00A0kg`}</Body>
-      </Body>
+    <View style={styles.hero}>
+      <Label style={styles.heroLabel}>{`SÉRIE ${index} DE ${total}`}</Label>
 
-      {previous !== undefined ? <Previous previous={previous} onCopy={onCopyPrevious} /> : null}
+      {previous ? (
+        <Pressable onPress={onCopyPrevious} disabled={!onCopyPrevious} accessibilityRole="button">
+          <Meta style={styles.center}>
+            {`Última: ${formatWeight(previous.weightKg)} kg × ${previous.reps}`}
+          </Meta>
+        </Pressable>
+      ) : null}
 
-      <View style={styles.adjust}>
-        <NumberLine
-          label="Peso"
+      <View style={styles.steppers}>
+        <BigStepper
+          label="CARGA"
           unit="kg"
           value={weightKg}
           format={formatWeight}
@@ -114,8 +102,8 @@ function HeroSet({
           plus={(v) => Math.min(WEIGHT_MAX, round(v + WEIGHT_STEP))}
           onChange={onChangeWeight}
         />
-        <NumberLine
-          label="Reps"
+        <BigStepper
+          label="REPS"
           unit=""
           value={reps}
           format={String}
@@ -128,21 +116,17 @@ function HeroSet({
         />
       </View>
 
-      {/* O lugar de tocar. Accent so na serie da vez do exercicio da vez: e o
-          unico "toque aqui" da tela. */}
-      <Pill
-        full
-        tone={accent ? 'accent' : 'light'}
-        label={`Pronto, fiz a série ${index}`}
-        icon={<CheckIcon size={20} color={colors.textOnAccent} strokeWidth={2.2} />}
+      <Button
+        variant={accent ? 'primary' : 'inline'}
+        label="Concluir série"
         onPress={onToggle}
       />
     </View>
   );
 }
 
-/** "Peso  [−]  62,5 kg  [+]": o numero no meio e tocavel para digitar. */
-function NumberLine({
+/** Numero grande no centro, − e + embaixo. Tocar no numero abre o teclado. */
+function BigStepper({
   label,
   unit,
   value,
@@ -177,21 +161,18 @@ function NumberLine({
   const name = label.toLowerCase();
 
   return (
-    <View style={styles.line}>
-      <Body style={styles.lineLabel}>{label}</Body>
-      <StepButton repeat={down} accessibilityLabel={`Diminuir ${name}`}>
-        <MinusIcon size={20} color={colors.textPrimary} />
-      </StepButton>
+    <View style={styles.stepper}>
+      <Label>{label}</Label>
       <Pressable
         onPress={draft.start}
         disabled={draft.draft !== null}
-        accessibilityLabel={`${label}, ${format(value)} ${unit}. Tocar para digitar`}
-        style={styles.valueBox}
+        accessibilityLabel={`${name}, ${format(value)} ${unit}. Tocar para digitar`}
+        style={styles.numberBox}
       >
         {draft.draft === null ? (
-          <Mono style={styles.value} maxFontSizeMultiplier={FONT_SCALE_CAP.readout}>
+          <Text style={styles.number} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.2}>
             {format(value)}
-          </Mono>
+          </Text>
         ) : (
           <TextInput
             value={draft.draft}
@@ -202,22 +183,25 @@ function NumberLine({
             returnKeyType="done"
             selectTextOnFocus
             autoFocus
-            maxFontSizeMultiplier={FONT_SCALE_CAP.readout}
-            style={[styles.value, styles.input]}
+            maxFontSizeMultiplier={1.2}
+            style={[styles.number, styles.input]}
           />
         )}
-        {unit ? <Label style={styles.unit}>{unit}</Label> : null}
+        {unit ? <Meta style={styles.unit}>{unit}</Meta> : null}
       </Pressable>
-      <StepButton repeat={up} accessibilityLabel={`Aumentar ${name}`}>
-        <PlusIcon size={20} color={colors.textPrimary} />
-      </StepButton>
+      <View style={styles.buttons}>
+        <StepButton repeat={down} accessibilityLabel={`Diminuir ${name}`}>
+          <MinusIcon size={22} color={theme.onSurface} />
+        </StepButton>
+        <StepButton repeat={up} accessibilityLabel={`Aumentar ${name}`}>
+          <PlusIcon size={22} color={theme.onSurface} />
+        </StepButton>
+      </View>
     </View>
   );
 }
 
 type Repeat = ReturnType<typeof useRepeatPress>;
-
-const STEP_SLOP = (layout.touch - STEP_BUTTON_SIZE) / 2;
 
 function StepButton({
   repeat,
@@ -230,9 +214,8 @@ function StepButton({
 }) {
   return (
     <PressableSurface
-      feedback="control"
-      borderRadius={radius.pill}
-      hitSlop={STEP_SLOP}
+      feedback="solid"
+      borderRadius={shape.control}
       onPress={repeat.onPress}
       onPressIn={repeat.onPressIn}
       onPressOut={repeat.onPressOut}
@@ -244,34 +227,6 @@ function StepButton({
   );
 }
 
-/** A ultima vez naquela MESMA serie. Tocar copia os valores para hoje. */
-function Previous({
-  previous,
-  onCopy,
-}: {
-  previous: { reps: number; weightKg: number } | null;
-  onCopy?: () => void;
-}) {
-  return (
-    <Pressable
-      disabled={!previous || !onCopy}
-      onPress={onCopy}
-      accessibilityLabel={
-        previous
-          ? `Repetir ${previous.reps} por ${formatWeight(previous.weightKg)} quilos da última vez`
-          : undefined
-      }
-      style={styles.previous}
-    >
-      <Meta>
-        {previous
-          ? `última vez · ${previous.reps} × ${formatWeight(previous.weightKg)} kg`
-          : 'última vez · —'}
-      </Meta>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
@@ -279,96 +234,76 @@ const styles = StyleSheet.create({
     minHeight: layout.touch + layout.touchGap,
     gap: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
+    borderTopColor: theme.outlineVariant,
   },
-  rowText: {
+  rowLabel: {
     flex: 1,
+    fontFamily: fonts.sansSemiBold,
   },
-  /** Serie que ainda vem: previsao, nao registro — um degrau abaixo. */
-  pending: {
-    color: colors.textAux,
+  rowValue: {
+    fontFamily: fonts.displayBold,
+    fontSize: 16,
+    color: theme.onSurface,
+    fontVariant: ['tabular-nums'],
   },
-  doneTag: {
-    color: colors.textPrimary,
+  future: {
+    color: theme.onSurfaceVariant,
   },
   hero: {
-    backgroundColor: colors.bg,
-    borderRadius: radius.card - 4,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
+    backgroundColor: theme.surfaceContainerHigh,
+    borderRadius: shape.card,
     padding: spacing.lg,
     marginVertical: spacing.sm,
     gap: spacing.md,
   },
-  heroAccent: {
-    borderColor: colors.textPrimary,
-  },
-  now: {
-    color: colors.textAux,
+  heroLabel: {
     textAlign: 'center',
   },
-  /** A instrucao: grande, em frase, com os numeros em destaque. */
-  instruction: {
-    fontSize: 26,
-    lineHeight: 32,
-    color: colors.textAux,
+  center: {
     textAlign: 'center',
   },
-  instructionStrong: {
-    fontSize: 26,
-    lineHeight: 32,
-    fontFamily: fonts.sansBold,
-    color: colors.textPrimary,
-  },
-  adjust: {
-    gap: spacing.sm,
-    paddingTop: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
-  },
-  line: {
+  steppers: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: spacing.md,
-    minHeight: layout.touch,
   },
-  lineLabel: {
-    width: 56,
-  },
-  valueBox: {
+  stepper: {
     flex: 1,
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  numberBox: {
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'center',
-    minHeight: layout.touch,
-    paddingTop: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderStrong,
+    minHeight: 60,
+    alignSelf: 'stretch',
   },
-  value: {
-    fontFamily: fonts.mono,
-    fontSize: fontSize.numberLine + 4,
-    color: colors.textPrimary,
+  number: {
+    fontFamily: fonts.display,
+    fontSize: 48,
+    lineHeight: 56,
+    letterSpacing: -1.4,
+    color: theme.onSurface,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'center',
   },
   input: {
     padding: 0,
-    minWidth: 56,
-    textAlign: 'center',
+    minWidth: 72,
   },
   unit: {
     marginLeft: spacing.xs,
   },
-  previous: {
-    paddingVertical: spacing.xs,
+  buttons: {
+    flexDirection: 'row',
+    gap: layout.touchGap,
   },
   stepButton: {
-    width: STEP_BUTTON_SIZE,
-    height: STEP_BUTTON_SIZE,
-    borderRadius: radius.pill,
+    width: STEP_SIZE,
+    height: STEP_SIZE,
+    borderRadius: shape.control,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: surfaces.raised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    backgroundColor: theme.surfaceBright,
   },
 });

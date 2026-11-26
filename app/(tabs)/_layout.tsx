@@ -1,236 +1,62 @@
 import { Redirect, Tabs } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 import { useOnboarding } from '@/store/onboarding';
-import { colors, fonts, radius } from '@/theme/tokens';
-import { GlassSurface } from '@/ui/GlassSurface';
-import { ChartIcon, ListIcon, PersonIcon, TodayIcon } from '@/ui/icons';
+import { theme } from '@/theme/tokens';
+import { ChartIcon, ListIcon, PersonIcon, TodayIcon, type IconProps } from '@/ui/icons';
 import { tabTransitionSpec, useTabAnimation } from '@/ui/motion';
-import { TabIcon } from '@/ui/TabIcon';
 import { useTabBarGeometry } from '@/ui/tabBar';
-import { TRAIN_BUTTON_SIZE, TrainButton } from '@/ui/TrainButton';
 
 /**
- * Quanto o botao central sobe acima do centro da barra. Com 12, a borda de
- * cima dele passa 10dp do pill: le como uma peca a parte, a acao, e nao como
- * mais um icone de aba.
- */
-const TRAIN_LIFT = 22;
-
-/**
- * Tab bar flutuante — e o caso mais claro da regra do brief: ela paira sobre
- * conteudo rolavel, entao e vidro.
+ * Barra de abas da linguagem Blink (Design/design.md §5): largura cheia,
+ * opaca, colada no fundo, com divisor de 1px em cima. Icones Ionicons sem
+ * rotulo: contorno quando inativos, preenchidos quando ativos.
  *
- * No meio, um quinto lugar que NAO e aba: o botao "Treinar" (`TrainButton`),
- * dono do accent das quatro telas de aba (design.md §2).
- *
- * Sem rotulos de texto: os quatro icones outline bastam, e texto embaixo de
- * icone e o visual generico que o brief manda evitar.
- *
- * Mas sem rotulo VISIVEL nao quer dizer sem nome: `tabBarAccessibilityLabel`
- * em todas, senao o leitor de tela anuncia "aba, 1 de 4" e nada mais. E cada
- * icone diz a ACAO da aba (comecar, montar, ver, voce), nao uma forma abstrata
- * — a grade e os sliders de antes nao diziam o que havia atras deles.
+ * Sem botao central: comecar o treino e o botao principal da aba Hoje.
+ * O nome de cada aba continua para o leitor de tela (`tabBarAccessibilityLabel`).
  */
 export default function TabsLayout() {
   const bar = useTabBarGeometry();
   const onboarding = useOnboarding((state) => state.status);
   const tabAnimation = useTabAnimation();
 
-  // Banco vazio: antes da home, o onboarding. O `_layout` raiz so solta o
-  // splash depois de saber a resposta, entao esta troca nunca aparece na tela.
   if (onboarding === 'needed') return <Redirect href="/onboarding" />;
 
+  const tab = (label: string, Icon: (props: IconProps) => React.ReactElement) => ({
+    tabBarAccessibilityLabel: label,
+    tabBarIcon: ({ focused }: { focused: boolean }) => (
+      <Icon size={26} filled={focused} color={focused ? theme.onSurface : theme.outline} />
+    ),
+  });
+
   return (
-    <View style={styles.root}>
     <Tabs
       screenOptions={{
         headerShown: false,
-        // Com nome embaixo de cada icone: so icone deixou quem abria o app pela
-        // primeira vez sem saber o que era cada aba (ajuste de clareza, plano 16).
-        tabBarShowLabel: true,
-        tabBarLabelStyle: {
-          fontFamily: fonts.sansMedium,
-          fontSize: 11,
-        },
-        /*
-          A troca de aba e um cross-fade do proprio navegador: as duas cenas se
-          sobrepoem, uma apagando enquanto a outra acende. Ver `useTabAnimation`.
-
-          O `transitionSpec` so vai junto quando ha animacao. O navegador
-          resolve o default por parametro, e ele so vale se o valor chegar
-          `undefined` — mandar o nosso de 160ms com `animation: 'none'` tiraria
-          do usuario exatamente a instantaneidade que ele pediu ao ligar
-          "reduzir movimento".
-        */
+        tabBarShowLabel: false,
         animation: tabAnimation,
         transitionSpec: tabAnimation === 'fade' ? tabTransitionSpec : undefined,
-        // As duas iguais: o estado agora vem da opacidade do `TabIcon`, nao
-        // da cor. Deixar o inativo em `textSecondary` aplicaria os dois
-        // efeitos um sobre o outro e o icone apagado sumiria.
-        tabBarActiveTintColor: colors.textPrimary,
-        tabBarInactiveTintColor: colors.textPrimary,
-        tabBarStyle: [
-          styles.bar,
-          {
-            height: bar.height,
-            bottom: bar.bottom,
-            // `start`/`end`, nao `left`/`right`. O BottomTabBar ja aplica
-            // `start: 0, end: 0` no proprio container, e no Yoga as propriedades
-            // logicas ganham das fisicas — um `left` aqui e simplesmente
-            // ignorado, e o pill esticava de ponta a ponta da tela.
-            start: bar.sideInset,
-            end: bar.sideInset,
-          },
-        ],
-        tabBarItemStyle: { height: bar.height, paddingVertical: 6 },
-        // Centraliza o icone na vertical. O item interno do BottomTabItem usa
-        // `justifyContent: 'flex-start'` num container de coluna que ocupa a
-        // altura toda do pill — pensado para deixar espaco ao label embaixo.
-        // Com `tabBarShowLabel: false` o label some mas o alinhamento fica, e o
-        // icone gruda no topo. Esse estilo interno nao e alcancavel por
-        // `tabBarItemStyle` (que vai para a View externa); `tabBarIconStyle` e o
-        // unico prop mesclado no wrapper do icone. Com `flex: 1` o wrapper
-        // deixa de ter altura fixa de 28px e passa a ocupar a caixa inteira,
-        // onde o icone ja se centraliza sozinho.
-        tabBarIconStyle: { marginTop: 4 },
-        // No Android o vidro so borra se estiver FORA da sub-arvore que ele le
-        // (ver `src/ui/blurTarget.tsx`). Aqui isso sai de graca: o
-        // `tabBarBackground` mora na barra, e a barra e irma das telas dentro
-        // do navegador — nunca filha delas. Nao mova este vidro para dentro de
-        // um `Screen`.
-        tabBarBackground: () => (
-          <GlassSurface borderRadius={radius.pill} style={StyleSheet.absoluteFill} />
-        ),
-        sceneStyle: { backgroundColor: colors.bg },
+        tabBarStyle: [styles.bar, { height: bar.height }],
+        sceneStyle: { backgroundColor: theme.background },
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Hoje',
-          tabBarAccessibilityLabel: 'Hoje',
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon focused={focused}>
-              <TodayIcon color={color} />
-            </TabIcon>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="plan"
-        options={{
-          title: 'Plano',
-          tabBarAccessibilityLabel: 'Plano',
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon focused={focused}>
-              <ListIcon color={color} />
-            </TabIcon>
-          ),
-        }}
-      />
-      {/*
-        O lugar do meio e um ESPACADOR, nao uma aba: ele so abre o vao entre
-        Plano e Histórico onde o botao "Treinar" pousa. O botao em si e irmao
-        do `<Tabs>`, logo abaixo, e nao o `tabBarButton` deste item — o
-        container da barra recorta o que passa da borda no Android, e o botao
-        sobe acima do pill.
-      */}
-      <Tabs.Screen
-        name="train"
-        options={{
-          tabBarButton: () => (
-            <View
-              style={styles.spacer}
-              pointerEvents="none"
-              accessibilityElementsHidden
-              importantForAccessibility="no-hide-descendants"
-            >
-              {/* O nome do botao do meio, no mesmo lugar dos nomes das abas. */}
-              <Text style={styles.trainLabel}>Treinar</Text>
-            </View>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="history"
-        options={{
-          title: 'Histórico',
-          tabBarAccessibilityLabel: 'Histórico',
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon focused={focused}>
-              <ChartIcon color={color} />
-            </TabIcon>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Perfil',
-          tabBarAccessibilityLabel: 'Perfil',
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon focused={focused}>
-              <PersonIcon color={color} />
-            </TabIcon>
-          ),
-        }}
-      />
+      <Tabs.Screen name="index" options={tab('Hoje', TodayIcon)} />
+      <Tabs.Screen name="plan" options={tab('Plano', ListIcon)} />
+      <Tabs.Screen name="history" options={tab('Histórico', ChartIcon)} />
+      <Tabs.Screen name="profile" options={tab('Perfil', PersonIcon)} />
     </Tabs>
-    {/* Telas empilhadas (sessao, resultado) sao do Stack raiz e cobrem este
-        layout inteiro, botao junto: ele so aparece com a barra. */}
-    <View
-      pointerEvents="box-none"
-      style={[
-        styles.train,
-        { bottom: bar.bottom + (bar.height - TRAIN_BUTTON_SIZE) / 2 + TRAIN_LIFT },
-      ]}
-    >
-      <TrainButton />
-    </View>
-    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  spacer: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    paddingBottom: 8,
-  },
-  trainLabel: {
-    fontFamily: fonts.sansMedium,
-    fontSize: 11,
-    color: colors.accent,
-  },
-  train: {
+  bar: {
     position: 'absolute',
     left: 0,
     right: 0,
-    alignItems: 'center',
-  },
-  bar: {
-    position: 'absolute',
-    borderRadius: radius.pill,
-    // A borda, o preenchimento e o brilho especular vem todos do GlassSurface
-    // renderizado em tabBarBackground; aqui a barra e so transparente.
-    backgroundColor: 'transparent',
-    borderTopWidth: 0,
+    bottom: 0,
+    backgroundColor: theme.background,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.outlineVariant,
     elevation: 0,
-    // Zerar os paddings de area segura NAO e cosmetico. O BottomTabBar aplica
-    // `paddingBottom: insets.bottom` no proprio container e, como `tabBarStyle`
-    // e mesclado por ultimo, so as chaves que declaramos vencem — o padding
-    // sobrevive. Numa barra de altura livre isso e o certo; nesta, que tem
-    // altura fixa e ja flutua acima da area segura, o inset comia ate 48px dos
-    // 60 do pill e espremia os icones para fora dele. O respiro pela area
-    // segura e dado pelo `bottom` de `useTabBarGeometry`, nao por padding.
-    paddingBottom: 0,
-    paddingTop: 0,
-    paddingHorizontal: 0,
   },
 });

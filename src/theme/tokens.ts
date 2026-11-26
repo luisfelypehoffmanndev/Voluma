@@ -9,9 +9,9 @@
 
 export const colors = {
   /** fundo base, quase preto — nunca #000 puro (mata a profundidade) */
-  bg: '#0A0A0A',
+  bg: '#000000',
   /** bordas de 1px, nunca mais grossas */
-  border: 'rgba(255,255,255,0.08)',
+  border: '#2c2c2e',
   /**
    * Divisores dentro de um card.
    *
@@ -20,10 +20,10 @@ export const colors = {
    * atravessar um halo do campo de luz. A 0,08 ela enfraquecia justamente onde
    * o card estava mais claro.
    */
-  divider: 'rgba(255,255,255,0.12)',
+  divider: '#2c2c2e',
   /** borda um pouco mais visivel, para marcar estado sem mudar preenchimento */
-  borderStrong: 'rgba(255,255,255,0.18)',
-  textPrimary: '#F5F5F5',
+  borderStrong: '#3a3a3c',
+  textPrimary: '#c9c9c9',
   /**
    * Cinza de icone apagado, desabilitado e texto direto sobre o FUNDO.
    *
@@ -32,7 +32,7 @@ export const colors = {
    * isso o texto auxiliar tem token proprio (`textAux`). Este continua aqui
    * porque o icone inativo da tab bar e calibrado contra ele (`tabIcon`).
    */
-  textSecondary: '#8A8A8A',
+  textSecondary: '#71717a',
   /**
    * Texto auxiliar — rotulo, metadado, linha de baixo — sobre qualquer
    * superficie do app.
@@ -43,7 +43,7 @@ export const colors = {
    * `composite.test.ts` falha se alguem baixar este cinza ou subir um alpha a
    * ponto de passar abaixo de 4,5:1.
    */
-  textAux: '#ADADAD',
+  textAux: '#a1a1aa',
   /**
    * Texto sobre fundo accent solido. Preto puro, e nao o `bg` quase-preto: sobre
    * o laranja, qualquer cinza no lugar do preto vira marrom sujo.
@@ -59,11 +59,11 @@ export const colors = {
    *
    * O que faz ler como neon nao e so a matiz: e o `accentGlow` em volta.
    */
-  accent: '#FF5C00',
+  accent: '#bdbdbd',
   /** pontos apagados do dot-matrix (dias sem treino) */
-  dotEmpty: 'rgba(255,255,255,0.14)',
+  dotEmpty: '#2c2c2e',
   /** pontos cheios do dot-matrix (dias com treino) */
-  dotFilled: '#F5F5F5',
+  dotFilled: '#bdbdbd',
   /**
    * Rampa do dot-matrix: um passo por faixa de carga do dia, do vazio ao mais
    * pesado da janela. Escala de cinza, nunca heatmap colorido — o brief e
@@ -107,10 +107,10 @@ export const chart = {
   baseline: colors.divider,
   tick: colors.dotEmpty,
   cursor: 'rgba(255,255,255,0.28)',
-  area: 'rgba(255,92,0,0.24)',
-  fade: 'rgba(255,92,0,0)',
+  area: 'rgba(189,189,189,0.18)',
+  fade: 'rgba(189,189,189,0)',
   track: 'rgba(255,255,255,0.07)',
-  ring: '#191919',
+  ring: '#121212',
 } as const;
 
 /**
@@ -134,16 +134,16 @@ export const chart = {
 export const people = {
   self: colors.accent,
   friends: [
-    /** ciano */
-    '#29B6FF',
-    /** magenta */
-    '#FF4FC0',
-    /** lima */
-    '#C6F53D',
-    /** violeta */
-    '#6E6BFF',
-    /** menta */
-    '#3DF2C4',
+    /** azul acinzentado */
+    '#7c93b3',
+    /** rosa queimado */
+    '#b37c96',
+    /** oliva */
+    '#9aa86f',
+    /** lilas */
+    '#8f84b8',
+    /** verde agua */
+    '#6fa89a',
   ],
 } as const;
 
@@ -317,7 +317,8 @@ export const glass = {
  * brilho do unico elemento accent da tela.
  */
 export const accentGlow = {
-  opacity: 0.55,
+  // Sem glow na linguagem Blink: cor so com significado, nada que brilhe.
+  opacity: 0,
   radius: 18,
   /** Android: sombra por elevacao, tingida pelo shadowColor so a partir do 9. */
   elevation: 12,
@@ -414,12 +415,18 @@ export const spacing = {
  * - sans neutra e discreta para UI, labels e corpo. Nunca italico.
  */
 export const fonts = {
-  monoLight: 'JetBrainsMono_300Light',
-  mono: 'JetBrainsMono_400Regular',
+  // Os numeros deixaram de ser mono: agora sao Plus Jakarta Sans com
+  // algarismos tabulares (`fontVariant: ['tabular-nums']` em `Mono`).
+  monoLight: 'PlusJakartaSans_800ExtraBold',
+  mono: 'PlusJakartaSans_700Bold',
   sans: 'Inter_400Regular',
   sansMedium: 'Inter_500Medium',
   /** Titulos no estilo simples (plano 16, ajuste de clareza): grandes e em negrito. */
   sansBold: 'Inter_700Bold',
+  /** Titulos e numeros grandes: Plus Jakarta Sans (linguagem Blink). */
+  display: 'PlusJakartaSans_800ExtraBold',
+  displayBold: 'PlusJakartaSans_700Bold',
+  sansSemiBold: 'Inter_600SemiBold',
 } as const;
 
 /**
@@ -492,18 +499,70 @@ export const layout = {
  * escuro, o laranja no destaque.
  */
 export const simple = {
-  /** Bloco solido (card, atalho, escolha). */
-  block: '#1C1C1E',
-  /** Bloco tocado / selecionado de leve. */
-  blockPressed: '#2A2A2D',
-  /** Raio dos blocos grandes. */
-  radius: 24,
-  /** Raio dos blocos pequenos (atalho, dia). */
-  radiusSmall: 16,
-  /** Botao pilula padrao: claro sobre o fundo escuro, texto escuro. */
-  pill: '#F5F5F5',
-  pillText: '#0A0A0A',
+  block: '#121212',
+  blockPressed: '#1c1c1e',
+  radius: 18,
+  radiusSmall: 14,
+  pill: '#bdbdbd',
+  pillText: '#000000',
 } as const;
+
+/**
+ * A paleta da linguagem Blink (Design/design.md). Monocromatica: o chrome nao
+ * tem cor; cor so com significado (`success`, `error`) e no grafico de amigos.
+ * Escuro e o padrao; o claro fica pronto para quando o tema for ligado.
+ */
+export const palette = {
+  dark: {
+    background: '#000000',
+    surfaceContainerLow: '#0a0a0a',
+    surfaceContainer: '#121212',
+    surfaceContainerHigh: '#1c1c1e',
+    surfaceContainerHighest: '#2c2c2e',
+    surfaceBright: '#3a3a3c',
+    primary: '#c9c9c9',
+    primaryContainer: '#bdbdbd',
+    onPrimary: '#000000',
+    onSurface: '#c9c9c9',
+    onSurfaceVariant: '#a1a1aa',
+    outline: '#71717a',
+    outlineVariant: '#2c2c2e',
+    success: '#22c55e',
+    error: '#f4212e',
+    cardBorder: 'rgba(255,255,255,0.12)',
+  },
+  light: {
+    background: '#e2e2df',
+    surfaceContainerLow: '#e7e7e4',
+    surfaceContainer: '#ecece9',
+    surfaceContainerHigh: '#d9d9d6',
+    surfaceContainerHighest: '#cececb',
+    surfaceBright: '#f1f1ee',
+    primary: '#111111',
+    primaryContainer: '#111111',
+    onPrimary: '#f7f7f5',
+    onSurface: '#111111',
+    onSurfaceVariant: '#52525b',
+    outline: '#78787d',
+    outlineVariant: '#cdcdca',
+    success: '#15803d',
+    error: '#d92d20',
+    cardBorder: 'rgba(0,0,0,0.06)',
+  },
+} as const;
+
+export type ThemeColors = { [K in keyof (typeof palette)['dark']]: string };
+
+/** As cores do tema atual. Hoje sempre o escuro (o padrao); o claro esta pronto. */
+export function useThemeColors(): ThemeColors {
+  return palette.dark;
+}
+
+/** Atalho estatico para quem esta fora de componente (estilos de StyleSheet). */
+export const theme: ThemeColors = palette.dark;
+
+/** Raios da linguagem Blink: os mesmos em todo o app. */
+export const shape = { card: 18, control: 14, pill: 999 } as const;
 
 export const hitSlop = { top: 12, bottom: 12, left: 12, right: 12 } as const;
 

@@ -31,7 +31,7 @@ export function elapsedMs(
 
 /** "4:07", "24:15", "1:02:09" — relogio de painel, sem unidade. */
 export function formatClock(ms: number | null): string {
-  if (ms === null) return '—';
+  if (ms === null) return '-';
   const total = Math.floor(ms / 1000);
   const hours = Math.floor(total / 3600);
   const minutes = Math.floor((total % 3600) / 60);

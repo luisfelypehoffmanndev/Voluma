@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet } from 'react-native';
 
-import { colors, layout, radius, spacing, surfaces } from '@/theme/tokens';
+import { layout, radius, spacing, theme } from '@/theme/tokens';
 
 import { Label } from './Text';
 
@@ -41,14 +41,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
     borderRadius: radius.pill,
+    backgroundColor: theme.surfaceContainerHigh,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    borderColor: theme.surfaceContainerHigh,
   },
   chipSelected: {
-    backgroundColor: surfaces.raised,
-    borderColor: colors.borderStrong,
+    backgroundColor: theme.primaryContainer,
+    borderColor: theme.primaryContainer,
   },
   labelSelected: {
-    color: colors.textPrimary,
+    color: theme.onPrimary,
   },
 });

@@ -14,19 +14,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
  * entao mudar a altura da barra ajusta as quatro telas junto.
  */
 
-/** Altura do pill. */
-export const TAB_BAR_HEIGHT = 64;
+/** Altura util da barra, acima da area segura. */
+export const TAB_BAR_HEIGHT = 52;
 
-/** Recuo lateral do pill ate a borda da tela. */
-export const TAB_BAR_SIDE_INSET = 20;
-
-/** Respiro abaixo do pill em aparelho sem area segura nenhuma. */
-const MIN_BOTTOM_GAP = 12;
-
-/** Ar entre o fim do conteudo rolavel e o topo do pill. */
+/** Ar entre o fim do conteudo rolavel e o topo da barra. */
 const CONTENT_BREATHING_ROOM = 24;
 
 export type TabBarGeometry = {
+  /** Altura total, com a area segura. */
   height: number;
   bottom: number;
   sideInset: number;
@@ -34,20 +29,14 @@ export type TabBarGeometry = {
   clearance: number;
 };
 
+/**
+ * A barra de abas da linguagem Blink: largura cheia, opaca e colada no fundo da
+ * tela. O conteudo rola por baixo e cada tela reserva `clearance` no fim.
+ */
 export function useTabBarGeometry(): TabBarGeometry {
   const insets = useSafeAreaInsets();
-
-  // O inset como piso, nao um numero fixo: na navegacao por gestos ele e ~24px,
-  // nos tres botoes ~48. O valor fixo de antes so funcionava num dos dois — no
-  // outro o pill ficava atras da barra do sistema.
-  const bottom = Math.max(insets.bottom, MIN_BOTTOM_GAP);
-
-  return {
-    height: TAB_BAR_HEIGHT,
-    bottom,
-    sideInset: TAB_BAR_SIDE_INSET,
-    clearance: bottom + TAB_BAR_HEIGHT + CONTENT_BREATHING_ROOM,
-  };
+  const height = TAB_BAR_HEIGHT + insets.bottom;
+  return { height, bottom: 0, sideInset: 0, clearance: height + CONTENT_BREATHING_ROOM };
 }
 
 /** Atalho para o unico valor que as telas de tab consomem. */

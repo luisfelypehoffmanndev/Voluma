@@ -135,7 +135,7 @@ export function ProfileForm({
         max={120}
         editable
         integer
-        format={(value) => (value === UNSET ? '—' : String(value))}
+        format={(value) => (value === UNSET ? '-' : String(value))}
         onChange={(next, source) => setAge(land(age, next, AGE_START, 13, source))}
       />
 
@@ -147,7 +147,7 @@ export function ProfileForm({
         max={80}
         editable
         integer
-        format={(value) => (value === UNSET ? '—' : String(value))}
+        format={(value) => (value === UNSET ? '-' : String(value))}
         onChange={(next, source) => setYears(land(years, next, YEARS_START, 0, source))}
       />
 

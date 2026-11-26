@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.label,
     // Mais aberto que antes (0,4): caixa alta pequena precisa de ar entre as
     // letras para ler como rotulo de instrumento, e nao como texto espremido.
-    letterSpacing: 0.8,
+    letterSpacing: 0.5,
     color: colors.textAux,
   },
   body: {
@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   title: {
-    fontFamily: fonts.sansBold,
+    fontFamily: fonts.display,
     fontSize: fontSize.title,
     color: colors.textPrimary,
     // Sans medium grande com entrelinha padrao corta acento maiusculo em
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   section: {
-    fontFamily: fonts.sansBold,
+    fontFamily: fonts.displayBold,
     fontSize: fontSize.section,
     color: colors.textPrimary,
     letterSpacing: -0.2,
@@ -106,5 +106,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.mono,
     fontSize: fontSize.body,
     color: colors.textPrimary,
+    fontVariant: ['tabular-nums'],
   },
 });

@@ -293,15 +293,15 @@ describe('monthRange', () => {
 
 describe('weekRangeLabel', () => {
   it('mostra um mes so quando a semana nao cruza', () => {
-    expect(weekRangeLabel('2026-08-16')).toBe('16 – 22 ago');
+    expect(weekRangeLabel('2026-08-16')).toBe('16 a 22 ago');
   });
 
   it('mostra os dois meses quando cruza', () => {
-    expect(weekRangeLabel('2026-08-30')).toBe('30 ago – 5 set');
+    expect(weekRangeLabel('2026-08-30')).toBe('30 ago a 5 set');
   });
 
   it('mostra os dois meses na virada de ano', () => {
-    expect(weekRangeLabel('2026-12-27')).toBe('27 dez – 2 jan');
+    expect(weekRangeLabel('2026-12-27')).toBe('27 dez a 2 jan');
   });
 });
 

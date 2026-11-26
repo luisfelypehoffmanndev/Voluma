@@ -4,7 +4,6 @@ import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, hitSlop, radius, spacing, surfaces } from '@/theme/tokens';
-import { Ambient } from './Ambient';
 import { BlurTarget } from './blurTarget';
 import { PressableSurface } from './PressableSurface';
 import { Meta, Title } from './Text';
@@ -32,7 +31,6 @@ export function Screen({ children, overlay }: { children: ReactNode; overlay?: R
   return (
     <View style={styles.screen}>
       <BlurTarget style={styles.field}>
-        <Ambient />
         <View style={[styles.content, { paddingTop: insets.top }]}>{children}</View>
       </BlurTarget>
       {overlay}

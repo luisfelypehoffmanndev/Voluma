@@ -360,6 +360,15 @@ export default function SessionScreen() {
     }
   };
 
+  // O exercicio da vez e a serie em que a pessoa esta, para o topo da tela.
+  const currentItem = exercises.find((item) => exerciseKey(item) === currentKey) ?? null;
+  const currentDraft = currentItem ? drafts[currentItem.exerciseId] : undefined;
+  const currentDone =
+    currentDraft?.doneSets ?? currentItem?.rows.filter((row) => row.done).length ?? 0;
+  const currentTotal = currentDraft?.totalSets ?? currentItem?.rows.length ?? 0;
+  const currentSetLabel =
+    currentTotal > 0 ? `Série ${Math.min(currentDone + 1, currentTotal)} de ${currentTotal}` : null;
+
   const footerBottom = insets.bottom + spacing.xl;
 
   return (
@@ -401,9 +410,8 @@ export default function SessionScreen() {
           nao some nem rola (design.md, "HUD da sessão"). */}
       <SessionHud
         title={data.title}
-        done={counts.done}
-        total={counts.total}
-        current={exercises.find((item) => exerciseKey(item) === currentKey)?.exerciseName ?? null}
+        current={currentItem?.exerciseName ?? null}
+        currentSet={currentSetLabel}
       />
 
       <Reveal style={styles.reveal}>

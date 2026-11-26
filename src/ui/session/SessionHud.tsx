@@ -1,55 +1,44 @@
-import { StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { StyleSheet, Text, View } from 'react-native';
 
-import { layout, spacing } from '@/theme/tokens';
+import { fonts, layout, spacing, theme } from '@/theme/tokens';
 import { ArrowLeftIcon } from '@/ui/icons';
 import { RoundButton } from '@/ui/Screen';
-import { Body, Section } from '@/ui/Text';
-import { SetMeter } from '@/ui/SetMeter';
+import { Label, Meta } from '@/ui/Text';
 
 type Props = {
-  /** O nome do treino — a rotina do dia, ou o dia da semana se ela nao tem nome. */
+  /** O nome do treino — a rotina do dia, ou o dia da semana. */
   title: string;
-  done: number;
-  total: number;
-  /** O exercicio da vez, para o "Passo 3 de 16 · Supino reto". */
+  /** O exercicio da vez, ou `null` quando tudo foi feito. */
   current: string | null;
+  /** "Série 3 de 4" do exercicio da vez. */
+  currentSet: string | null;
 };
 
 /**
- * O topo fixo do treino: o nome, o passo em que a pessoa esta e a barra.
- *
- * Sem numeros de painel (series, volume, tempo): um primeiro usuario tinha que
- * decifrar tres leituras antes de saber o que fazer. Agora o topo diz so onde
- * ela esta — "Passo 3 de 16 · Supino reto" — e o resto da tela diz o que fazer.
+ * O topo da sessao (Design/design.md §7): responde "o que eu faco agora?" num
+ * olhar — o exercicio da vez em destaque e a serie em que a pessoa esta. O
+ * progresso do treino inteiro fica no rodape, junto do "Finalizar treino".
  */
-export function SessionHud({ title, done, total, current }: Props) {
+export function SessionHud({ title, current, currentSet }: Props) {
   const router = useRouter();
 
   return (
     <View style={styles.hud}>
       <View style={styles.titleRow}>
-        <Section numberOfLines={2} style={styles.title}>
-          {title}
-        </Section>
+        <Label numberOfLines={1} style={styles.routine}>
+          {title.toUpperCase()}
+        </Label>
         <RoundButton
           icon={<ArrowLeftIcon size={20} />}
           onPress={() => router.back()}
           accessibilityLabel="Voltar"
         />
       </View>
-
-
-      {/* Onde a pessoa esta, em palavras: o passo e o exercicio. A barra mostra
-          o mesmo de relance — cada traco e uma serie. */}
-      <View style={styles.step}>
-        <Body numberOfLines={1}>
-          {done >= total
-            ? 'Tudo feito! Agora toque em Finalizar treino.'
-            : `Passo ${done + 1} de ${total}${current ? ` · ${current}` : ''}`}
-        </Body>
-        <SetMeter done={done} total={total} />
-      </View>
+      <Text style={styles.exercise} numberOfLines={2} maxFontSizeMultiplier={1.3}>
+        {current ?? 'Tudo feito!'}
+      </Text>
+      <Meta>{current ? (currentSet ?? '') : 'Toque em Finalizar treino para ver o resultado.'}</Meta>
     </View>
   );
 }
@@ -57,19 +46,24 @@ export function SessionHud({ title, done, total, current }: Props) {
 const styles = StyleSheet.create({
   hud: {
     paddingHorizontal: layout.screen,
-    paddingTop: spacing.md,
+    paddingTop: spacing.sm,
     paddingBottom: spacing.lg,
-    gap: spacing.md,
-  },
-  step: {
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: spacing.md,
   },
-  title: {
+  routine: {
     flex: 1,
+  },
+  exercise: {
+    fontFamily: fonts.display,
+    fontSize: 24,
+    lineHeight: 32,
+    letterSpacing: -0.4,
+    color: theme.onSurface,
   },
 });

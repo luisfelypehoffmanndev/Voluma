@@ -1,6 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 
-import { colors, radius, spacing, surfaces } from '@/theme/tokens';
+import { radius, spacing, theme } from '@/theme/tokens';
 
 import { PressableSurface } from './PressableSurface';
 import { Label } from './Text';
@@ -47,9 +47,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: spacing.xs,
     borderRadius: radius.pill,
-    backgroundColor: surfaces.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    backgroundColor: theme.surfaceContainerHigh,
   },
   segment: {
     flex: 1,
@@ -63,10 +61,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   selected: {
-    backgroundColor: surfaces.raised,
-    borderColor: colors.borderStrong,
+    backgroundColor: theme.primaryContainer,
   },
   labelSelected: {
-    color: colors.textPrimary,
+    color: theme.onPrimary,
   },
 });

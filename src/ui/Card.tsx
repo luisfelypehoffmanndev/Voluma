@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import Animated from 'react-native-reanimated';
 
-import { layout, simple } from '@/theme/tokens';
+import { layout, shape, theme } from '@/theme/tokens';
 import { useListMotion } from './motion';
 import { PressableSurface } from './PressableSurface';
 
@@ -73,9 +73,15 @@ const styles = StyleSheet.create({
   // Bloco solido da linguagem simples (plano 16, ajuste de clareza): sem vidro
   // e sem borda especular — o card se le como um bloco que se toca.
   card: {
-    borderRadius: simple.radius,
+    borderRadius: shape.card,
     padding: layout.cardPadding,
-    overflow: 'hidden',
-    backgroundColor: simple.block,
+    backgroundColor: theme.surfaceContainer,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.cardBorder,
+    shadowColor: '#000000',
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
 });

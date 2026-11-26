@@ -33,6 +33,6 @@ describe('formatClock', () => {
   });
 
   it('mostra um traco quando nao ha numero confiavel', () => {
-    expect(formatClock(null)).toBe('—');
+    expect(formatClock(null)).toBe('-');
   });
 });

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { interpolateColor, useAnimatedStyle } from 'react-native-reanimated';
 
-import { colors, layout, radius } from '@/theme/tokens';
+import { colors, layout, radius, theme } from '@/theme/tokens';
 import { CheckIcon } from './icons';
 import { useFlag } from './motion';
 import { PressableSurface } from './PressableSurface';
@@ -40,17 +40,17 @@ type Props = {
 };
 
 /** Branco com alpha zero: o RGB fica parado e so o alpha se move na transicao. */
-const WHITE_CLEAR = 'rgba(245,245,245,0)';
+const WHITE_CLEAR = 'rgba(34,197,94,0)';
 
 export function CheckCell({ checked, onPress, size = 32, icon, accessibilityLabel }: Props) {
   const progress = useFlag(checked);
 
   const boxStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(progress.value, [0, 1], [WHITE_CLEAR, colors.textPrimary]),
+    backgroundColor: interpolateColor(progress.value, [0, 1], [WHITE_CLEAR, theme.success]),
     borderColor: interpolateColor(
       progress.value,
       [0, 1],
-      [colors.borderStrong, colors.textPrimary],
+      [theme.outline, theme.success],
     ),
   }));
 
