@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import {
   getOrCreateSessionForDate,
@@ -29,14 +29,16 @@ import {
   weekdayOf,
 } from '@/domain/week';
 import { bumpData, useQuery } from '@/store/data';
-import { colors, fontSize, fonts, radius, spacing, theme } from '@/theme/tokens';
+import { colors, fontSize, fonts, layout, radius, shape, spacing, theme } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
 import { LoadError } from '@/ui/LoadError';
 import { shortDate } from '@/ui/relative';
 import { RoundButton } from '@/ui/Screen';
 import { useTabBarClearance } from '@/ui/tabBar';
 import { Body, Label, Meta, Mono } from '@/ui/Text';
-import { ChevronLeftIcon, ChevronRightIcon } from '@/ui/icons';
+import { BarbellIcon, ChevronLeftIcon, ChevronRightIcon, FlameIcon } from '@/ui/icons';
+import { MovementFigure } from '@/ui/MovementFigure';
+import { artSlugFor } from '@/movements/library';
 
 /**
  * Calendario do app — o painel "Calendário" da aba Histórico.
@@ -146,11 +148,20 @@ export function CalendarPanel() {
           onPress={() => shiftMonth(1)}
         />
       </View>
-      {streak.data ? (
-        <Meta style={styles.streak}>
-          {`sequência · ${streak.data} ${streak.data === 1 ? 'dia seguido' : 'dias seguidos'}`}
-        </Meta>
-      ) : null}
+      {/* O resumo do mes em dois blocos, com icone: quantos treinos e a
+          sequencia atual. Le-se antes do calendario, de relance. */}
+      <View style={styles.stats}>
+        <StatTile
+          icon={<BarbellIcon size={22} color={theme.onSurface} />}
+          value={String(month.data?.trained.size ?? 0)}
+          label={`treinos em ${monthLabel(cursor.getMonth()).toLowerCase()}`}
+        />
+        <StatTile
+          icon={<FlameIcon size={22} color={theme.onSurface} />}
+          value={String(streak.data ?? 0)}
+          label={(streak.data ?? 0) === 1 ? 'dia seguido' : 'dias seguidos'}
+        />
+      </View>
 
       <Card>
         <View style={styles.weekdays}>
@@ -216,6 +227,28 @@ export function CalendarPanel() {
   );
 }
 
+/** Bloco de resumo: icone, numero grande e o que ele conta. */
+function StatTile({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
+  return (
+    <View style={styles.statTile}>
+      <View style={styles.statIcon}>{icon}</View>
+      <Text style={styles.statValue} maxFontSizeMultiplier={1.2}>
+        {value}
+      </Text>
+      <Meta numberOfLines={2}>{label}</Meta>
+    </View>
+  );
+}
+
+/** A miniatura do movimento ao lado do nome do exercicio. */
+function Thumb({ name }: { name: string }) {
+  return (
+    <View style={styles.thumb}>
+      <MovementFigure slug={artSlugFor(name)} size={28} color={theme.onSurface} />
+    </View>
+  );
+}
+
 type DayDetailData = {
   session: Awaited<ReturnType<typeof getSessionByDate>>;
   /** A rotina do dia com os exercicios ja resolvidos para a semana daquela data. */
@@ -248,7 +281,9 @@ function DayDetail({
       <Card onPress={() => onOpen(session.id)}>
         <Label>{shortDate(date)}</Label>
         <View style={styles.detailHead}>
-          <Body>{dayTitle(planned?.name ?? '', planned?.items.length ?? 0, 'Treino livre')}</Body>
+          <Text style={styles.detailTitle}>
+            {dayTitle(planned?.name ?? '', planned?.items.length ?? 0, 'Treino livre')}
+          </Text>
           {/* So o volume: nao ha mais treino em andamento nem cronometro — o
               registro nasce pronto e a duracao seria sempre zero. */}
           <Meta>{formatVolume(totalVolume(sets))} kg</Meta>
@@ -256,6 +291,7 @@ function DayDetail({
 
         {[...byExercise.entries()].map(([exerciseId, volume]) => (
           <View key={exerciseId} style={styles.detailRow}>
+            <Thumb name={names.get(exerciseId) ?? ''} />
             <Body numberOfLines={1} style={styles.detailName}>
               {names.get(exerciseId) ?? 'Exercício'}
             </Body>
@@ -273,7 +309,7 @@ function DayDetail({
     <Card onPress={isFuture ? undefined : onStart}>
       <Label>{shortDate(date)}</Label>
       <View style={styles.detailHead}>
-        <Body>{dayTitle(planned?.name ?? '', items.length, 'Descanso')}</Body>
+        <Text style={styles.detailTitle}>{dayTitle(planned?.name ?? '', items.length, 'Descanso')}</Text>
         <Meta>
           {trains ? (isFuture ? 'planejado' : 'toque para registrar') : 'sem exercícios neste dia'}
         </Meta>
@@ -281,6 +317,7 @@ function DayDetail({
 
       {items.map((item) => (
         <View key={item.id} style={styles.detailRow}>
+          <Thumb name={item.exerciseName} />
           <Body numberOfLines={1} style={styles.detailName}>
             {item.exerciseName}
           </Body>
@@ -296,6 +333,50 @@ function DayDetail({
 }
 
 const styles = StyleSheet.create({
+  stats: {
+    flexDirection: 'row',
+    gap: layout.cardGap,
+  },
+  statTile: {
+    flex: 1,
+    backgroundColor: theme.surfaceContainer,
+    borderRadius: shape.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.cardBorder,
+    padding: spacing.lg,
+    gap: spacing.xs,
+  },
+  statIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: theme.surfaceContainerHigh,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+  },
+  statValue: {
+    fontFamily: fonts.display,
+    fontSize: 32,
+    lineHeight: 38,
+    letterSpacing: -0.8,
+    color: theme.onSurface,
+    fontVariant: ['tabular-nums'],
+  },
+  detailTitle: {
+    fontFamily: fonts.display,
+    fontSize: 20,
+    lineHeight: 26,
+    color: theme.onSurface,
+  },
+  thumb: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: theme.surfaceContainerHigh,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   content: {
     paddingHorizontal: spacing.xl,
     gap: spacing.md,
@@ -396,8 +477,10 @@ const styles = StyleSheet.create({
   },
   detailRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    gap: spacing.md,
+    minHeight: 56,
     paddingVertical: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.divider,

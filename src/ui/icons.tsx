@@ -53,3 +53,7 @@ export const InfoIcon = icon('information-circle-outline', 'information-circle')
 export const PeopleIcon = icon('people-outline', 'people');
 export const ImageIcon = icon('image-outline', 'image');
 export const ShareIcon = icon('share-social-outline', 'share-social');
+export const FlameIcon = icon('flame-outline', 'flame');
+export const TrophyIcon = icon('trophy-outline', 'trophy');
+export const TrendIcon = icon('trending-up-outline', 'trending-up');
+export const RunIcon = icon('walk-outline', 'walk');
