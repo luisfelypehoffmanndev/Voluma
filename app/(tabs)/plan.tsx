@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
     gap: layout.cardGap,
   },
   todayCard: {
-    borderColor: theme.primaryContainer,
+    borderColor: section.plan,
     borderWidth: 1.5,
   },
   cardHead: {
@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
     color: theme.onSurface,
   },
   todayBadge: {
-    backgroundColor: theme.primaryContainer,
+    backgroundColor: section.plan,
     borderRadius: shape.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
   todayText: {
     fontFamily: fonts.sansSemiBold,
     fontSize: 11,
-    color: theme.onPrimary,
+    color: '#FFFFFF',
   },
   workout: {
     fontFamily: fonts.display,

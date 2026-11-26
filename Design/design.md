@@ -6,7 +6,8 @@
 
 **Preto, branco e vermelho.** Três cores, uma combinação reconhecida no mundo todo. O app monocromático da primeira versão era bonito e mudo: quem tem dificuldade para se localizar (pense numa pessoa idosa) não sabia em que parte do app estava. Um arco-íris por seção também não serve, porque vira bagunça.
 
-- **Vermelho (`#E50914`)**: o botão principal de cada tela (texto branco), a aba ativa da barra, o selo colorido ao lado do título de cada aba, os ícones de destaque e o dia de hoje.
+- **Vermelho (`#B83B3B`), só em detalhes**: o selo ao lado do título de cada aba, o selo HOJE e o contorno do dia de hoje, os quadrados de ícone do Perfil e ícones pequenos de destaque (halter, chama). Nunca em superfície grande.
+- **Botão principal, aba ativa, chip e segmented ativos**: brancos, com texto preto.
 - **Branco**: texto e o estado "feito" (série marcada, dia treinado).
 - **Preto e cinzas escuros**: fundo e cards.
 
@@ -25,8 +26,8 @@ Tema escuro é o padrão; os tokens do claro já estão prontos (`palette` e `us
 | `surfaceContainerHighest` | `#2c2c2e` | `#cececb` | trilho de progresso, divisor forte |
 | `surfaceBright` | `#3a3a3c` | `#f1f1ee` | pressionado, botão − e + dentro do bloco da série |
 | `primary` | `#F2F2F2` | `#111111` | texto de destaque |
-| `primaryContainer` | `#E50914` | `#111111` | **botão principal** (texto branco, 4,8:1), chip ativo, aba ativa, selo HOJE |
-| `onPrimary` | `#FFFFFF` | `#f7f7f5` | texto sobre `primaryContainer` |
+| `primaryContainer` | `#F2F2F2` | `#111111` | **botão principal** (texto preto), chip e segmented ativos |
+| `onPrimary` | `#000000` | `#f7f7f5` | texto sobre `primaryContainer` |
 | `onSurface` | `#F2F2F2` | `#111111` | texto principal (quase branco, nunca `#ffffff`) |
 | `onSurfaceVariant` | `#a1a1aa` | `#52525b` | texto auxiliar, metadado, rótulo |
 | `outline` | `#71717a` | `#78787d` | ícone inativo, placeholder |

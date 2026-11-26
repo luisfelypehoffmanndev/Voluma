@@ -61,7 +61,7 @@ export const colors = {
    */
   // O laranja do Voluma voltou: e a cor do botao principal e da secao Hoje.
   // Preto, branco e vermelho: uma cor so de destaque.
-  accent: '#E50914',
+  accent: '#B83B3B',
   /** pontos apagados do dot-matrix (dias sem treino) */
   dotEmpty: '#2c2c2e',
   /** pontos cheios do dot-matrix (dias com treino) */
@@ -506,8 +506,8 @@ export const simple = {
   blockPressed: '#1c1c1e',
   radius: 18,
   radiusSmall: 14,
-  pill: '#E50914',
-  pillText: '#FFFFFF',
+  pill: '#F2F2F2',
+  pillText: '#000000',
 } as const;
 
 /**
@@ -526,9 +526,9 @@ export const palette = {
     primary: '#F2F2F2',
     // Mais escuro que o primeiro valor (#bdbdbd), que estourava como branco
     // neon nos botoes e nos circulos. Preto sobre ele ainda passa 7:1.
-    // O botao principal e o vermelho do Voluma, com texto branco (4,8:1, AA).
-    primaryContainer: '#E50914',
-    onPrimary: '#FFFFFF',
+    // O botao principal e branco com texto preto; o vermelho fica nos detalhes.
+    primaryContainer: '#F2F2F2',
+    onPrimary: '#000000',
     onSurface: '#F2F2F2',
     onSurfaceVariant: '#a1a1aa',
     outline: '#71717a',
@@ -575,10 +575,10 @@ export const theme: ThemeColors = palette.dark;
  * do titulo, na aba ativa da barra e nos icones daquela tela.
  */
 export const section = {
-  today: '#E50914',
-  plan: '#E50914',
-  history: '#E50914',
-  profile: '#E50914',
+  today: '#B83B3B',
+  plan: '#B83B3B',
+  history: '#B83B3B',
+  profile: '#B83B3B',
 } as const;
 
 /**

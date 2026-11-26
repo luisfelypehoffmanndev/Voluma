@@ -431,7 +431,7 @@ const styles = StyleSheet.create({
     color: theme.onPrimary,
   },
   dayToday: {
-    borderColor: theme.onSurface,
+    borderColor: section.history,
   },
   /** Selecionado: preenchido. E o estado que o dedo acabou de causar. */
   daySelected: {

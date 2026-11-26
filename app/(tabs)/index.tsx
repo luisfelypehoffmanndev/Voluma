@@ -417,7 +417,7 @@ const styles = StyleSheet.create({
   },
   circleToday: {
     borderWidth: 2,
-    borderColor: theme.primaryContainer,
+    borderColor: section.today,
   },
   dayToday: {
     color: theme.onSurface,

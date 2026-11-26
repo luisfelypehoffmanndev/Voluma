@@ -22,13 +22,13 @@ export default function TabsLayout() {
 
   if (onboarding === 'needed') return <Redirect href="/onboarding" />;
 
-  // Cada aba acende na cor da sua secao: a pessoa ve na barra onde esta.
-  const tab = (label: string, Icon: (props: IconProps) => React.ReactElement, color: string) => ({
+  // A aba ativa acende em branco, preenchida; o vermelho fica nos detalhes.
+  const tab = (label: string, Icon: (props: IconProps) => React.ReactElement, _color: string) => ({
     title: label,
     tabBarAccessibilityLabel: label,
-    tabBarActiveTintColor: color,
+    tabBarActiveTintColor: theme.onSurface,
     tabBarIcon: ({ focused }: { focused: boolean }) => (
-      <Icon size={24} filled={focused} color={focused ? color : theme.outline} />
+      <Icon size={24} filled={focused} color={focused ? theme.onSurface : theme.outline} />
     ),
   });
 
