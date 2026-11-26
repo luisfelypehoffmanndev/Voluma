@@ -23,7 +23,7 @@ export const colors = {
   divider: '#2c2c2e',
   /** borda um pouco mais visivel, para marcar estado sem mudar preenchimento */
   borderStrong: '#3a3a3c',
-  textPrimary: '#c9c9c9',
+  textPrimary: '#F2F2F2',
   /**
    * Cinza de icone apagado, desabilitado e texto direto sobre o FUNDO.
    *
@@ -59,7 +59,9 @@ export const colors = {
    *
    * O que faz ler como neon nao e so a matiz: e o `accentGlow` em volta.
    */
-  accent: '#9a9a9a',
+  // O laranja do Voluma voltou: e a cor do botao principal e da secao Hoje.
+  // Preto, branco e vermelho: uma cor so de destaque.
+  accent: '#E50914',
   /** pontos apagados do dot-matrix (dias sem treino) */
   dotEmpty: '#2c2c2e',
   /** pontos cheios do dot-matrix (dias com treino) */
@@ -504,8 +506,8 @@ export const simple = {
   blockPressed: '#1c1c1e',
   radius: 18,
   radiusSmall: 14,
-  pill: '#9a9a9a',
-  pillText: '#000000',
+  pill: '#E50914',
+  pillText: '#FFFFFF',
 } as const;
 
 /**
@@ -521,16 +523,18 @@ export const palette = {
     surfaceContainerHigh: '#1c1c1e',
     surfaceContainerHighest: '#2c2c2e',
     surfaceBright: '#3a3a3c',
-    primary: '#c9c9c9',
+    primary: '#F2F2F2',
     // Mais escuro que o primeiro valor (#bdbdbd), que estourava como branco
     // neon nos botoes e nos circulos. Preto sobre ele ainda passa 7:1.
-    primaryContainer: '#9a9a9a',
-    onPrimary: '#000000',
-    onSurface: '#c9c9c9',
+    // O botao principal e o vermelho do Voluma, com texto branco (4,8:1, AA).
+    primaryContainer: '#E50914',
+    onPrimary: '#FFFFFF',
+    onSurface: '#F2F2F2',
     onSurfaceVariant: '#a1a1aa',
     outline: '#71717a',
     outlineVariant: '#2c2c2e',
-    success: '#22c55e',
+    // Feito e branco: preto, branco e vermelho, sem uma quarta cor.
+    success: '#F2F2F2',
     error: '#f4212e',
     cardBorder: 'rgba(255,255,255,0.12)',
   },
@@ -563,6 +567,51 @@ export function useThemeColors(): ThemeColors {
 
 /** Atalho estatico para quem esta fora de componente (estilos de StyleSheet). */
 export const theme: ThemeColors = palette.dark;
+
+/**
+ * Cor de identidade por secao. O app monocromatico era bonito e mudo: quem tem
+ * dificuldade para se localizar (pense numa pessoa idosa) nao sabia em que
+ * parte do app estava. Agora cada aba tem uma cor que aparece no icone ao lado
+ * do titulo, na aba ativa da barra e nos icones daquela tela.
+ */
+export const section = {
+  today: '#E50914',
+  plan: '#E50914',
+  history: '#E50914',
+  profile: '#E50914',
+} as const;
+
+/**
+ * Cor por grupo muscular, para a pilula "Pernas" ser sempre da mesma cor e o
+ * grupo ser reconhecido antes de ser lido.
+ */
+export const muscle: Record<string, string> = {
+  Peito: '#F87171',
+  Costas: '#60A5FA',
+  Pernas: '#34D399',
+  Glúteos: '#F472B6',
+  Ombros: '#FBBF24',
+  Bíceps: '#A78BFA',
+  Tríceps: '#FB923C',
+  Abdômen: '#22D3EE',
+  Cardio: '#F43F5E',
+};
+
+/** A cor de um grupo muscular, com um cinza claro para grupo desconhecido. */
+export function muscleColor(group: string | null | undefined): string {
+  // Paleta de tres cores: as pilulas de grupo ficam brancas e discretas. O
+  // mapa `muscle` fica para um grafico que precise distinguir grupos.
+  void group;
+  return '#F2F2F2';
+}
+
+/** `#RRGGBB` com alpha: o fundo das pilulas e dos quadros de icone. */
+export function tint(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
 
 /** Raios da linguagem Blink: os mesmos em todo o app. */
 export const shape = { card: 18, control: 14, pill: 999 } as const;

@@ -2,7 +2,7 @@ import { Redirect, Tabs } from 'expo-router';
 import { StyleSheet } from 'react-native';
 
 import { useOnboarding } from '@/store/onboarding';
-import { fonts, theme } from '@/theme/tokens';
+import { fonts, section, theme } from '@/theme/tokens';
 import { ChartIcon, ListIcon, PersonIcon, TodayIcon, type IconProps } from '@/ui/icons';
 import { tabTransitionSpec, useTabAnimation } from '@/ui/motion';
 import { useTabBarGeometry } from '@/ui/tabBar';
@@ -22,11 +22,13 @@ export default function TabsLayout() {
 
   if (onboarding === 'needed') return <Redirect href="/onboarding" />;
 
-  const tab = (label: string, Icon: (props: IconProps) => React.ReactElement) => ({
+  // Cada aba acende na cor da sua secao: a pessoa ve na barra onde esta.
+  const tab = (label: string, Icon: (props: IconProps) => React.ReactElement, color: string) => ({
     title: label,
     tabBarAccessibilityLabel: label,
+    tabBarActiveTintColor: color,
     tabBarIcon: ({ focused }: { focused: boolean }) => (
-      <Icon size={24} filled={focused} color={focused ? theme.onSurface : theme.outline} />
+      <Icon size={24} filled={focused} color={focused ? color : theme.outline} />
     ),
   });
 
@@ -46,10 +48,10 @@ export default function TabsLayout() {
         sceneStyle: { backgroundColor: theme.background },
       }}
     >
-      <Tabs.Screen name="index" options={tab('Hoje', TodayIcon)} />
-      <Tabs.Screen name="plan" options={tab('Plano', ListIcon)} />
-      <Tabs.Screen name="history" options={tab('Histórico', ChartIcon)} />
-      <Tabs.Screen name="profile" options={tab('Perfil', PersonIcon)} />
+      <Tabs.Screen name="index" options={tab('Hoje', TodayIcon, section.today)} />
+      <Tabs.Screen name="plan" options={tab('Plano', ListIcon, section.plan)} />
+      <Tabs.Screen name="history" options={tab('Histórico', ChartIcon, section.history)} />
+      <Tabs.Screen name="profile" options={tab('Perfil', PersonIcon, section.profile)} />
     </Tabs>
   );
 }

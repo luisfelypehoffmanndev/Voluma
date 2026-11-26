@@ -4,14 +4,13 @@
 
 ## 1. Princípio
 
-Monocromático. O chrome do app não tem cor própria. Hierarquia vem de **tamanho, peso e espaço**, não de cor.
+**Preto, branco e vermelho.** Três cores, uma combinação reconhecida no mundo todo. O app monocromático da primeira versão era bonito e mudo: quem tem dificuldade para se localizar (pense numa pessoa idosa) não sabia em que parte do app estava. Um arco-íris por seção também não serve, porque vira bagunça.
 
-Cor aparece só quando comunica significado:
-- **verde (`success`)**: série concluída, recorde, meta batida;
-- **vermelho (`error`)**: erro e ação destrutiva;
-- **gráfico com amigos**: cada pessoa tem uma cor de uma paleta curta e dessaturada (`people.friends`), e "você" é `primary`. É a única exceção decorativa, e só dentro do gráfico.
+- **Vermelho (`#E50914`)**: o botão principal de cada tela (texto branco), a aba ativa da barra, o selo colorido ao lado do título de cada aba, os ícones de destaque e o dia de hoje.
+- **Branco**: texto e o estado "feito" (série marcada, dia treinado).
+- **Preto e cinzas escuros**: fundo e cards.
 
-Nada de gradiente decorativo, glow, sombra pesada, ícone colorido ou emoji na interface.
+Nada de gradiente decorativo, glow, sombra pesada ou emoji. Ação destrutiva também é vermelha, e sempre pede confirmação ou oferece desfazer.
 
 ## 2. Cores
 
@@ -25,14 +24,14 @@ Tema escuro é o padrão; os tokens do claro já estão prontos (`palette` e `us
 | `surfaceContainerHigh` | `#1c1c1e` | `#d9d9d6` | input, item selecionado, chip inativo, bloco da série da vez |
 | `surfaceContainerHighest` | `#2c2c2e` | `#cececb` | trilho de progresso, divisor forte |
 | `surfaceBright` | `#3a3a3c` | `#f1f1ee` | pressionado, botão − e + dentro do bloco da série |
-| `primary` | `#c9c9c9` | `#111111` | texto de destaque, ícone ativo |
-| `primaryContainer` | `#9a9a9a` | `#111111` | **botão principal**, chip ativo, progresso, selo HOJE (era `#bdbdbd`, que estourava como branco neon) |
-| `onPrimary` | `#000000` | `#f7f7f5` | texto sobre `primaryContainer` |
-| `onSurface` | `#c9c9c9` | `#111111` | texto principal |
+| `primary` | `#F2F2F2` | `#111111` | texto de destaque |
+| `primaryContainer` | `#E50914` | `#111111` | **botão principal** (texto branco, 4,8:1), chip ativo, aba ativa, selo HOJE |
+| `onPrimary` | `#FFFFFF` | `#f7f7f5` | texto sobre `primaryContainer` |
+| `onSurface` | `#F2F2F2` | `#111111` | texto principal (quase branco, nunca `#ffffff`) |
 | `onSurfaceVariant` | `#a1a1aa` | `#52525b` | texto auxiliar, metadado, rótulo |
 | `outline` | `#71717a` | `#78787d` | ícone inativo, placeholder |
 | `outlineVariant` | `#2c2c2e` | `#cdcdca` | borda de 1px, divisor |
-| `success` | `#22c55e` | `#15803d` | concluído, recorde |
+| `success` | `#F2F2F2` | `#15803d` | concluído (branco: sem quarta cor) |
 | `error` | `#f4212e` | `#d92d20` | erro, excluir |
 
 - **Nunca branco puro sobre preto puro.** Texto e destaque são `#c9c9c9` (~12:1), não `#ffffff` (21:1 vibra e cansa).

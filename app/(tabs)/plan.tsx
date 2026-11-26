@@ -7,10 +7,10 @@ import type { Weekday } from '@/domain/types';
 import { weekPlan, weekStartKey, weekdayName, weekdayOf } from '@/domain/week';
 import { artSlugFor } from '@/movements/library';
 import { useQuery } from '@/store/data';
-import { fonts, layout, shape, spacing, theme } from '@/theme/tokens';
+import { fonts, layout, muscleColor, section, shape, spacing, theme, tint } from '@/theme/tokens';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
-import { BarbellIcon, ChevronRightIcon, PlusIcon } from '@/ui/icons';
+import { BarbellIcon, ChevronRightIcon, ListIcon, PlusIcon } from '@/ui/icons';
 import { LoadError } from '@/ui/LoadError';
 import { MovementFigure } from '@/ui/MovementFigure';
 import { Header, Screen } from '@/ui/Screen';
@@ -45,6 +45,7 @@ export default function PlanScreen() {
     <Screen>
       <Header
         title="Plano"
+        badge={{ icon: <ListIcon size={26} color="#FFFFFF" filled />, color: section.plan }}
         subtitle={
           data
             ? `${trainingDays} ${trainingDays === 1 ? 'dia' : 'dias'} de treino na semana`
@@ -101,8 +102,8 @@ export default function PlanScreen() {
                 {day.groups.length > 0 ? (
                   <View style={styles.pills}>
                     {day.groups.slice(0, 3).map((group) => (
-                      <View key={group} style={styles.pill}>
-                        <Text style={styles.pillText}>{group}</Text>
+                      <View key={group} style={[styles.pill, { backgroundColor: tint(muscleColor(group), 0.18) }]}>
+                        <Text style={[styles.pillText, { color: muscleColor(group) }]}>{group}</Text>
                       </View>
                     ))}
                   </View>

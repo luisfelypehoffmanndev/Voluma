@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View, Text } from 'react-native';
 
 import { listBodyWeightLogs } from '@/db/repo';
 import type { Profile } from '@/domain/types';
@@ -11,7 +11,7 @@ import { useProfile } from '@/store/profile';
 import { useAuth } from '@/sync/auth';
 import { signedAvatarUrls } from '@/sync/avatar';
 import { isCloudConfigured } from '@/sync/supabase';
-import { colors, people, spacing, theme } from '@/theme/tokens';
+import { colors, fonts, people, section, spacing, theme } from '@/theme/tokens';
 import { usePrefs } from '@/store/prefs';
 import { Avatar } from '@/ui/Avatar';
 import { Button } from '@/ui/Button';
@@ -43,7 +43,7 @@ export default function ProfileScreen() {
 
   return (
     <Screen>
-      <Header title="Perfil" />
+      <Header title="Perfil" badge={{ icon: <PersonIcon size={26} color="#FFFFFF" filled />, color: section.profile }} />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
@@ -58,7 +58,7 @@ export default function ProfileScreen() {
         <Label style={styles.sectionLabel}>VOCÊ</Label>
 
         <Card onPress={() => router.push('/bodyweight')}>
-          <CardTitle icon={<BodyIcon size={18} color={theme.onSurfaceVariant} />}>Peso corporal</CardTitle>
+          <CardTitle color={section.profile} icon={<BodyIcon size={18} color="#FFFFFF" filled />}>Peso corporal</CardTitle>
           <View style={styles.row}>
             <View style={styles.rowText}>
               <Body>{latest ? `${formatWeight(latest.weightKg)} kg` : 'Registrar peso'}</Body>
@@ -110,7 +110,7 @@ function MotionCard() {
 
   return (
     <Card>
-      <CardTitle icon={<PhoneIcon size={18} color={theme.onSurfaceVariant} />}>Vibração</CardTitle>
+      <CardTitle color={section.profile} icon={<PhoneIcon size={18} color="#FFFFFF" filled />}>Vibração</CardTitle>
       <View style={styles.row}>
         <View style={styles.rowText}>
           <Body>Feedback tátil</Body>
@@ -151,7 +151,7 @@ function PublicProfileCard() {
 
   return (
     <Card onPress={() => router.push('/profile-setup')}>
-      <CardTitle icon={<PersonIcon size={18} color={theme.onSurfaceVariant} />}>Perfil</CardTitle>
+      <CardTitle color={section.profile} icon={<PersonIcon size={18} color="#FFFFFF" filled />}>Perfil</CardTitle>
       <View style={styles.row}>
         <View style={styles.rowText}>
           <Body>{profile ? `@${profile.handle}` : 'Definir @'}</Body>
@@ -219,7 +219,7 @@ function AvatarCard() {
 
   return (
     <Card>
-      <CardTitle icon={<ImageIcon size={18} color={theme.onSurfaceVariant} />}>Foto</CardTitle>
+      <CardTitle color={section.profile} icon={<ImageIcon size={18} color="#FFFFFF" filled />}>Foto</CardTitle>
       <View style={styles.avatarRow}>
         <Avatar
           handle={profile.handle}
@@ -291,7 +291,7 @@ function FriendsCard() {
 
   return (
     <Card onPress={() => router.push('/friends')}>
-      <CardTitle icon={<PeopleIcon size={18} color={theme.onSurfaceVariant} />}>Amigos</CardTitle>
+      <CardTitle color={section.profile} icon={<PeopleIcon size={18} color="#FFFFFF" filled />}>Amigos</CardTitle>
       <View style={styles.row}>
         <View style={styles.rowText}>
           <Body>{friendsTitle(lists.accepted.length)}</Body>
@@ -335,7 +335,7 @@ function SharingCard() {
 
   return (
     <Card>
-      <CardTitle icon={<ShareIcon size={18} color={theme.onSurfaceVariant} />}>Compartilhar</CardTitle>
+      <CardTitle color={section.profile} icon={<ShareIcon size={18} color="#FFFFFF" filled />}>Compartilhar</CardTitle>
       <View style={styles.row}>
         <View style={styles.rowText}>
           <Body>Estatísticas</Body>
@@ -371,7 +371,7 @@ function SyncCard() {
   if (!isCloudConfigured) {
     return (
       <Card>
-        <CardTitle icon={<CloudIcon size={18} color={theme.onSurfaceVariant} />}>Nuvem</CardTitle>
+        <CardTitle color={section.profile} icon={<CloudIcon size={18} color="#FFFFFF" filled />}>Nuvem</CardTitle>
         <View style={styles.rowText}>
           <Body>Modo offline</Body>
           <Meta>Configure o .env para sincronizar</Meta>
@@ -383,7 +383,7 @@ function SyncCard() {
   if (status !== 'signedIn') {
     return (
       <Card onPress={() => router.push('/login')}>
-        <CardTitle icon={<CloudIcon size={18} color={theme.onSurfaceVariant} />}>Nuvem</CardTitle>
+        <CardTitle color={section.profile} icon={<CloudIcon size={18} color="#FFFFFF" filled />}>Nuvem</CardTitle>
         <View style={styles.row}>
           <View style={styles.rowText}>
             <Body>Entrar</Body>
@@ -397,7 +397,7 @@ function SyncCard() {
 
   return (
     <Card>
-      <CardTitle icon={<CloudIcon size={18} color={theme.onSurfaceVariant} />}>Nuvem</CardTitle>
+      <CardTitle color={section.profile} icon={<CloudIcon size={18} color="#FFFFFF" filled />}>Nuvem</CardTitle>
 
       <Pressable style={styles.row} onPress={() => void runSync()} disabled={syncing}>
         <View style={styles.rowText}>
@@ -435,7 +435,7 @@ function SyncCard() {
 function CreditsCard() {
   return (
     <Card>
-      <CardTitle icon={<InfoIcon size={18} color={theme.onSurfaceVariant} />}>Créditos</CardTitle>
+      <CardTitle color={section.profile} icon={<InfoIcon size={18} color="#FFFFFF" filled />}>Créditos</CardTitle>
       <View style={styles.rowText}>
         <Body>Figuras dos exercícios</Body>
         <Meta>Bryl Lim · workout-guide, derivado de Everkinetic · CC BY-SA 4.0</Meta>
@@ -484,12 +484,24 @@ const styles = StyleSheet.create({
   },
 });
 
-/** Titulo de card do Perfil: icone de contorno a esquerda e o nome. */
-function CardTitle({ icon, children }: { icon: React.ReactNode; children: string }) {
+/**
+ * Titulo de card do Perfil, no jeito dos Ajustes do iPhone: o icone dentro de
+ * um quadrado colorido e o nome em texto de corpo. Cada item tem a sua cor, e e
+ * por ela que se acha o item sem precisar ler a tela inteira.
+ */
+function CardTitle({
+  icon,
+  color,
+  children,
+}: {
+  icon: React.ReactNode;
+  color: string;
+  children: string;
+}) {
   return (
     <View style={titleStyles.row}>
-      {icon}
-      <Label>{children}</Label>
+      <View style={[titleStyles.square, { backgroundColor: color }]}>{icon}</View>
+      <Text style={titleStyles.text}>{children}</Text>
     </View>
   );
 }
@@ -498,6 +510,18 @@ const titleStyles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
+  },
+  square: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  text: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 17,
+    color: theme.onSurface,
   },
 });

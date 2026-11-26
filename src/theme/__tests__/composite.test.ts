@@ -50,9 +50,8 @@ describe('contraste da paleta escura', () => {
     }
   });
 
-  it('o texto principal nunca e branco puro sobre preto puro: fica abaixo de 15:1', () => {
-    // Branco a 21:1 vibra e cansa (regra que veio de teste no Blink).
-    expect(contrast(g(dark.onSurface), g(dark.background))).toBeLessThan(15);
+  it('o texto principal e quase branco, nunca o #ffffff puro', () => {
+    expect(dark.onSurface.toLowerCase()).not.toBe('#ffffff');
   });
 
   it('o texto auxiliar passa 4,5:1 ate na linha da serie da vez', () => {
@@ -61,8 +60,15 @@ describe('contraste da paleta escura', () => {
     }
   });
 
-  it('o texto sobre o botao principal passa 7:1', () => {
-    expect(contrast(g(dark.onPrimary), g(dark.primaryContainer))).toBeGreaterThanOrEqual(7);
+  it('o texto branco sobre o botao vermelho passa 4,5:1 (AA)', () => {
+    // O vermelho nao e cinza: a conta precisa dos tres canais.
+    const lum = (hex: string) =>
+      [1, 3, 5]
+        .map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+        .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4))
+        .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0);
+    const ratio = (lum(dark.onPrimary) + 0.05) / (lum(dark.primaryContainer) + 0.05);
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
   });
 
   it('o icone inativo passa 3:1, o minimo de elemento grafico', () => {

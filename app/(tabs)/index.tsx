@@ -14,7 +14,7 @@ import { currentStreak } from '@/domain/streak';
 import { dayTitle, workoutState, type WorkoutState } from '@/domain/today';
 import { lastNDays, routineForWeekday, toDateKey, weekStartKey, weekdayName, weekdayOf } from '@/domain/week';
 import { useQuery } from '@/store/data';
-import { fonts, layout, shape, spacing, theme } from '@/theme/tokens';
+import { fonts, layout, muscleColor, section, shape, spacing, theme, tint } from '@/theme/tokens';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { LoadError } from '@/ui/LoadError';
@@ -23,7 +23,7 @@ import { Header, Screen } from '@/ui/Screen';
 import { useTabBarClearance } from '@/ui/tabBar';
 import { Reveal } from '@/ui/Reveal';
 import { Body, Label, Meta } from '@/ui/Text';
-import { BarbellIcon, CheckIcon } from '@/ui/icons';
+import { BarbellIcon, CheckIcon, TodayIcon } from '@/ui/icons';
 import { MovementFigure } from '@/ui/MovementFigure';
 import { artSlugFor } from '@/movements/library';
 import { useStartWorkout } from '@/ui/useStartWorkout';
@@ -40,7 +40,7 @@ export default function HomeScreen() {
   if (error) {
     return (
       <Screen>
-        <Header title="Hoje" subtitle={todaySubtitle()} />
+        <Header title="Hoje" subtitle={todaySubtitle()} badge={{ icon: <TodayIcon size={26} color="#FFFFFF" filled />, color: section.today }} />
         <LoadError error={error} onRetry={reload} />
       </Screen>
     );
@@ -49,7 +49,7 @@ export default function HomeScreen() {
   if (loading || !data) {
     return (
       <Screen>
-        <Header title="Hoje" subtitle={todaySubtitle()} />
+        <Header title="Hoje" subtitle={todaySubtitle()} badge={{ icon: <TodayIcon size={26} color="#FFFFFF" filled />, color: section.today }} />
         <ActivityIndicator color={theme.outline} />
       </Screen>
     );
@@ -63,7 +63,7 @@ export default function HomeScreen() {
 
   return (
     <Screen>
-      <Header title="Hoje" subtitle={todaySubtitle()} />
+      <Header title="Hoje" subtitle={todaySubtitle()} badge={{ icon: <TodayIcon size={26} color="#FFFFFF" filled />, color: section.today }} />
       <Reveal style={styles.reveal}>
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
@@ -76,7 +76,7 @@ export default function HomeScreen() {
             <View style={styles.heroHead}>
               <View style={styles.heroText}>
                 <View style={styles.kicker}>
-                  <BarbellIcon size={16} color={theme.onSurfaceVariant} />
+                  <BarbellIcon size={16} color={section.today} />
                   <Label>{hasPlan ? 'TREINO DE HOJE' : 'HOJE'}</Label>
                 </View>
                 <Text style={styles.heroName} maxFontSizeMultiplier={1.3}>
@@ -86,8 +86,8 @@ export default function HomeScreen() {
                 {groups.length > 0 ? (
                   <View style={styles.pills}>
                     {groups.slice(0, 3).map((group) => (
-                      <View key={group} style={styles.pill}>
-                        <Text style={styles.pillText} maxFontSizeMultiplier={1.3}>
+                      <View key={group} style={[styles.pill, { backgroundColor: tint(muscleColor(group), 0.18) }]}>
+                        <Text style={[styles.pillText, { color: muscleColor(group) }]} maxFontSizeMultiplier={1.3}>
                           {group}
                         </Text>
                       </View>
@@ -144,7 +144,7 @@ export default function HomeScreen() {
                 accessibilityLabel={`${day.letter}${day.trained ? ', treinou' : ''}${day.today ? ', hoje' : ''}`}
               >
                 {day.trained ? (
-                  <CheckIcon size={18} color={theme.onPrimary} />
+                  <CheckIcon size={18} color={theme.background} />
                 ) : (
                   <Text style={[styles.dayLetter, day.today && styles.dayLetterToday]}>
                     {day.letter}
@@ -341,7 +341,7 @@ const styles = StyleSheet.create({
     width: 104,
     height: 104,
     borderRadius: shape.card,
-    backgroundColor: theme.surfaceContainerHigh,
+    backgroundColor: tint(section.today, 0.16),
     alignItems: 'center',
     justifyContent: 'center',
   },

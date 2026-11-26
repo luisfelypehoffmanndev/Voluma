@@ -29,7 +29,7 @@ import {
   weekdayOf,
 } from '@/domain/week';
 import { bumpData, useQuery } from '@/store/data';
-import { colors, fontSize, fonts, layout, radius, shape, spacing, theme } from '@/theme/tokens';
+import { colors, fontSize, fonts, layout, radius, section, shape, spacing, theme, tint } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
 import { LoadError } from '@/ui/LoadError';
 import { shortDate } from '@/ui/relative';
@@ -152,12 +152,12 @@ export function CalendarPanel() {
           sequencia atual. Le-se antes do calendario, de relance. */}
       <View style={styles.stats}>
         <StatTile
-          icon={<BarbellIcon size={22} color={theme.onSurface} />}
+          icon={<BarbellIcon size={22} color={section.history} />}
           value={String(month.data?.trained.size ?? 0)}
           label={`treinos em ${monthLabel(cursor.getMonth()).toLowerCase()}`}
         />
         <StatTile
-          icon={<FlameIcon size={22} color={theme.onSurface} />}
+          icon={<FlameIcon size={22} color={section.today} />}
           value={String(streak.data ?? 0)}
           label={(streak.data ?? 0) === 1 ? 'dia seguido' : 'dias seguidos'}
         />
@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: theme.surfaceContainerHigh,
+    backgroundColor: tint(section.history, 0.16),
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.xs,
