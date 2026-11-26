@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import {
   getOrCreateSessionForDate,
@@ -12,12 +12,14 @@ import {
   trainedDates,
   type WeekExercise,
 } from '@/db/repo';
+import { currentStreak } from '@/domain/streak';
 import { dayTitle } from '@/domain/today';
 import type { Routine } from '@/domain/types';
 import { formatDistance, formatDuration } from '@/domain/run';
 import { formatVolume, formatWeight, totalVolume, volumeByExercise } from '@/domain/volume';
 import {
   fromDateKey,
+  lastNDays,
   monthGrid,
   monthLabel,
   routineForWeekday,
@@ -27,14 +29,17 @@ import {
   weekdayOf,
 } from '@/domain/week';
 import { bumpData, useQuery } from '@/store/data';
-import { colors, fontSize, fonts, radius, spacing, surfaces } from '@/theme/tokens';
+import { colors, fontSize, fonts, layout, radius, section, shape, spacing, theme, tint } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
 import { LoadError } from '@/ui/LoadError';
 import { shortDate } from '@/ui/relative';
 import { RoundButton } from '@/ui/Screen';
 import { useTabBarClearance } from '@/ui/tabBar';
 import { Body, Label, Meta, Mono } from '@/ui/Text';
-import { ChevronLeftIcon, ChevronRightIcon } from '@/ui/icons';
+import { BarbellIcon, ChevronLeftIcon, ChevronRightIcon } from '@/ui/icons';
+import { Flame } from '@/ui/Flame';
+import { MovementFigure } from '@/ui/MovementFigure';
+import { artSlugFor } from '@/movements/library';
 
 /**
  * Calendario do app — o painel "Calendário" da aba Histórico.
@@ -49,6 +54,9 @@ import { ChevronLeftIcon, ChevronRightIcon } from '@/ui/icons';
  * eram tres linguagens brigando na mesma grade (circulo no selecionado,
  * sublinhado no hoje, nada nos demais), e a grade lia como quebrada.
  */
+/** Quanto para tras a sequencia olha. Mais de um ano seguido e caso de comemorar a parte. */
+const STREAK_WINDOW_DAYS = 400;
+
 export function CalendarPanel() {
   const clearance = useTabBarClearance();
   const router = useRouter();
@@ -63,6 +71,19 @@ export function CalendarPanel() {
 
   const month = useQuery(
     useCallback(async () => ({ trained: await trainedDates(firstKey, lastKey) }), [firstKey, lastKey]),
+  );
+
+  /**
+   * A sequencia de dias seguidos. Morava na Hoje, no card de progresso que saiu
+   * no plano 21; veio para ca porque e aqui que dias seguidos se leem — o mesmo
+   * calendario mostra quais sao.
+   */
+  const streak = useQuery(
+    useCallback(async () => {
+      const now = new Date();
+      const window = lastNDays(now, STREAK_WINDOW_DAYS);
+      return currentStreak(await trainedDates(window[0], toDateKey(now)), now);
+    }, []),
   );
 
   const day = useQuery(
@@ -128,6 +149,20 @@ export function CalendarPanel() {
           onPress={() => shiftMonth(1)}
         />
       </View>
+      {/* O resumo do mes em dois blocos, com icone: quantos treinos e a
+          sequencia atual. Le-se antes do calendario, de relance. */}
+      <View style={styles.stats}>
+        <StatTile
+          icon={<BarbellIcon size={22} color={section.history} />}
+          value={String(month.data?.trained.size ?? 0)}
+          label={`treinos em ${monthLabel(cursor.getMonth()).toLowerCase()}`}
+        />
+        <StatTile
+          icon={<Flame size={34} />}
+          value={String(streak.data ?? 0)}
+          label={(streak.data ?? 0) === 1 ? 'dia seguido' : 'dias seguidos'}
+        />
+      </View>
 
       <Card>
         <View style={styles.weekdays}>
@@ -156,16 +191,22 @@ export function CalendarPanel() {
                   <View
                     style={[
                       styles.dayInner,
+                      trained && styles.dayTrained,
                       isToday && styles.dayToday,
                       isSelected && styles.daySelected,
                       isSelected && isToday && styles.daySelectedToday,
                     ]}
                   >
-                    <Mono style={[styles.dayNumber, !trained && styles.dayNumberIdle]}>
+                    <Mono
+                      style={[
+                        styles.dayNumber,
+                        !trained && styles.dayNumberIdle,
+                        trained && styles.dayNumberTrained,
+                      ]}
+                    >
                       {fromDateKey(dateKey).getDate()}
                     </Mono>
                   </View>
-                  <View style={[styles.dayDot, trained && styles.dayDotFilled]} />
                 </Pressable>
               );
             })}
@@ -184,6 +225,28 @@ export function CalendarPanel() {
         onOpen={(sessionId) => router.push(`/session/${sessionId}`)}
       />
     </ScrollView>
+  );
+}
+
+/** Bloco de resumo: icone, numero grande e o que ele conta. */
+function StatTile({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
+  return (
+    <View style={styles.statTile}>
+      <View style={styles.statIcon}>{icon}</View>
+      <Text style={styles.statValue} maxFontSizeMultiplier={1.2}>
+        {value}
+      </Text>
+      <Meta numberOfLines={2}>{label}</Meta>
+    </View>
+  );
+}
+
+/** A miniatura do movimento ao lado do nome do exercicio. */
+function Thumb({ name }: { name: string }) {
+  return (
+    <View style={styles.thumb}>
+      <MovementFigure slug={artSlugFor(name)} size={28} color={theme.onSurface} />
+    </View>
   );
 }
 
@@ -219,7 +282,9 @@ function DayDetail({
       <Card onPress={() => onOpen(session.id)}>
         <Label>{shortDate(date)}</Label>
         <View style={styles.detailHead}>
-          <Body>{dayTitle(planned?.name ?? '', planned?.items.length ?? 0, 'Treino livre')}</Body>
+          <Text style={styles.detailTitle}>
+            {dayTitle(planned?.name ?? '', planned?.items.length ?? 0, 'Treino livre')}
+          </Text>
           {/* So o volume: nao ha mais treino em andamento nem cronometro — o
               registro nasce pronto e a duracao seria sempre zero. */}
           <Meta>{formatVolume(totalVolume(sets))} kg</Meta>
@@ -227,6 +292,7 @@ function DayDetail({
 
         {[...byExercise.entries()].map(([exerciseId, volume]) => (
           <View key={exerciseId} style={styles.detailRow}>
+            <Thumb name={names.get(exerciseId) ?? ''} />
             <Body numberOfLines={1} style={styles.detailName}>
               {names.get(exerciseId) ?? 'Exercício'}
             </Body>
@@ -244,7 +310,7 @@ function DayDetail({
     <Card onPress={isFuture ? undefined : onStart}>
       <Label>{shortDate(date)}</Label>
       <View style={styles.detailHead}>
-        <Body>{dayTitle(planned?.name ?? '', items.length, 'Descanso')}</Body>
+        <Text style={styles.detailTitle}>{dayTitle(planned?.name ?? '', items.length, 'Descanso')}</Text>
         <Meta>
           {trains ? (isFuture ? 'planejado' : 'toque para registrar') : 'sem exercícios neste dia'}
         </Meta>
@@ -252,6 +318,7 @@ function DayDetail({
 
       {items.map((item) => (
         <View key={item.id} style={styles.detailRow}>
+          <Thumb name={item.exerciseName} />
           <Body numberOfLines={1} style={styles.detailName}>
             {item.exerciseName}
           </Body>
@@ -267,6 +334,50 @@ function DayDetail({
 }
 
 const styles = StyleSheet.create({
+  stats: {
+    flexDirection: 'row',
+    gap: layout.cardGap,
+  },
+  statTile: {
+    flex: 1,
+    backgroundColor: theme.surfaceContainer,
+    borderRadius: shape.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.cardBorder,
+    padding: spacing.lg,
+    gap: spacing.xs,
+  },
+  statIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: tint(section.history, 0.16),
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+  },
+  statValue: {
+    fontFamily: fonts.display,
+    fontSize: 32,
+    lineHeight: 38,
+    letterSpacing: -0.8,
+    color: theme.onSurface,
+    fontVariant: ['tabular-nums'],
+  },
+  detailTitle: {
+    fontFamily: fonts.display,
+    fontSize: 20,
+    lineHeight: 26,
+    color: theme.onSurface,
+  },
+  thumb: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: theme.surfaceContainerHigh,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   content: {
     paddingHorizontal: spacing.xl,
     gap: spacing.md,
@@ -279,6 +390,10 @@ const styles = StyleSheet.create({
   },
   monthTitle: {
     alignItems: 'center',
+  },
+  streak: {
+    textAlign: 'center',
+    paddingBottom: spacing.sm,
   },
   weekdays: {
     flexDirection: 'row',
@@ -309,13 +424,20 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   /** Hoje: so o contorno. Marca o dia sem competir com a selecao. */
+  /** Dia treinado: quadradinho cheio, como num mapa de atividade. */
+  dayTrained: {
+    backgroundColor: theme.primaryContainer,
+  },
+  dayNumberTrained: {
+    color: theme.onPrimary,
+  },
   dayToday: {
-    borderColor: colors.border,
+    borderColor: section.history,
   },
   /** Selecionado: preenchido. E o estado que o dedo acabou de causar. */
   daySelected: {
-    backgroundColor: surfaces.raised,
-    borderColor: colors.border,
+    borderColor: theme.onSurface,
+    borderWidth: 2,
   },
   /** Os dois ao mesmo tempo: preenchido, com a borda um passo mais visivel. */
   daySelectedToday: {
@@ -323,7 +445,7 @@ const styles = StyleSheet.create({
   },
   dayNumber: {
     fontFamily: fonts.monoLight,
-    fontSize: fontSize.labelLg,
+    fontSize: fontSize.aux,
     color: colors.textPrimary,
     textAlign: 'center',
     // O Android reserva um respiro extra em volta da linha a partir das metricas
@@ -356,8 +478,10 @@ const styles = StyleSheet.create({
   },
   detailRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    gap: spacing.md,
+    minHeight: 56,
     paddingVertical: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.divider,

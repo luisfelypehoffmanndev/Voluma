@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   title: {
-    fontSize: fontSize.bodyLg,
+    fontSize: fontSize.body,
   },
   actions: {
     flexDirection: 'row',

@@ -1,123 +1,46 @@
-import { useRouter } from 'expo-router';
-import { useCallback, useRef } from 'react';
-import {
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { useCallback } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import {
-  getOrCreateSessionForDate,
   getSessionByDate,
-  listBodyWeightLogs,
+  listExercises,
   listRoutines,
   listSessionSets,
-  routineExerciseCounts,
   targetsForWeek,
   trainedDates,
-  volumeByDate,
   type WeekExercise,
 } from '@/db/repo';
-import { applyOrder } from '@/domain/order';
-import { buildDotMatrix, currentStreak } from '@/domain/streak';
-import { formatDistance, formatDuration } from '@/domain/run';
+import { currentStreak } from '@/domain/streak';
 import { dayTitle, workoutState, type WorkoutState } from '@/domain/today';
-import { formatVolume, formatWeight } from '@/domain/volume';
-import type { Routine, Weekday } from '@/domain/types';
-import {
-  daysSinceMonthStart,
-  lastNDays,
-  routineForWeekday,
-  toDateKey,
-  weekStartKey,
-  weekdayName,
-  weekdayOf,
-} from '@/domain/week';
-import { bumpData, useQuery } from '@/store/data';
-import { colors, fontSize, radius, spacing } from '@/theme/tokens';
+import { routineForWeekday, toDateKey, weekStartKey, weekdayName, weekdayOf } from '@/domain/week';
+import { useQuery } from '@/store/data';
+import { fonts, layout, muscleColor, section, shape, spacing, theme, tint } from '@/theme/tokens';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
-import { DotMatrix } from '@/ui/DotMatrix';
-import { PressableSurface } from '@/ui/PressableSurface';
-import { ProgressRing } from '@/ui/ProgressRing';
-import { shortDate } from '@/ui/relative';
 import { LoadError } from '@/ui/LoadError';
+import { shortDate } from '@/ui/relative';
 import { Header, Screen } from '@/ui/Screen';
-import { Tour } from '@/ui/tour/Tour';
-import { TourTarget } from '@/ui/tour/TourTarget';
-import { StatNumber } from '@/ui/StatNumber';
 import { useTabBarClearance } from '@/ui/tabBar';
 import { Reveal } from '@/ui/Reveal';
-import { Body, Label, Meta, Mono, Section } from '@/ui/Text';
+import { Body, Label, Meta } from '@/ui/Text';
+import { BarbellIcon, CheckIcon, TodayIcon } from '@/ui/icons';
+import { MovementFigure } from '@/ui/MovementFigure';
+import { artSlugFor } from '@/movements/library';
+import { useStartWorkout } from '@/ui/useStartWorkout';
 
 /**
- * Blocos de mes no dot-matrix da home: o mes corrente e os cinco anteriores.
- *
- * Seis meses, e nao tres, por geometria. Com tres meses sao ~14 colunas, que
- * nao preenchem a largura do card sem engordar a celula: ou a grade fica
- * centralizada com margens grandes nas pontas, ou cresce para ~130px de altura.
- * Com seis meses sao ~30 colunas, e a celula pequena preenche o card
- * naturalmente numa faixa baixa — que e a proporcao da referencia.
- */
-const MATRIX_MONTHS = 5;
-
-/** Desde quando a sequencia conta: antes disso o app nem existia. */
-const STREAK_SINCE = '2020-01-01';
-
-/**
- * Home — "Foco Unico": um trabalho so, te colocar no treino de hoje em um toque.
- *
- * O treino abria ao tocar no card "HOJE", que nao tinha cara de botao, no meio
- * de cinco cards disputando atencao. Agora a acao principal e um botao de
- * verdade, logo abaixo do card do dia, com o dado no rotulo ("Começar treino ·
- * 5 exercícios").
- *
- * Uma unica cor de destaque nesta tela: esse botao, quando ele e a acao
- * principal (comecar ou continuar). O card de volume de 7 dias, que era o card
- * accent solido, virou vidro normal — dois laranjas brigariam, e o que o
- * usuario precisa achar de relance e o botao, nao o numero. Treino ja
- * finalizado ou dia de descanso: o botao vira vidro e a tela fica sem accent.
- *
- * O dot-matrix continua com `showRecord={false}`: o ponto de recorde tambem e
- * accent.
+ * Hoje (Design/design.md §7): o heroi e o treino do dia, com um botao largo que
+ * diz o que fazer. Embaixo, a semana em sete circulos e os exercicios do dia.
  */
 export default function HomeScreen() {
   const clearance = useTabBarClearance();
-  const router = useRouter();
-  const { width } = useWindowDimensions();
-
-  // Largura util dentro do card: tela menos as margens da tela e o padding do
-  // card dos dois lados.
-  const matrixWidth = width - spacing.xl * 4;
-
+  const openWorkout = useStartWorkout();
   const { data, loading, error, reload } = useQuery(useCallback(() => loadHome(), []));
-
-  // Um treino por data: abrir de novo cai no mesmo registro, com os numeros que
-  // ja foram gravados. "Comecar" e "continuar" abrem a mesma sessao; o que muda
-  // e so o rotulo, que diz em que pe o dia esta.
-  //
-  // A trava evita que um toque duplo empilhe a mesma sessao duas vezes.
-  const opening = useRef(false);
-  const openWorkout = async () => {
-    if (opening.current) return;
-    opening.current = true;
-    try {
-      const session = await getOrCreateSessionForDate(new Date());
-      bumpData();
-      router.push(`/session/${session.id}`);
-    } catch (reason) {
-      console.warn('[Voluma] falha ao abrir o treino de hoje', reason);
-    } finally {
-      opening.current = false;
-    }
-  };
 
   if (error) {
     return (
       <Screen>
-        <Header title="Hoje" subtitle={todaySubtitle()} />
+        <Header title="Hoje" subtitle={todaySubtitle()} badge={{ icon: <TodayIcon size={26} color="#FFFFFF" filled />, color: section.today }} />
         <LoadError error={error} onRetry={reload} />
       </Screen>
     );
@@ -126,292 +49,237 @@ export default function HomeScreen() {
   if (loading || !data) {
     return (
       <Screen>
-        <Header title="Hoje" subtitle={todaySubtitle()} />
-        <ActivityIndicator color={colors.textSecondary} />
+        <Header title="Hoje" subtitle={todaySubtitle()} badge={{ icon: <TodayIcon size={26} color="#FFFFFF" filled />, color: section.today }} />
+        <ActivityIndicator color={theme.outline} />
       </Screen>
     );
   }
 
-  const { today, upcoming, weekVolume, bodyWeight, dots, streak } = data;
+  const { today, week, streak, trainedToday, current, groups, groupOf } = data;
+  // A figura grande: o exercicio da vez durante o treino, ou o primeiro do dia.
+  const featured = current ?? today.exercises[0]?.exerciseName ?? null;
+  const hasPlan = today.exercises.length > 0;
+  const progress = today.sets.total > 0 ? today.sets.done / today.sets.total : 0;
 
   return (
-    <Screen
-      overlay={
-        /* No `overlay` do `Screen`, e nao entre os filhos: ali a camada e irma
-           do conteudo e cobre a tela inteira, nas mesmas coordenadas de janela
-           em que o alvo foi medido. Dentro do conteudo ela comecaria abaixo da
-           area segura e o recorte sairia deslocado. */
-        <Tour
-          id="home"
-          active
-          steps={[
-            {
-              target: 'home.action',
-              // Uma frase que vale em todo estado do dia: em dia de descanso
-              // nao ha numero nenhum no botao, e falar dele seria mentira.
-              text: 'O treino de hoje começa aqui.',
-            },
-          ]}
-        />
-      }
-    >
-      <Header title="Hoje" subtitle={todaySubtitle()} />
-
-      {/* O `Header` fica FORA do fade: ele ja estava na tela durante o
-          carregamento, e faze-lo acender de novo seria animar uma troca que
-          nao aconteceu. So o conteudo, que ate agora era um spinner, entra. */}
+    <Screen>
+      <Header title="Hoje" subtitle={todaySubtitle()} badge={{ icon: <TodayIcon size={26} color="#FFFFFF" filled />, color: section.today }} />
       <Reveal style={styles.reveal}>
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* O HEROI da tela: o treino de hoje, e so ele, com o nome em titulo de
-            secao e as series em mono grande. Tudo aqui era corpo de 16 no meio
-            de cinco cards do mesmo tamanho, e nada dizia por onde comecar.
-
-            O card nao e tocavel: quem abre o treino e o botao logo abaixo. Um
-            card que as vezes e botao ensina a tocar em todo card, e os outros
-            daqui levam a outras telas. */}
-        <Card>
-          <View style={styles.todayHead}>
-            <View style={styles.todayText}>
-              <Label>{weekdayName(today.weekday).toUpperCase()}</Label>
-              <Section numberOfLines={1} style={styles.todayName}>
-                {today.name}
-              </Section>
-              {/* A orientacao da tela, em UMA linha: o que falta fazer hoje.
-                  Mais que isso vira parede de texto na tela que a pessoa abre
-                  dez vezes por semana. */}
-              <Meta numberOfLines={1}>{todayHint(today.state, today.sets)}</Meta>
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <Card>
+            {/* A identidade da tela: a figura do primeiro movimento do dia, grande,
+                ao lado do nome do treino. Diz "e isto que voce vai fazer" sem
+                precisar de texto. */}
+            <View style={styles.heroHead}>
+              <View style={styles.heroText}>
+                <View style={styles.kicker}>
+                  <BarbellIcon size={16} color={section.today} />
+                  <Label>{hasPlan ? 'TREINO DE HOJE' : 'HOJE'}</Label>
+                </View>
+                <Text style={styles.heroName} maxFontSizeMultiplier={1.3}>
+                  {hasPlan ? today.name : 'Dia de descanso'}
+                </Text>
+                {current ? <Meta style={styles.now}>{`Agora: ${current}`}</Meta> : null}
+                {groups.length > 0 ? (
+                  <View style={styles.pills}>
+                    {groups.slice(0, 3).map((group) => (
+                      <View key={group} style={[styles.pill, { backgroundColor: tint(muscleColor(group), 0.18) }]}>
+                        <Text style={[styles.pillText, { color: muscleColor(group) }]} maxFontSizeMultiplier={1.3}>
+                          {group}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+              {hasPlan ? (
+                <View style={styles.heroArt}>
+                  <MovementFigure
+                    slug={featured ? artSlugFor(featured) : null}
+                    size={88}
+                    color={theme.onSurface}
+                  />
+                </View>
+              ) : null}
             </View>
-            {/* O anel mostra as series do dia: o numero e o total, e o arco, o
-                quanto ja foi marcado. Antes o arco so conhecia dois estados
-                (0 ou 1), entao ficava vazio durante o treino inteiro. */}
-            <ProgressRing
-              progress={today.sets.total > 0 ? today.sets.done / today.sets.total : 0}
-              value={String(today.sets.total)}
+            {!hasPlan ? (
+              <Meta style={styles.heroMeta}>Nada no seu plano para hoje.</Meta>
+            ) : null}
+
+            {today.state.kind === 'inProgress' ? (
+              <View style={styles.track} accessibilityLabel={`${today.sets.done} de ${today.sets.total} séries`}>
+                <View style={[styles.fill, { width: `${Math.round(progress * 100)}%` }]} />
+              </View>
+            ) : null}
+
+            <Button
+              variant={today.state.kind === 'completed' || today.state.kind === 'rest' ? 'inline' : 'primary'}
+              label={actionLabel(today.state, today.sets, today.exercises.length)}
+              onPress={() => void openWorkout()}
+              style={styles.action}
             />
-          </View>
+          </Card>
 
-          {today.exercises.slice(0, MAX_TODAY_ROWS).map((item) => (
-            <View key={item.id} style={styles.exerciseRow}>
-              <Body numberOfLines={1} style={styles.exerciseName}>
-                {item.exerciseName}
-              </Body>
-              <Mono style={styles.exerciseTargets}>{targetsLabel(item)}</Mono>
-            </View>
-          ))}
-
-          {today.exercises.length > MAX_TODAY_ROWS ? (
-            <Meta style={styles.moreRow}>
-              {`+${today.exercises.length - MAX_TODAY_ROWS} exercícios`}
+          {streak > 0 && !trainedToday && hasPlan ? (
+            <Meta style={styles.streak}>
+              {`Treine hoje para não perder a sequência de ${streak} ${streak === 1 ? 'dia' : 'dias'}.`}
             </Meta>
           ) : null}
-        </Card>
 
-        <TourTarget id="home.action">
-          <TodayAction state={today.state} sets={today.sets} onPress={openWorkout} />
-        </TourTarget>
-
-        {/* Daqui para baixo e consulta, nao acao: um titulo de secao separa, e
-            os numeros encolhem. Antes peso, volume e sequencia ocupavam tres
-            cards do mesmo tamanho do treino de hoje. */}
-        <Label style={styles.sectionLabel}>PROGRESSO</Label>
-
-        <Card>
-          <View style={styles.stats}>
-            <PressableSurface
-              feedback="raised"
-              borderRadius={radius.inner}
-              style={styles.stat}
-              onPress={() => router.push('/bodyweight')}
-              accessibilityLabel="Peso corporal"
-            >
-              <StatNumber
-                value={bodyWeight ? formatWeight(bodyWeight.weightKg) : '—'}
-                unit="kg"
-                size={fontSize.numberSm}
-              />
-              <Meta numberOfLines={1}>Peso</Meta>
-            </PressableSurface>
-
-            <View style={styles.statDivider} />
-
-            <PressableSurface
-              feedback="raised"
-              borderRadius={radius.inner}
-              style={styles.stat}
-              onPress={() => router.push('/history?view=numbers')}
-              accessibilityLabel="Volume dos últimos 7 dias"
-            >
-              <StatNumber value={formatVolume(weekVolume)} unit="kg" size={fontSize.numberSm} />
-              <Meta numberOfLines={1}>7 dias</Meta>
-            </PressableSurface>
-
-            <View style={styles.statDivider} />
-
-            <View style={styles.stat}>
-              <StatNumber value={String(streak)} size={fontSize.numberSm} />
-              <Meta numberOfLines={1}>{streak === 1 ? 'dia seguido' : 'dias seguidos'}</Meta>
-            </View>
+          <Label style={styles.section}>SEMANA</Label>
+          <View style={styles.week}>
+            {/* A letra do dia DENTRO do circulo. Treinou: verde com ✓ (cor so com
+                significado: feito). Hoje: contorno. O resto: cinza apagado. */}
+            {week.map((day, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.circle,
+                  day.trained && styles.circleDone,
+                  day.today && !day.trained && styles.circleToday,
+                ]}
+                accessibilityLabel={`${day.letter}${day.trained ? ', treinou' : ''}${day.today ? ', hoje' : ''}`}
+              >
+                {day.trained ? (
+                  <CheckIcon size={18} color={theme.background} />
+                ) : (
+                  <Text style={[styles.dayLetter, day.today && styles.dayLetterToday]}>
+                    {day.letter}
+                  </Text>
+                )}
+              </View>
+            ))}
           </View>
 
-          <View style={styles.matrix}>
-            <DotMatrix dots={dots} width={matrixWidth} showRecord={false} />
-          </View>
-        </Card>
-
-        {upcoming.length > 0 ? (
-          <>
-            <Label style={styles.sectionLabel}>PRÓXIMOS</Label>
-            <Card>
-              {upcoming.map((day, index) => (
-                <View
-                  key={day.weekday}
-                  style={[styles.upcomingRow, index > 0 && styles.upcomingDivided]}
-                >
-                  <Body numberOfLines={1} style={styles.exerciseName}>
-                    {day.name}
-                  </Body>
-                  <Meta>{weekdayName(day.weekday)}</Meta>
-                </View>
-              ))}
-            </Card>
-          </>
-        ) : null}
-      </ScrollView>
+          {hasPlan ? (
+            <>
+              <Label style={styles.section}>EXERCÍCIOS</Label>
+              <Card style={styles.list}>
+                {today.exercises.map((item, index) => (
+                  <View key={item.id} style={[styles.row, index > 0 && styles.rowDivided]}>
+                    <View style={styles.thumb}>
+                      <MovementFigure
+                        slug={artSlugFor(item.exerciseName)}
+                        size={36}
+                        color={theme.onSurface}
+                      />
+                    </View>
+                    <View style={styles.rowText}>
+                      <Body numberOfLines={2} style={styles.rowNameText}>
+                        {item.exerciseName}
+                      </Body>
+                      {groupOf[item.exerciseId] ? <Meta>{groupOf[item.exerciseId]}</Meta> : null}
+                    </View>
+                  </View>
+                ))}
+              </Card>
+            </>
+          ) : null}
+        </ScrollView>
       </Reveal>
     </Screen>
   );
 }
 
-/**
- * O botao principal da home, com o estado do dia no rotulo.
- *
- * Primario (accent) so quando ele e o proximo passo — comecar ou continuar.
- * Treino finalizado e dia de descanso ainda podem abrir a sessao, mas ai e
- * consulta ou extra, nao a acao do dia: nivel 2, sem cor.
- *
- * Nivel 2 e nao vidro porque este botao mora no `ScrollView` da home e rola com
- * ele — ver a nota de posicao em `Button.tsx`.
- */
-function TodayAction({
-  state,
-  sets,
-  onPress,
-}: {
-  state: WorkoutState;
-  /** O dia em series — a mesma unidade que a tela de treino conta. */
-  sets: { done: number; total: number };
-  onPress: () => void;
-}) {
+/** Microtexto especifico (§8): o botao diz o que acontece. */
+function actionLabel(
+  state: WorkoutState,
+  sets: { done: number; total: number },
+  exercises: number,
+): string {
   switch (state.kind) {
     case 'notStarted':
-      return (
-        <Button
-          variant="primary"
-          label={`Começar treino · ${sets.total} ${sets.total === 1 ? 'série' : 'séries'}`}
-          onPress={onPress}
-        />
-      );
+      return `Começar treino (${exercises} ${exercises === 1 ? 'exercício' : 'exercícios'})`;
     case 'inProgress':
-      return (
-        <Button
-          variant="primary"
-          label={`Continuar treino · ${sets.done} de ${sets.total}`}
-          onPress={onPress}
-        />
-      );
+      return `Continuar treino · ${sets.done} de ${sets.total} séries`;
     case 'completed':
-      return <Button variant="inline" label="Ver treino de hoje" onPress={onPress} />;
+      return 'Ver treino de hoje';
     case 'rest':
-      return <Button variant="inline" label="Treino livre" onPress={onPress} />;
+      return 'Fazer treino livre';
   }
 }
 
-/**
- * A orientacao da home, em UMA linha.
- *
- * Nao e frase motivacional (§7 proibe) nem tutorial: e o que falta fazer hoje,
- * dito com o dado que a tela ja tem. Uma linha, e no mesmo lugar sempre — a
- * pessoa abre esta tela dez vezes por semana e nao vai ler um paragrafo.
- */
-function todayHint(state: WorkoutState, sets: { done: number; total: number }): string {
-  switch (state.kind) {
-    case 'notStarted':
-      return `${sets.total} ${sets.total === 1 ? 'série' : 'séries'} para hoje`;
-    case 'inProgress': {
-      const left = Math.max(0, sets.total - sets.done);
-      return `faltam ${left} ${left === 1 ? 'série' : 'séries'}`;
-    }
-    case 'completed':
-      return 'treino de hoje finalizado';
-    case 'rest':
-      return 'descanso no seu plano';
-  }
-}
 
-/** "Segunda · 14 set" — o dado no lugar do "Bem-vindo de volta" (§7). */
+
+
 function todaySubtitle(now = new Date()): string {
-  return `${weekdayName(weekdayOf(now))} · ${shortDate(now, now)}`;
+  return `${weekdayName(weekdayOf(now))}, ${shortDate(now, now)}`;
 }
+
+const LETTERS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
+
+/** Desde quando a sequencia conta: antes disso o app nem existia. */
+const STREAK_SINCE = '2020-01-01';
 
 async function loadHome() {
   const now = new Date();
   const todayKey = toDateKey(now);
-  // O mesmo numero alimenta a consulta e a grade: se divergirem, o dot-matrix
-  // pede dias que a query nunca buscou e eles aparecem como "sem treino".
-  const matrixDays = daysSinceMonthStart(now, MATRIX_MONTHS);
-  const window = lastNDays(now, matrixDays);
 
-  const [routines, volumes, counts, weights, session, trained] = await Promise.all([
+  const sunday = new Date(now);
+  sunday.setDate(now.getDate() - now.getDay());
+  const weekKeys = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(sunday);
+    date.setDate(sunday.getDate() + index);
+    return toDateKey(date);
+  });
+
+  // A sequencia nao tem janela: desde quando o app existe (regra do Luis, de
+  // "dia treinado" ser serie feita com carga, vem de `trainedDates`).
+  const [routines, session, trainedWeek, trainedAll, catalog] = await Promise.all([
     listRoutines(),
-    volumeByDate(window[0], todayKey),
-    routineExerciseCounts(),
-    listBodyWeightLogs(1),
     getSessionByDate(todayKey),
-    // A sequencia nao para na janela do dot-matrix: quem treina todo dia ha
-    // mais de cinco meses veria um teto.
+    trainedDates(weekKeys[0], weekKeys[6]),
     trainedDates(STREAK_SINCE, todayKey),
+    listExercises(),
   ]);
+  const groupOf = new Map(catalog.map((exercise) => [exercise.id, exercise.muscleGroup]));
 
-  const weekStart = weekStartKey(now);
   const todayRoutine = routineForWeekday(routines, weekdayOf(now));
-  // Os numeros da semana, ja resolvidos: e o que o card de hoje mostra e o que
-  // a sessao vai materializar quando o usuario tocar em treinar. So depende das
-  // rotinas e da sessao, entao roda junto com as series de hoje.
   const [todayExercises, sessionSets] = await Promise.all([
-    todayRoutine ? targetsForWeek(weekStart, todayRoutine.id) : Promise.resolve<WeekExercise[]>([]),
+    todayRoutine
+      ? targetsForWeek(weekStartKey(now), todayRoutine.id)
+      : Promise.resolve<WeekExercise[]>([]),
     session ? listSessionSets(session.id) : Promise.resolve([]),
   ]);
   const plannedSets = todayExercises.reduce((sum, item) => sum + item.targets.sets, 0);
-
-  /**
-   * O dia contado em SERIES, a mesma unidade da tela de treino.
-   *
-   * O botao dizia "Começar treino · 5 exercícios" e a sessao, depois de aberta,
-   * dizia "0 de 18 séries": dois numeros para o mesmo treino. Aqui o total e o
-   * do plano, com o que foi gravado por cima — series adicionadas a mais no dia
-   * entram, e um dia de treino livre (sem plano) conta as do que foi registrado.
-   */
   const doneSets = sessionSets.filter((set) => set.done).length;
-  const todaySets = {
-    done: doneSets,
-    total: Math.max(plannedSets, sessionSets.length),
-  };
 
-  const weekKeys = lastNDays(now, 7);
-  const weekVolume = weekKeys.reduce((sum, key) => sum + (volumes.get(key) ?? 0), 0);
+  // O exercicio da vez: o primeiro do dia que ainda tem serie por fazer. So
+  // existe com o treino em andamento (alguma serie marcada).
+  const recorded = new Map<string, boolean[]>();
+  for (const set of sessionSets) {
+    const list = recorded.get(set.exerciseId) ?? [];
+    list.push(set.done);
+    recorded.set(set.exerciseId, list);
+  }
+  const current =
+    doneSets > 0
+      ? (todayExercises.find((item) => {
+          const done = recorded.get(item.exerciseId);
+          return !done || done.some((value) => !value);
+        }) ?? null)
+      : null;
+
+  // Os grupos do dia, sem repetir, na ordem dos exercicios.
+  const groups = [
+    ...new Set(
+      todayExercises
+        .map((item) => groupOf.get(item.exerciseId))
+        .filter((group): group is string => Boolean(group)),
+    ),
+  ];
 
   return {
+    current: current?.exerciseName ?? null,
+    groups,
+    groupOf: Object.fromEntries(groupOf),
     today: {
-      routineId: todayRoutine?.id ?? null,
-      weekday: weekdayOf(now),
       name: dayTitle(todayRoutine?.name ?? '', todayExercises.length),
-      // Na ordem que o usuario arrastou no treino de hoje, se arrastou.
-      exercises: applyOrder(todayExercises, session?.exerciseOrder ?? [], (item) => item.exerciseId),
-      plannedSets,
-      sets: todaySets,
+      exercises: todayExercises,
+      sets: { done: doneSets, total: Math.max(plannedSets, sessionSets.length) },
       state: workoutState({
         plannedExerciseIds: todayExercises.map((item) => item.exerciseId),
         sets: sessionSets,
@@ -419,164 +287,171 @@ async function loadHome() {
         completed: session?.completedAt != null,
       }),
     },
-    upcoming: nextDays(routines, counts, now, 3),
-    weekVolume,
-    bodyWeight: weights[0] ?? null,
-    dots: buildDotMatrix(volumes, now, matrixDays),
-    // A mesma regra de "dia treinado" do calendario e do dot-matrix: serie
-    // feita com carga. Abrir o treino e sair sem marcar nao conta.
-    streak: currentStreak(trained, now),
+    week: weekKeys.map((key, index) => ({
+      letter: LETTERS[index],
+      // Hoje so conta com serie marcada: abrir o treino nao e ter treinado.
+      trained: key === todayKey ? doneSets > 0 : trainedWeek.has(key),
+      today: key === todayKey,
+    })),
+    streak: currentStreak(trainedAll, now),
+    trainedToday: doneSets > 0,
   };
 }
 
-/**
- * Quantos exercicios cabem no card de hoje antes de virar rolagem disfarcada.
- *
- * Cinco linhas mais o cabecalho ja empurram os outros cards para fora da
- * dobra num telefone comum. O resto vira uma linha de "+N", e a lista inteira
- * esta a um toque de distancia na tela do dia.
- */
-const MAX_TODAY_ROWS = 5;
-
-
-/** "3 × 10 · 62,5 kg" ou "5 km · 28 min" — o alvo da semana, em mono. */
-function targetsLabel(item: WeekExercise): string {
-  const { sets, reps, weightKg, distanceKm, durationMin } = item.targets;
-
-  if (item.exerciseKind === 'run') {
-    const km = `${formatDistance(distanceKm)} km`;
-    return durationMin > 0 ? `${km} · ${formatDuration(durationMin)}` : km;
-  }
-
-  if (weightKg === 0) return `${sets} × ${reps}`;
-  return `${sets} × ${reps} · ${formatWeight(weightKg)} kg`;
-}
-
-/**
- * Os proximos dias com treino, olhando ate uma semana a frente.
- *
- * Nunca conta hoje — hoje ja tem o card grande. E pula dia sem exercicio: com
- * os sete dias sempre existindo, "tem rotina" deixou de significar "treina
- * nesse dia", e so a contagem de exercicios distingue treino de descanso.
- */
-function nextDays(
-  routines: readonly Routine[],
-  counts: ReadonlyMap<string, number>,
-  from: Date,
-  count: number,
-): { weekday: Weekday; name: string }[] {
-  const found: { weekday: Weekday; name: string }[] = [];
-
-  for (let daysAhead = 1; daysAhead <= 7 && found.length < count; daysAhead += 1) {
-    const date = new Date(from);
-    date.setDate(date.getDate() + daysAhead);
-    const weekday = weekdayOf(date);
-
-    const routine = routineForWeekday(routines, weekday);
-    const exerciseCount = routine ? (counts.get(routine.id) ?? 0) : 0;
-    if (!routine || exerciseCount === 0) continue;
-
-    found.push({ weekday, name: dayTitle(routine.name, exerciseCount) });
-  }
-
-  return found;
-}
-
 const styles = StyleSheet.create({
-  // O `Reveal` entra entre o `Screen` e o `ScrollView`, entao precisa esticar
-  // igual ao que ele substitui no fluxo — sem isto o scroll fica sem altura.
   reveal: { flex: 1 },
   content: {
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: layout.screen,
+    gap: layout.cardGap,
+  },
+  heroHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.md,
   },
-  todayHead: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: spacing.lg,
-    marginBottom: spacing.md,
-  },
-  todayText: {
+  heroText: {
     flex: 1,
   },
-  todayName: {
-    marginTop: spacing.xs,
-    marginBottom: 2,
-  },
-  /** Titulo de secao fora do card: e ele que separa acao de consulta. */
-  sectionLabel: {
-    marginTop: spacing.lg,
-    marginLeft: spacing.xs,
-  },
-  stats: {
+  kicker: {
     flexDirection: 'row',
-    alignItems: 'center',
-  },
-  stat: {
-    flex: 1,
     alignItems: 'center',
     gap: spacing.xs,
-    paddingVertical: spacing.sm,
   },
-  statDivider: {
-    width: StyleSheet.hairlineWidth,
-    alignSelf: 'stretch',
-    marginVertical: spacing.xs,
-    backgroundColor: colors.divider,
+  now: {
+    marginTop: spacing.xs,
+    color: theme.onSurface,
   },
-  matrix: {
-    marginTop: spacing.xl,
-  },
-  upcomingDivided: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
-  },
-  exerciseRow: {
+  pills: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  pill: {
+    backgroundColor: theme.surfaceContainerHigh,
+    borderRadius: shape.pill,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 4,
+  },
+  pillText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 12,
+    color: theme.onSurface,
+  },
+  rowNameText: {
+    fontFamily: fonts.sansSemiBold,
+  },
+  heroArt: {
+    width: 104,
+    height: 104,
+    borderRadius: shape.card,
+    backgroundColor: tint(section.today, 0.16),
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.lg,
-    paddingVertical: spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
+    justifyContent: 'center',
   },
-  exerciseName: {
-    flex: 1,
+  thumb: {
+    width: 52,
+    height: 52,
+    borderRadius: shape.control,
+    backgroundColor: theme.surfaceContainerHigh,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  exerciseTargets: {
-    fontSize: fontSize.label,
-    color: colors.textSecondary,
+  heroName: {
+    fontFamily: fonts.display,
+    fontSize: 30,
+    lineHeight: 36,
+    letterSpacing: -0.6,
+    color: theme.onSurface,
+    marginTop: spacing.sm,
   },
-  moreRow: {
-    paddingTop: spacing.md,
+  heroMeta: {
+    marginTop: spacing.xs,
   },
-  upcomingRow: {
+  track: {
+    height: 6,
+    borderRadius: shape.pill,
+    backgroundColor: theme.surfaceContainerHighest,
+    marginTop: spacing.lg,
+    overflow: 'hidden',
+  },
+  fill: {
+    height: '100%',
+    borderRadius: shape.pill,
+    backgroundColor: theme.primaryContainer,
+  },
+  action: {
+    marginTop: spacing.lg,
+  },
+  streak: {
+    textAlign: 'center',
+    color: theme.onSurface,
+  },
+  section: {
+    marginTop: layout.sectionGap - layout.cardGap,
+    marginLeft: spacing.xs,
+  },
+  week: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xs,
+  },
+  day: {
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  circle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.surfaceContainerHigh,
+  },
+  circleDone: {
+    backgroundColor: theme.success,
+  },
+  dayLetter: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 14,
+    color: theme.outline,
+  },
+  dayLetterToday: {
+    color: theme.onSurface,
+  },
+  circleToday: {
+    borderWidth: 2,
+    borderColor: section.today,
+  },
+  dayToday: {
+    color: theme.onSurface,
+  },
+  list: {
+    paddingVertical: spacing.xs,
   },
   row: {
     flexDirection: 'row',
-    gap: spacing.md,
-  },
-  half: {
-    flex: 1,
-    justifyContent: 'space-between',
-  },
-  cardFoot: {
-    marginTop: spacing.lg,
-  },
-  matrixFoot: {
-    flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    marginTop: spacing.xl,
+    minHeight: 56,
+    paddingVertical: spacing.sm,
   },
-  matrixText: {
+  rowDivided: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.outlineVariant,
+  },
+  rowText: {
     flex: 1,
     gap: 2,
+  },
+  rowName: {
+    flex: 1,
+    fontFamily: fonts.sansSemiBold,
+  },
+  rowLoad: {
+    fontFamily: fonts.displayBold,
+    fontSize: 16,
+    color: theme.onSurface,
+    fontVariant: ['tabular-nums'],
   },
 });

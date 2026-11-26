@@ -8,15 +8,15 @@ import { colors, people } from '../tokens';
  * quebra aqui, e o comentario de `people` diz o que rodar.
  */
 describe('people', () => {
-  it('voce e sempre o laranja da marca', () => {
+  it('voce e sempre a cor principal (primary)', () => {
     expect(people.self).toBe(colors.accent);
   });
 
   it('os amigos usam a paleta validada, nesta ordem', () => {
-    expect(people.friends).toEqual(['#29B6FF', '#FF4FC0', '#C6F53D', '#6E6BFF', '#3DF2C4']);
+    expect(people.friends).toEqual(['#7c93b3', '#b37c96', '#9aa86f', '#8f84b8', '#6fa89a']);
   });
 
-  it('nenhum amigo tem a cor do laranja', () => {
+  it('nenhum amigo tem a cor de voce', () => {
     expect(people.friends).not.toContain(people.self);
   });
 });

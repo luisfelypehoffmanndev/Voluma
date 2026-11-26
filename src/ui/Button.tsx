@@ -1,18 +1,17 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { accentGlow, colors, radius, spacing, surfaces } from '@/theme/tokens';
+import { accentGlow, colors, fonts, radius, shape, spacing, theme } from '@/theme/tokens';
 
-import { GlassSurface } from './GlassSurface';
 import { PressableSurface } from './PressableSurface';
-import { Body } from './Text';
+import { Body, FONT_SCALE_CAP } from './Text';
 
 type Props = {
   label: string;
   onPress: () => void;
   /**
    * `primary` e o accent da tela: fundo laranja solido, texto preto. No maximo
-   * UM por tela, e nunca numa tela que tenha caixa de concluido (§2).
+   * UM por tela (§2) — e as telas de aba e a sessao ja tem o seu dono.
    * `secondary` e vidro de nivel 3, sem cor.
    * `inline` e nivel 2, para a acao que ROLA com a pagina — ver abaixo.
    */
@@ -69,7 +68,11 @@ export function Button({
   const content = (
     <View style={styles.content}>
       {icon}
-      <Body numberOfLines={1} style={[styles.label, { color: textColor }]}>
+      <Body
+        numberOfLines={1}
+        maxFontSizeMultiplier={FONT_SCALE_CAP.button}
+        style={[styles.label, { color: textColor }]}
+      >
         {label}
       </Body>
     </View>
@@ -90,8 +93,8 @@ export function Button({
         // nivel 3 e quase opaco — acender uma laje fechada nao se ve. O
         // `inline` inverte essa razao: a 8% ele e translucido de verdade, entao
         // acende, como o card e o controle.
-        feedback={inline ? 'raised' : 'solid'}
-        borderRadius={radius.pill}
+        feedback="solid"
+        borderRadius={shape.control}
         accessibilityLabel={accessibilityLabel ?? label}
       >
         {primary ? (
@@ -101,30 +104,35 @@ export function Button({
         ) : inline ? (
           <View style={[styles.box, styles.inline]}>{content}</View>
         ) : (
-          <GlassSurface borderRadius={radius.pill} style={styles.box}>
-            {content}
-          </GlassSurface>
+          <View style={[styles.box, styles.inline]}>{content}</View>
         )}
       </PressableSurface>
     </View>
   );
 }
 
+/**
+ * Altura do botao. Exportada porque quem empilha coisas acima de uma barra de
+ * botao (o aviso de desfazer da sessao) precisa saber onde ela termina.
+ *
+ * 56 e nao 54: o multiplo de 4 da escala, e 8 acima do alvo minimo de toque.
+ */
+export const BUTTON_HEIGHT = 50;
+
 const styles = StyleSheet.create({
   box: {
-    height: 54,
-    borderRadius: radius.pill,
+    height: BUTTON_HEIGHT,
+    borderRadius: shape.control,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
   },
   primary: {
-    backgroundColor: colors.accent,
+    backgroundColor: theme.primaryContainer,
   },
   primaryDisabled: {
-    backgroundColor: surfaces.raised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    backgroundColor: theme.primaryContainer,
+    opacity: 0.5,
   },
   /**
    * Nivel 2 — o mesmo preenchimento do `primaryDisabled` logo acima e do
@@ -137,12 +145,7 @@ const styles = StyleSheet.create({
    * botao apagado nao e superficie que o olho deva subir.
    */
   inline: {
-    backgroundColor: surfaces.raised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderTopColor: surfaces.specularTop,
-    borderLeftColor: surfaces.specularSide,
-    borderRightColor: surfaces.specularSide,
-    borderBottomColor: surfaces.specularBottom,
+    backgroundColor: theme.surfaceContainerHigh,
   },
   /** O mesmo glow do card accent: e o que faz o laranja ler como neon. */
   glow: {
@@ -158,7 +161,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
+  /** Medium: o rotulo de uma acao e o texto mais forte da linha em que esta. */
   label: {
     textAlign: 'center',
+    fontFamily: fonts.sansSemiBold,
   },
 });

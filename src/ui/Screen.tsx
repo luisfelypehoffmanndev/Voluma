@@ -4,7 +4,6 @@ import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, hitSlop, radius, spacing, surfaces } from '@/theme/tokens';
-import { Ambient } from './Ambient';
 import { BlurTarget } from './blurTarget';
 import { PressableSurface } from './PressableSurface';
 import { Meta, Title } from './Text';
@@ -33,7 +32,6 @@ export function Screen({ children, overlay }: { children: ReactNode; overlay?: R
   return (
     <View style={styles.screen}>
       <BlurTarget style={styles.field}>
-        <Ambient />
         <View style={[styles.content, { paddingTop: insets.top }]}>{children}</View>
       </BlurTarget>
       {overlay}
@@ -58,15 +56,23 @@ type HeaderProps = {
   /** Acao a direita: um unico botao redondo, como nos mockups. */
   action?: { icon: ReactNode; onPress: () => void; accessibilityLabel?: string };
   secondaryAction?: { icon: ReactNode; onPress: () => void; accessibilityLabel?: string };
+  /**
+   * O selo da secao: o icone da aba dentro de um quadrado na cor dela. E o que
+   * diz "voce esta no Plano" antes de qualquer leitura.
+   */
+  badge?: { icon: ReactNode; color: string };
 };
 
 /** Cabecalho de tela: titulo a esquerda; acoes e o voltar, redondos, a direita. */
-export function Header({ title, subtitle, back, onBack, action, secondaryAction }: HeaderProps) {
+export function Header({ title, subtitle, back, onBack, action, secondaryAction, badge }: HeaderProps) {
   const router = useRouter();
 
   return (
     <View style={styles.header}>
       <View style={styles.lead}>
+        {badge ? (
+          <View style={[styles.badge, { backgroundColor: badge.color }]}>{badge.icon}</View>
+        ) : null}
         <View style={styles.title}>
           <Title numberOfLines={1}>{title}</Title>
           {subtitle ? <Meta numberOfLines={1}>{subtitle}</Meta> : null}
@@ -113,6 +119,13 @@ export function RoundButton({
 }
 
 const styles = StyleSheet.create({
+  badge: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   screen: {
     flex: 1,
     backgroundColor: colors.bg,

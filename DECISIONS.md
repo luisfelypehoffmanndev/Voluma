@@ -4,6 +4,49 @@ Registro de decisões de produto/arquitetura que ainda não viraram código.
 Serve pra não perder o contexto de "por que decidimos assim" entre uma
 conversa e outra.
 
+## Sem tutorial: a tela se explica sozinha
+
+**Data:** 2026-11-26
+**Status:** implementado (plano 21, ajuste de clareza)
+
+Um primeiro usuario (o professor) se perdeu, e o tutorial cortava a tela. A
+dica de primeira visita (`Tour`) saiu da Hoje, do Plano e da Sessao. No lugar:
+nomes embaixo dos icones da barra, um botao grande com verbo por tela ("Começar
+meu treino", "Pronto, fiz a série 3"), a instrucao da serie em frase ("Faça
+agora: 8 repetições com 62,5 kg") e menos numeros — o topo da sessao perdeu
+series/volume/tempo e mostra so "Passo 3 de 16 · Supino reto". O §9 do
+`design.md` (tour) fica sem uso ate decidirmos apaga-lo.
+
+## Reset visual e o dono do accent
+
+**Data:** 2026-11-25
+**Status:** implementado na Onda 0 do [`plans/21-redesign.md`](plans/21-redesign.md) — pilotos Hoje e Sessão; a propagação às outras telas vem nas Ondas 3a–3c
+
+A linguagem continua a do §1 do `design.md` (painel de instrumento, preto quase
+puro, um accent, números em mono). O que mudou é a execução:
+
+- **O accent tem dono fixo por tipo de tela.** Nas quatro abas, o botão
+  "Treinar" no centro da barra; na sessão, o contorno da série da vez. A
+  exceção da caixa de concluído laranja caiu: a caixa marcada é branca. O
+  laranja tinha trabalho mais importante, que é dizer qual é a próxima série.
+- **"Treinar" é um botão, não uma aba.** É um espaçador no `Tabs` mais o botão
+  irmão do `<Tabs>`, porque no Android a barra recorta o que passa da borda. A
+  aba Hoje trocou o ícone de play (agora do botão) por um dia de calendário.
+- **Cada dado mora num lugar.** A Hoje perdeu o card PROGRESSO: o peso fica no
+  Perfil (vai para Progresso na Onda 3a), o volume em Números, e a sequência
+  foi para o Calendário.
+- **O número herói da sessão é a carga da série da vez**, e não o volume do
+  dia. O volume do dia desceu para o HUD compacto, que não encolhe ao rolar
+  porque animar tamanho é proibido pelo §10.
+- **A escala tipográfica tem oito papéis**, no lugar de dez tamanhos soltos. O
+  texto auxiliar ganhou `textAux` (`#ADADAD`), calibrado pela conta de
+  contraste contra a pior superfície real. O `#8A8A8A` dava 3,0:1 na linha da
+  série.
+- **Alvo de toque de 48dp em tudo que se toca no treino**, e um teto de escala
+  da fonte do sistema por papel, testado no maior tamanho do iOS.
+- **`Card accent` foi apagado:** não tinha uso, e não sobrou tela onde ele
+  pudesse existir sem ser o segundo laranja.
+
 ## Migração para multiusuário (academia real)
 
 **Data:** 2026-09-16 (atualizado em 2026-09-28)

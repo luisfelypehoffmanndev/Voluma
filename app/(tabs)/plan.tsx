@@ -1,208 +1,388 @@
 import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { listExercises, listLocalPresets, listRoutines, routineExerciseCounts } from '@/db/repo';
-import { routineLink } from '@/domain/presets';
+import {
+  listExercises,
+  listLocalPresets,
+  listRoutines,
+  targetsForWeek,
+  type WeekExercise,
+} from '@/db/repo';
+import { routineLink, type RoutineLink } from '@/domain/presets';
 import type { Weekday } from '@/domain/types';
-import { weekPlan, weekdayName, weekdayOf } from '@/domain/week';
+import { weekPlan, weekStartKey, weekdayName, weekdayOf } from '@/domain/week';
+import { artSlugFor } from '@/movements/library';
 import { useQuery } from '@/store/data';
 import { FLAG_SUGGESTED_WORKOUTS, useFlag } from '@/store/flags';
-import { colors, fontSize, spacing } from '@/theme/tokens';
-import { Card } from '@/ui/Card';
-import { PressableSurface } from '@/ui/PressableSurface';
-import { LoadError } from '@/ui/LoadError';
-import { Header, Screen } from '@/ui/Screen';
-import { Tour } from '@/ui/tour/Tour';
-import { TourTarget } from '@/ui/tour/TourTarget';
-import { useTabBarClearance } from '@/ui/tabBar';
-import { Label, Meta, Section } from '@/ui/Text';
-import { ChevronRightIcon } from '@/ui/icons';
 import { GYM } from '@/world';
+import { fonts, layout, muscleColor, section, shape, spacing, theme, tint } from '@/theme/tokens';
+import { Button } from '@/ui/Button';
+import { Card } from '@/ui/Card';
+import { BarbellIcon, ChevronRightIcon, ListIcon, PlusIcon } from '@/ui/icons';
+import { LoadError } from '@/ui/LoadError';
+import { MovementFigure } from '@/ui/MovementFigure';
+import { Header, Screen } from '@/ui/Screen';
+import { useTabBarClearance } from '@/ui/tabBar';
+import { Label, Meta } from '@/ui/Text';
+import { useStartWorkout } from '@/ui/useStartWorkout';
 
 /**
- * Plano: a semana inteira e o catalogo de movimentos.
+ * Quantas miniaturas cabem no card antes do "+N". Tres: com quatro mais o "+N",
+ * a contagem de exercicios saia cortada da linha num telefone comum.
+ */
+const MAX_THUMBS = 3;
+
+/**
+ * Plano: a semana de treino, com cara de ficha de academia.
  *
- * Morava em Ajustes. Montar o treino e conteudo, nao configuracao — quem quer
- * decidir o que faz na segunda nao procura atras de um icone de sliders.
- *
- * Sem acao de criar: os sete dias sao permanentes, nao se criam nem se apagam.
+ * Cada dia de treino e um card com o nome do treino, os grupos musculares em
+ * pilulas e as figuras dos movimentos — da para reconhecer o dia sem ler a
+ * lista. O dia de hoje tem o botao de comecar ali mesmo. Dia de descanso e uma
+ * linha curta com o atalho para adicionar treino. Tocar num dia abre o editor.
  */
 export default function PlanScreen() {
   const clearance = useTabBarClearance();
   const router = useRouter();
+  const openWorkout = useStartWorkout();
 
-  const { data, error, reload } = useQuery(
-    useCallback(async () => {
-      const [routines, exercises, perRoutine, presets] = await Promise.all([
-        listRoutines(),
-        listExercises(),
-        routineExerciseCounts(),
-        listLocalPresets(GYM),
-      ]);
-      // Os sete dias sao sintetizados aqui; no banco so existe linha para os
-      // dias que ja receberam nome ou exercicio.
-      const days = weekPlan(routines);
-      const counts = days.map((day) => (day ? (perRoutine.get(day.id) ?? 0) : 0));
-      return { days, counts, exercises, presets };
-    }, []),
-  );
+  const { data, error, reload } = useQuery(useCallback(() => loadPlan(), []));
+  const today = weekdayOf(new Date());
+  const openDay = (weekday: number) =>
+    router.push({ pathname: '/day/[weekday]', params: { weekday } });
 
-  const days = data?.days ?? [];
-  const counts = data?.counts ?? [];
+  const trainingDays = data?.days.filter((day) => day.exercises.length > 0).length ?? 0;
+  // As fichas montadas pelos instrutores da academia, atras da flag dela.
   const suggestedOn = useFlag(FLAG_SUGGESTED_WORKOUTS);
   const presets = suggestedOn ? (data?.presets ?? []) : [];
-  const today = weekdayOf(new Date());
 
   return (
-    <Screen
-      overlay={
-        /* O Plano e a tela que ninguem adivinha: o dia da semana e que guarda
-           os exercicios, e e tocando nele que se monta o treino. Vai no
-           `overlay` pelo mesmo motivo da Hoje — coordenadas de janela. */
-        <Tour
-          id="plan"
-          active={data != null}
-          steps={[
-            {
-              target: 'plan.day',
-              text: 'Toque num dia para escolher os exercícios dele. Vale para toda semana.',
-            },
-          ]}
-        />
-      }
-    >
-      <Header title="Plano" />
+    <Screen>
+      <Header
+        title="Plano"
+        badge={{ icon: <ListIcon size={26} color="#FFFFFF" filled />, color: section.plan }}
+        subtitle={
+          data
+            ? `${trainingDays} ${trainingDays === 1 ? 'dia' : 'dias'} de treino na semana`
+            : undefined
+        }
+      />
 
-      {error ? <LoadError error={error} onRetry={reload} /> : (
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
-        showsVerticalScrollIndicator={false}
-      >
-        <Label style={styles.sectionLabel}>SUA SEMANA</Label>
+      {error ? (
+        <LoadError error={error} onRetry={reload} />
+      ) : (
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
+          showsVerticalScrollIndicator={false}
+        >
+          {(data?.days ?? []).map((day) => {
+            const isToday = day.weekday === today;
+            const dayName = weekdayName(day.weekday as Weekday);
 
-        <Card>
-          {days.map((day, weekday) => {
-            const count = counts[weekday] ?? 0;
-            // Hoje e o unico dia com accent na tela: num plano de sete linhas
-            // iguais, nada dizia em qual delas o usuario esta.
-            const isToday = weekday === today;
-            // A dica aponta UM dia, nao a semana inteira: ela diz "toque num
-            // dia", e um alvo de sete linhas nao mostra onde tocar. Hoje e o
-            // dia que o usuario reconhece de imediato.
-            const row = (
-              <PressableSurface
-                key={weekday}
-                feedback="solid"
-                style={[styles.row, weekday > 0 && styles.rowDivided]}
-                onPress={() => router.push({ pathname: '/day/[weekday]', params: { weekday } })}
-                accessibilityLabel={`Editar ${weekdayName(weekday as Weekday)}${isToday ? ', hoje' : ''}`}
-              >
-                <View style={styles.rowText}>
-                  <View style={styles.dayLine}>
-                    <Section numberOfLines={1}>{weekdayName(weekday as Weekday)}</Section>
-                    {routineLink(day) === 'preset' ? <Label style={styles.presetTag}>SUGERIDO</Label> : null}
-                    {routineLink(day) === 'instructor' ? <Label style={styles.presetTag}>INSTRUTOR</Label> : null}
-                    {routineLink(day) === 'plan' ? <Label style={styles.presetTag}>PLANO</Label> : null}
-                    {isToday ? <Label style={styles.todayTag}>HOJE</Label> : null}
+            if (day.exercises.length === 0) {
+              return (
+                <Pressable
+                  key={day.weekday}
+                  onPress={() => openDay(day.weekday)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${dayName}, descanso. Adicionar treino`}
+                  style={({ pressed }) => [styles.rest, pressed && styles.pressed]}
+                >
+                  <View style={styles.restText}>
+                    <DayLabel name={dayName} today={isToday} />
+                    <Meta>Descanso</Meta>
                   </View>
-                  <Meta>{daySummary(day?.name ?? '', count)}</Meta>
-                </View>
-                <ChevronRightIcon size={16} color={colors.textSecondary} />
-              </PressableSurface>
-            );
+                  <View style={styles.addChip}>
+                    <PlusIcon size={16} color={theme.onSurface} />
+                    <Text style={styles.addText}>Adicionar treino</Text>
+                  </View>
+                </Pressable>
+              );
+            }
 
-            return isToday ? (
-              <TourTarget key={weekday} id="plan.day">
-                {row}
-              </TourTarget>
-            ) : (
-              row
+            const thumbs = day.exercises.slice(0, MAX_THUMBS);
+            const extra = day.exercises.length - thumbs.length;
+
+            return (
+              <Card key={day.weekday} onPress={() => openDay(day.weekday)} style={isToday && styles.todayCard}>
+                <View style={styles.cardHead}>
+                  <DayLabel name={dayName} today={isToday} link={day.link} />
+                  <ChevronRightIcon size={18} color={theme.outline} />
+                </View>
+
+                <Text style={styles.workout} numberOfLines={2} maxFontSizeMultiplier={1.3}>
+                  {day.name || `Treino de ${dayName.toLowerCase()}`}
+                </Text>
+
+                {day.groups.length > 0 ? (
+                  <View style={styles.pills}>
+                    {day.groups.slice(0, 3).map((group) => (
+                      <View key={group} style={[styles.pill, { backgroundColor: tint(muscleColor(group), 0.18) }]}>
+                        <Text style={[styles.pillText, { color: muscleColor(group) }]}>{group}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+
+                <View style={styles.thumbs}>
+                  {thumbs.map((item) => (
+                    <View key={item.id} style={styles.thumb}>
+                      <MovementFigure slug={artSlugFor(item.exerciseName)} size={36} color={theme.onSurface} />
+                    </View>
+                  ))}
+                  {extra > 0 ? (
+                    <View style={styles.thumb}>
+                      <Text style={styles.extra}>{`+${extra}`}</Text>
+                    </View>
+                  ) : null}
+                  <Meta style={styles.count}>
+                    {`${day.exercises.length} ${day.exercises.length === 1 ? 'exercício' : 'exercícios'}`}
+                  </Meta>
+                </View>
+
+                {isToday ? (
+                  <Button
+                    variant="primary"
+                    label="Começar treino"
+                    onPress={() => void openWorkout()}
+                    style={styles.start}
+                  />
+                ) : null}
+              </Card>
             );
           })}
-        </Card>
 
-        {presets.length > 0 ? (
-          <>
-            <Label style={styles.sectionLabel}>ACADEMIA</Label>
-            <Card onPress={() => router.push('/presets')}>
-              <View style={styles.row}>
-                <View style={styles.rowText}>
-                  <Section>{`${presets.length} ${presets.length === 1 ? 'ficha sugerida' : 'fichas sugeridas'}`}</Section>
-                  <Meta>treinos montados pelos instrutores</Meta>
+          {presets.length > 0 ? (
+            <>
+              <Label style={styles.sectionLabel}>ACADEMIA</Label>
+              <Card onPress={() => router.push('/presets')}>
+                <View style={styles.catalog}>
+                  <View style={styles.catalogIcon}>
+                    <ListIcon size={24} color={section.plan} />
+                  </View>
+                  <View style={styles.catalogText}>
+                    <Text style={styles.catalogTitle}>
+                      {`${presets.length} ${presets.length === 1 ? 'ficha sugerida' : 'fichas sugeridas'}`}
+                    </Text>
+                    <Meta>Treinos montados pelos instrutores</Meta>
+                  </View>
+                  <ChevronRightIcon size={18} color={theme.outline} />
                 </View>
-                <ChevronRightIcon size={16} color={colors.textSecondary} />
+              </Card>
+            </>
+          ) : null}
+
+          <Label style={styles.sectionLabel}>MOVIMENTOS</Label>
+          <Card onPress={() => router.push('/catalog')}>
+            <View style={styles.catalog}>
+              <View style={styles.catalogIcon}>
+                <BarbellIcon size={26} color={theme.onSurface} />
               </View>
-            </Card>
-          </>
-        ) : null}
-
-        <Label style={styles.sectionLabel}>MOVIMENTOS</Label>
-
-        <Card onPress={() => router.push('/catalog')}>
-          <View style={styles.row}>
-            <View style={styles.rowText}>
-              <Section>{`${data?.exercises.length ?? 0} no catálogo`}</Section>
-              <Meta>adicionar, apagar e organizar por grupo</Meta>
+              <View style={styles.catalogText}>
+                <Text style={styles.catalogTitle}>{`${data?.catalogSize ?? 0} no catálogo`}</Text>
+                <Meta>Adicionar, apagar e organizar por grupo</Meta>
+              </View>
+              <ChevronRightIcon size={18} color={theme.outline} />
             </View>
-            <ChevronRightIcon size={16} color={colors.textSecondary} />
-          </View>
-        </Card>
-      </ScrollView>
+          </Card>
+        </ScrollView>
       )}
     </Screen>
   );
 }
 
-/**
- * O que a linha do dia diz embaixo do nome: o rotulo que o usuario deu, ou o
- * estado do dia quando ele nao deu nenhum.
- *
- * Dia sem nome mas com exercicios nao e descanso — e um dia que ainda nao foi
- * batizado, e a contagem ja diz o que importa.
- */
-function daySummary(name: string, count: number): string {
-  const label = name.trim();
-  if (count === 0) return label || 'Descanso';
-  const plural = count === 1 ? 'exercício' : 'exercícios';
-  return label ? `${label} · ${count} ${plural}` : `${count} ${plural}`;
+/** De onde veio o treino do dia, quando nao foi o proprio aluno que montou. */
+const LINK_LABEL: Record<Exclude<RoutineLink, null>, string> = {
+  preset: 'SUGERIDO',
+  instructor: 'INSTRUTOR',
+  plan: 'PLANO',
+};
+
+/** "SEGUNDA" com o selo HOJE quando for o dia, e a origem do treino. */
+function DayLabel({ name, today, link = null }: { name: string; today: boolean; link?: RoutineLink }) {
+  return (
+    <View style={styles.dayLabel}>
+      <Label style={today ? styles.dayLabelToday : undefined}>{name.toUpperCase()}</Label>
+      {link ? <Label style={styles.linkTag}>{LINK_LABEL[link]}</Label> : null}
+      {today ? (
+        <View style={styles.todayBadge}>
+          <Text style={styles.todayText}>HOJE</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+async function loadPlan() {
+  const [routines, catalog, presets] = await Promise.all([
+    listRoutines(),
+    listExercises(),
+    listLocalPresets(GYM),
+  ]);
+  const groupOf = new Map(catalog.map((exercise) => [exercise.id, exercise.muscleGroup]));
+  const weekStart = weekStartKey(new Date());
+  const plan = weekPlan(routines);
+
+  const days = await Promise.all(
+    plan.map(async (routine, weekday) => {
+      const exercises: WeekExercise[] = routine ? await targetsForWeek(weekStart, routine.id) : [];
+      const groups = [
+        ...new Set(
+          exercises
+            .map((item) => groupOf.get(item.exerciseId))
+            .filter((group): group is string => Boolean(group)),
+        ),
+      ];
+      return { weekday, name: routine?.name.trim() ?? '', exercises, groups, link: routineLink(routine) };
+    }),
+  );
+
+  return { days, catalogSize: catalog.length, presets };
 }
 
 const styles = StyleSheet.create({
   content: {
-    paddingHorizontal: spacing.xl,
-    gap: spacing.md,
+    paddingHorizontal: layout.screen,
+    gap: layout.cardGap,
   },
-  sectionLabel: {
-    marginTop: spacing.lg,
-    marginLeft: spacing.xs,
-    marginBottom: spacing.xs,
+  todayCard: {
+    borderColor: section.plan,
+    borderWidth: 1.5,
   },
-  row: {
+  cardHead: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: spacing.lg,
   },
-  rowDivided: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
-  },
-  dayLine: {
+  dayLabel: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
   },
-  /** O unico accent da tela: onde o usuario esta na semana. */
-  todayTag: {
-    color: colors.accent,
+  linkTag: {
+    color: theme.onSurfaceVariant,
   },
-  presetTag: {
-    color: colors.textSecondary,
-    fontSize: fontSize.label,
+  dayLabelToday: {
+    color: theme.onSurface,
   },
-  rowText: {
+  todayBadge: {
+    backgroundColor: section.plan,
+    borderRadius: shape.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+  },
+  todayText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 11,
+    color: '#FFFFFF',
+  },
+  workout: {
+    fontFamily: fonts.display,
+    fontSize: 22,
+    lineHeight: 28,
+    letterSpacing: -0.4,
+    color: theme.onSurface,
+    marginTop: spacing.sm,
+  },
+  pills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  pill: {
+    backgroundColor: theme.surfaceContainerHigh,
+    borderRadius: shape.pill,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 4,
+  },
+  pillText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 12,
+    color: theme.onSurface,
+  },
+  thumbs: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  thumb: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: theme.surfaceContainerHigh,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  extra: {
+    fontFamily: fonts.displayBold,
+    fontSize: 15,
+    color: theme.onSurface,
+  },
+  count: {
+    marginLeft: 'auto',
+  },
+  start: {
+    marginTop: spacing.lg,
+  },
+  rest: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: layout.cardPadding,
+    paddingVertical: spacing.md,
+    minHeight: 64,
+    borderRadius: shape.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.outlineVariant,
+    borderStyle: 'dashed',
+  },
+  pressed: {
+    backgroundColor: theme.surfaceContainerLow,
+  },
+  restText: {
     flex: 1,
     gap: 2,
+  },
+  addChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: theme.surfaceContainerHigh,
+    borderRadius: shape.pill,
+    paddingHorizontal: spacing.md,
+    height: 36,
+  },
+  addText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 13,
+    color: theme.onSurface,
+  },
+  sectionLabel: {
+    marginTop: layout.sectionGap - layout.cardGap,
+    marginLeft: spacing.xs,
+  },
+  catalog: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  catalogIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: theme.surfaceContainerHigh,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  catalogText: {
+    flex: 1,
+    gap: 2,
+  },
+  catalogTitle: {
+    fontFamily: fonts.displayBold,
+    fontSize: 18,
+    color: theme.onSurface,
   },
 });

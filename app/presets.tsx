@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   modalTitle: {
-    fontSize: fontSize.bodyLg,
+    fontSize: fontSize.body,
   },
   modalSubtitle: {
     marginBottom: spacing.xs,

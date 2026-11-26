@@ -17,7 +17,7 @@ import { colors, radius, surfaces } from '@/theme/tokens';
  * estas sao silhuetas solidas. A regra continua valendo para icone; isto e
  * ilustracao, uma classe diferente, e paga a diferenca ficando em
  * `textSecondary` e nunca em accent. Numa tela onde o accent ja tem dono — a
- * caixa de concluido do treino — a figura nao disputa.
+ * serie da vez no treino — a figura nao disputa.
  */
 
 /**

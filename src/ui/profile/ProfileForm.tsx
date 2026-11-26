@@ -3,9 +3,9 @@ import { StyleSheet, TextInput, View } from 'react-native';
 
 import { NAME_MAX } from '@/domain/friends';
 import { HANDLE_MAX, HANDLE_MIN, isValidHandle, normalizeHandle } from '@/domain/handle';
-import { colors, fontSize, radius, spacing, surfaces } from '@/theme/tokens';
+import { colors, fontSize, spacing } from '@/theme/tokens';
 
-import { PressableSurface } from '../PressableSurface';
+import { Button } from '../Button';
 import { Stepper } from '../Stepper';
 import { Body, Label, Meta } from '../Text';
 
@@ -135,7 +135,7 @@ export function ProfileForm({
         max={120}
         editable
         integer
-        format={(value) => (value === UNSET ? '—' : String(value))}
+        format={(value) => (value === UNSET ? '-' : String(value))}
         onChange={(next, source) => setAge(land(age, next, AGE_START, 13, source))}
       />
 
@@ -147,19 +147,11 @@ export function ProfileForm({
         max={80}
         editable
         integer
-        format={(value) => (value === UNSET ? '—' : String(value))}
+        format={(value) => (value === UNSET ? '-' : String(value))}
         onChange={(next, source) => setYears(land(years, next, YEARS_START, 0, source))}
       />
 
-      <PressableSurface
-        disabled={busy}
-        onPress={submit}
-        pressedOpacity={0.8}
-        borderRadius={radius.pill}
-        style={styles.submit}
-      >
-        <Body>{submitLabel}</Body>
-      </PressableSurface>
+      <Button variant="primary" label={submitLabel} disabled={busy} onPress={submit} />
     </View>
   );
 }
@@ -213,22 +205,13 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   at: {
-    fontSize: fontSize.bodyLg,
+    fontSize: fontSize.body,
     color: colors.textSecondary,
   },
   input: {
     flex: 1,
     fontFamily: 'Inter_400Regular',
-    fontSize: fontSize.bodyLg,
+    fontSize: fontSize.body,
     color: colors.textPrimary,
-  },
-  submit: {
-    height: 54,
-    borderRadius: radius.pill,
-    backgroundColor: surfaces.raised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });

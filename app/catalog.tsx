@@ -104,7 +104,7 @@ export default function CatalogScreen() {
           <Label>Biblioteca</Label>
           <View style={styles.commonText}>
             <Body>{`${MOVEMENT_LIBRARY.length} movimentos`}</Body>
-            <Meta>com grupo, equipamento e figura — escolha em vez de digitar</Meta>
+            <Meta>com grupo, equipamento e figura. Escolha em vez de digitar.</Meta>
           </View>
         </Card>
 
@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
   input: {
     marginTop: spacing.sm,
     fontFamily: 'Inter_400Regular',
-    fontSize: fontSize.bodyLg,
+    fontSize: fontSize.body,
     color: colors.textPrimary,
   },
   chips: {

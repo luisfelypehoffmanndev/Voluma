@@ -92,7 +92,7 @@ export default function BodyWeightScreen() {
             <MinusIcon size={18} color={colors.textSecondary} />
           </PressableSurface>
 
-          <StatNumber value={formatWeight(value)} size={fontSize.numberXl} />
+          <StatNumber value={formatWeight(value)} size={fontSize.numberHero} />
 
           <PressableSurface
             hitSlop={hitSlop}

@@ -16,8 +16,10 @@ import { workoutState } from '@/domain/today';
 import { formatVolume, totalVolume, volumeByExercise } from '@/domain/volume';
 import { fromDateKey, lastWeekday, weekStartKey, weekdayName, weekdayOf } from '@/domain/week';
 import { useQuery } from '@/store/data';
-import { colors, fontSize, spacing } from '@/theme/tokens';
+import { colors, fontSize, spacing, theme } from '@/theme/tokens';
 import { Button } from '@/ui/Button';
+import { MovementFigure } from '@/ui/MovementFigure';
+import { artSlugFor } from '@/movements/library';
 import { Card } from '@/ui/Card';
 import { duration, shortDate } from '@/ui/relative';
 import { LoadError } from '@/ui/LoadError';
@@ -89,7 +91,7 @@ export default function ResultScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.hero}>
-          <StatNumber value={formatVolume(volume)} unit="kg" size={fontSize.numberLg} />
+          <StatNumber value={formatVolume(volume)} unit="kg" size={fontSize.numberHero} />
           <Label>Volume levantado</Label>
           <Body style={styles.comparison}>
             {comparison
@@ -108,22 +110,30 @@ export default function ResultScreen() {
           <Card>
             <Label>Por exercício</Label>
             {byExercise.map((item) => (
-              <Row key={item.name} label={item.name} value={`${formatVolume(item.volume)} kg`} />
+              <Row
+                key={item.name}
+                label={item.name}
+                value={`${formatVolume(item.volume)} kg`}
+                figure={artSlugFor(item.name)}
+              />
             ))}
           </Card>
         ) : null}
 
-        {/* `inline`: este botao e o fim da leitura e rola com ela, nao um
-            footer que flutua — nivel 2, nao vidro. */}
-        <Button variant="inline" label="Fechar" onPress={close} />
+        <Button variant="primary" label="Concluir" onPress={close} />
       </ScrollView>
     </Screen>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value, figure }: { label: string; value: string; figure?: string | null }) {
   return (
     <View style={styles.row}>
+      {figure !== undefined ? (
+        <View style={styles.thumb}>
+          <MovementFigure slug={figure} size={30} color={theme.onSurface} />
+        </View>
+      ) : null}
       <Body numberOfLines={1} style={styles.rowLabel}>
         {label}
       </Body>
@@ -177,6 +187,14 @@ async function loadResult(id: string) {
 }
 
 const styles = StyleSheet.create({
+  thumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: theme.surfaceContainerHigh,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   content: {
     paddingHorizontal: spacing.xl,
     gap: spacing.md,
@@ -191,10 +209,11 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing.lg,
-    paddingVertical: spacing.md,
+    gap: spacing.md,
+    minHeight: 56,
+    paddingVertical: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.divider,
   },

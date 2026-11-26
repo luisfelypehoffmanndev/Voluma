@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View, Text } from 'react-native';
 
 import { listBodyWeightLogs } from '@/db/repo';
 import type { Profile } from '@/domain/types';
@@ -13,13 +13,11 @@ import { useAuth } from '@/sync/auth';
 import { signedAvatarUrls } from '@/sync/avatar';
 import { syncStatusText } from '@/sync/status';
 import { isCloudConfigured } from '@/sync/supabase';
-import { colors, people, spacing } from '@/theme/tokens';
+import { colors, fonts, people, section, spacing, theme } from '@/theme/tokens';
 import { usePrefs } from '@/store/prefs';
-import { useTour } from '@/store/tour';
 import { Avatar } from '@/ui/Avatar';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
-import { PressableSurface } from '@/ui/PressableSurface';
 import { pickAvatar } from '@/ui/profile/pickAvatar';
 import { CheckCell } from '@/ui/CheckCell';
 import { confirm, preview } from '@/ui/haptics';
@@ -29,8 +27,7 @@ import { Header, Screen } from '@/ui/Screen';
 import { useTabBarClearance } from '@/ui/tabBar';
 import { Body, Label, Meta } from '@/ui/Text';
 import { ConfirmModal } from '@/ui/ConfirmModal';
-import { ChevronRightIcon, SyncIcon } from '@/ui/icons';
-import { APP_NAME } from '@/world';
+import { BodyIcon, ChevronRightIcon, CloudIcon, ImageIcon, InfoIcon, PeopleIcon, PersonIcon, PhoneIcon, ShareIcon, SyncIcon } from '@/ui/icons';
 
 /**
  * Perfil: o que e seu e nao e treino — peso, preferencias, conta, creditos.
@@ -49,7 +46,7 @@ export default function ProfileScreen() {
 
   return (
     <Screen>
-      <Header title="Perfil" />
+      <Header title="Perfil" badge={{ icon: <PersonIcon size={26} color="#FFFFFF" filled />, color: section.profile }} />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: clearance }]}
@@ -64,7 +61,7 @@ export default function ProfileScreen() {
         <Label style={styles.sectionLabel}>VOCÊ</Label>
 
         <Card onPress={() => router.push('/bodyweight')}>
-          <Label>Peso corporal</Label>
+          <CardTitle color={section.profile} icon={<BodyIcon size={18} color="#FFFFFF" filled />}>Peso corporal</CardTitle>
           <View style={styles.row}>
             <View style={styles.rowText}>
               <Body>{latest ? `${formatWeight(latest.weightKg)} kg` : 'Registrar peso'}</Body>
@@ -88,7 +85,6 @@ export default function ProfileScreen() {
 
         <Label style={styles.sectionLabel}>APP</Label>
 
-        <HelpCard />
 
         <MotionCard />
 
@@ -100,54 +96,6 @@ export default function ProfileScreen() {
   );
 }
 
-/**
- * Ajuda: rever o guia e trazer as dicas de volta.
- *
- * As dicas aparecem uma vez por tela e ficam guardadas no aparelho — sem este
- * botao, quem fechou nunca mais as ve, e quem instala para um amigo testar nao
- * tem como mostrar.
- */
-function HelpCard() {
-  const router = useRouter();
-  const [restored, setRestored] = useState(false);
-
-  return (
-    <Card>
-      <Label>Ajuda</Label>
-
-      <PressableSurface
-        feedback="solid"
-        style={styles.row}
-        onPress={() => router.push('/onboarding?replay=1')}
-      >
-        <View style={styles.rowText}>
-          <Body>Guia rápido</Body>
-          <Meta>como funciona o app {APP_NAME}, em duas telas</Meta>
-        </View>
-        <ChevronRightIcon size={16} color={colors.textSecondary} />
-      </PressableSurface>
-
-      <PressableSurface
-        feedback="solid"
-        style={styles.row}
-        onPress={() => {
-          useTour.getState().reset();
-          confirm();
-          setRestored(true);
-        }}
-      >
-        <View style={styles.rowText}>
-          <Body>{restored ? 'Dicas restauradas' : 'Ver as dicas de novo'}</Body>
-          <Meta>
-            {restored
-              ? 'elas aparecem na próxima vez que você abrir cada tela'
-              : 'a dica de cada tela volta a aparecer uma vez'}
-          </Meta>
-        </View>
-      </PressableSurface>
-    </Card>
-  );
-}
 
 /**
  * Vibracao ao confirmar.
@@ -165,7 +113,7 @@ function MotionCard() {
 
   return (
     <Card>
-      <Label>Vibração</Label>
+      <CardTitle color={section.profile} icon={<PhoneIcon size={18} color="#FFFFFF" filled />}>Vibração</CardTitle>
       <View style={styles.row}>
         <View style={styles.rowText}>
           <Body>Feedback tátil</Body>
@@ -206,7 +154,7 @@ function PublicProfileCard() {
 
   return (
     <Card onPress={() => router.push('/profile-setup')}>
-      <Label>Perfil</Label>
+      <CardTitle color={section.profile} icon={<PersonIcon size={18} color="#FFFFFF" filled />}>Perfil</CardTitle>
       <View style={styles.row}>
         <View style={styles.rowText}>
           <Body>{profile ? `@${profile.handle}` : 'Definir @'}</Body>
@@ -274,7 +222,7 @@ function AvatarCard() {
 
   return (
     <Card>
-      <Label>Foto</Label>
+      <CardTitle color={section.profile} icon={<ImageIcon size={18} color="#FFFFFF" filled />}>Foto</CardTitle>
       <View style={styles.avatarRow}>
         <Avatar
           handle={profile.handle}
@@ -346,7 +294,7 @@ function FriendsCard() {
 
   return (
     <Card onPress={() => router.push('/friends')}>
-      <Label>Amigos</Label>
+      <CardTitle color={section.profile} icon={<PeopleIcon size={18} color="#FFFFFF" filled />}>Amigos</CardTitle>
       <View style={styles.row}>
         <View style={styles.rowText}>
           <Body>{friendsTitle(lists.accepted.length)}</Body>
@@ -390,7 +338,7 @@ function SharingCard() {
 
   return (
     <Card>
-      <Label>Compartilhar</Label>
+      <CardTitle color={section.profile} icon={<ShareIcon size={18} color="#FFFFFF" filled />}>Compartilhar</CardTitle>
       <View style={styles.row}>
         <View style={styles.rowText}>
           <Body>Estatísticas</Body>
@@ -428,7 +376,7 @@ function SyncCard() {
   if (!isCloudConfigured) {
     return (
       <Card>
-        <Label>Nuvem</Label>
+        <CardTitle color={section.profile} icon={<CloudIcon size={18} color="#FFFFFF" filled />}>Nuvem</CardTitle>
         <View style={styles.rowText}>
           <Body>Modo offline</Body>
           <Meta>Configure o .env para sincronizar</Meta>
@@ -440,7 +388,7 @@ function SyncCard() {
   if (status !== 'signedIn') {
     return (
       <Card onPress={() => router.push('/login')}>
-        <Label>Nuvem</Label>
+        <CardTitle color={section.profile} icon={<CloudIcon size={18} color="#FFFFFF" filled />}>Nuvem</CardTitle>
         <View style={styles.row}>
           <View style={styles.rowText}>
             <Body>Entrar</Body>
@@ -455,7 +403,7 @@ function SyncCard() {
 
   return (
     <Card>
-      <Label>Nuvem</Label>
+      <CardTitle color={section.profile} icon={<CloudIcon size={18} color="#FFFFFF" filled />}>Nuvem</CardTitle>
 
       <Pressable style={styles.row} onPress={() => void runSync()} disabled={syncing}>
         <View style={styles.rowText}>
@@ -501,7 +449,7 @@ function SyncCard() {
 function CreditsCard() {
   return (
     <Card>
-      <Label>Créditos</Label>
+      <CardTitle color={section.profile} icon={<InfoIcon size={18} color="#FFFFFF" filled />}>Créditos</CardTitle>
       <View style={styles.rowText}>
         <Body>Figuras dos exercícios</Body>
         <Meta>Bryl Lim · workout-guide, derivado de Everkinetic · CC BY-SA 4.0</Meta>
@@ -547,5 +495,47 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
     marginTop: spacing.sm,
+  },
+});
+
+/**
+ * Titulo de card do Perfil, no jeito dos Ajustes do iPhone: o icone dentro de
+ * um quadrado colorido e o nome em texto de corpo. Cada item tem a sua cor, e e
+ * por ela que se acha o item sem precisar ler a tela inteira.
+ */
+function CardTitle({
+  icon,
+  color,
+  children,
+}: {
+  icon: React.ReactNode;
+  color: string;
+  children: string;
+}) {
+  return (
+    <View style={titleStyles.row}>
+      <View style={[titleStyles.square, { backgroundColor: color }]}>{icon}</View>
+      <Text style={titleStyles.text}>{children}</Text>
+    </View>
+  );
+}
+
+const titleStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  square: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  text: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 17,
+    color: theme.onSurface,
   },
 });

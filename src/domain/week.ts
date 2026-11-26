@@ -111,9 +111,9 @@ export function weekRangeLabel(weekStart: string): string {
   const endMonth = monthLabelShort(end.getMonth()).toLowerCase();
 
   if (start.getMonth() === end.getMonth()) {
-    return `${start.getDate()} – ${end.getDate()} ${endMonth}`;
+    return `${start.getDate()} a ${end.getDate()} ${endMonth}`;
   }
-  return `${start.getDate()} ${startMonth} – ${end.getDate()} ${endMonth}`;
+  return `${start.getDate()} ${startMonth} a ${end.getDate()} ${endMonth}`;
 }
 
 /**

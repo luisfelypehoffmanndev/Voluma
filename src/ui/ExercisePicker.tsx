@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     fontFamily: fonts.sans,
-    fontSize: fontSize.bodyLg,
+    fontSize: fontSize.body,
     color: colors.textPrimary,
   },
   row: {

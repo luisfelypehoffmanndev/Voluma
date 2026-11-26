@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
   position: {
     width: 18,
     color: colors.textSecondary,
-    fontSize: fontSize.bodyLg,
+    fontSize: fontSize.body,
   },
   strong: {
     color: colors.textPrimary,
@@ -163,7 +163,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   daysNumber: {
-    fontSize: fontSize.numberSm,
+    fontSize: fontSize.numberLine,
     color: colors.textSecondary,
   },
   // A sua linha nao abre nada; o vao do chevron mantem os numeros alinhados.

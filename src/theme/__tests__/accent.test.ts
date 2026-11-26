@@ -22,7 +22,7 @@ it('usa o accent da academia, e deriva dele o degrade dos graficos', () => {
 
   expect(colors.accent).toBe('#29B6FF');
   expect(people.self).toBe('#29B6FF');
-  expect(chart.area).toBe('rgba(41,182,255,0.24)');
+  expect(chart.area).toBe('rgba(41,182,255,0.18)');
   expect(chart.fade).toBe('rgba(41,182,255,0)');
 });
 
@@ -31,9 +31,9 @@ it.each([
   ['sem tema', {}],
   ['accent que nao e cor', { theme: { accent: 'laranja' } }],
   ['hex curto', { theme: { accent: '#F50' } }],
-])('%s: fica o laranja da marca', (_caso, extra) => {
+])('%s: fica o vermelho da marca', (_caso, extra) => {
   const { colors, chart } = tokensWith(extra);
 
-  expect(colors.accent).toBe('#FF5C00');
-  expect(chart.area).toBe('rgba(255,92,0,0.24)');
+  expect(colors.accent).toBe('#B83B3B');
+  expect(chart.area).toBe('rgba(184,59,59,0.18)');
 });

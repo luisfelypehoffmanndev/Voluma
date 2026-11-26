@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet } from 'react-native';
 
-import { colors, radius, spacing, surfaces } from '@/theme/tokens';
+import { layout, radius, spacing, theme } from '@/theme/tokens';
 
 import { Label } from './Text';
 
@@ -23,6 +23,8 @@ export function Chip({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected }}
+      // A pilula e baixa para caber em fileira; o alvo sobe ate `layout.touch`.
+      hitSlop={{ top: (layout.touch - CHIP_HEIGHT) / 2, bottom: (layout.touch - CHIP_HEIGHT) / 2 }}
       style={[styles.chip, selected && styles.chipSelected]}
     >
       <Label style={selected ? styles.labelSelected : undefined}>{label}</Label>
@@ -30,19 +32,24 @@ export function Chip({
   );
 }
 
+/** Altura visivel do chip — a mesma do segmento do `Segmented`. */
+const CHIP_HEIGHT = 36;
+
 const styles = StyleSheet.create({
   chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    height: CHIP_HEIGHT,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
     borderRadius: radius.pill,
+    backgroundColor: theme.surfaceContainerHigh,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    borderColor: theme.surfaceContainerHigh,
   },
   chipSelected: {
-    backgroundColor: surfaces.raised,
-    borderColor: colors.borderStrong,
+    backgroundColor: theme.primaryContainer,
+    borderColor: theme.primaryContainer,
   },
   labelSelected: {
-    color: colors.textPrimary,
+    color: theme.onPrimary,
   },
 });

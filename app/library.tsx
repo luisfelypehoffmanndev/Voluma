@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
   },
   input: {
     fontFamily: 'Inter_400Regular',
-    fontSize: fontSize.bodyLg,
+    fontSize: fontSize.body,
     color: colors.textPrimary,
   },
   chips: {

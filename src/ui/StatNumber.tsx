@@ -3,6 +3,8 @@ import Animated, { useAnimatedProps, type SharedValue } from 'react-native-reani
 
 import { colors, fontSize, fonts } from '@/theme/tokens';
 
+import { FONT_SCALE_CAP } from './Text';
+
 /**
  * O truque padrao para animar TEXTO sem passar pela JS thread: `Text` nao tem
  * prop animavel de conteudo, `TextInput` tem (`text`), e o Reanimated sabe
@@ -67,7 +69,7 @@ type Props = {
 export function StatNumber({
   value,
   unit,
-  size = fontSize.numberLg,
+  size = fontSize.numberHero,
   color = colors.textPrimary,
   dimUnit = true,
   fit = true,
@@ -88,6 +90,9 @@ export function StatNumber({
       {animatedValue ? (
         <AnimatedTextInput
           editable={false}
+          // Numero grande ja e grande: cresce pouco com a fonte do sistema, ou
+          // o painel em colunas transborda (ver `FONT_SCALE_CAP`).
+          maxFontSizeMultiplier={FONT_SCALE_CAP.readout}
           // Sem isto o TextInput traz a bagagem de campo de formulario e o
           // numero sai desalinhado da unidade: padding proprio no Android,
           // sublinhado, e a folga de fonte que a `lineHeight` acima ja resolve.
@@ -98,12 +103,18 @@ export function StatNumber({
           style={[valueStyle, styles.animatedValue]}
         />
       ) : (
-        <Text numberOfLines={1} adjustsFontSizeToFit={fit} style={valueStyle}>
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit={fit}
+          maxFontSizeMultiplier={FONT_SCALE_CAP.readout}
+          style={valueStyle}
+        >
           {value}
         </Text>
       )}
       {unit ? (
         <Text
+          maxFontSizeMultiplier={FONT_SCALE_CAP.readout}
           style={[
             styles.unit,
             { fontSize: unitSize, lineHeight: unitSize * 1.1, color },

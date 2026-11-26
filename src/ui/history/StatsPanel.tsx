@@ -26,7 +26,7 @@ import {
 } from '@/domain/volume';
 import { addWeeks, fromDateKey, lastNDays, toDateKey, weekStartKey } from '@/domain/week';
 import { bumpData, useQuery } from '@/store/data';
-import { colors, fontSize, spacing } from '@/theme/tokens';
+import { colors, fontSize, spacing, theme } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
 import { monthTicks, weekMonthKey } from '@/ui/charts/axis';
 import { BarChart } from '@/ui/charts/BarChart';
@@ -35,7 +35,7 @@ import { LineChart } from '@/ui/charts/LineChart';
 import { signedDelta } from '@/ui/charts/scale';
 import { Chip } from '@/ui/Chip';
 import { EmptyState } from '@/ui/EmptyState';
-import { ChevronRightIcon } from '@/ui/icons';
+import { BarbellIcon, BodyIcon, ChevronRightIcon, RunIcon, TrendIcon, TrophyIcon } from '@/ui/icons';
 import { LoadError } from '@/ui/LoadError';
 import { useListMotion } from '@/ui/motion';
 import { PressableSurface } from '@/ui/PressableSurface';
@@ -137,7 +137,7 @@ export function StatsPanel() {
       <ProgressCard candidates={data.candidates} since={data.since} width={chartWidth} />
 
       <Card>
-        <Label>{`Volume por grupo · últimos ${GROUP_DAYS} dias`}</Label>
+        <CardTitle icon={<BodyIcon size={18} color={theme.onSurfaceVariant} />}>{`Volume por grupo · últimos ${GROUP_DAYS} dias`}</CardTitle>
         <HBarList
           width={chartWidth}
           rows={groups.map((group) => ({
@@ -153,13 +153,13 @@ export function StatsPanel() {
       </Card>
 
       <Card>
-        <Label>Peso corporal</Label>
+        <CardTitle icon={<BodyIcon size={18} color={theme.onSurfaceVariant} />}>Peso corporal</CardTitle>
         {shownWeight ? (
           <View style={styles.chartHead}>
             <StatNumber
               value={formatWeight(shownWeight.weightKg)}
               unit="kg"
-              size={fontSize.numberMd}
+              size={fontSize.numberDisplay}
             />
             <Meta>
               {weights.length > 1 && weightIndex === null
@@ -202,12 +202,12 @@ export function StatsPanel() {
           desce junto, em vez de pular. */}
       {data.runs ? (
         <Card resizes>
-          <Label>Distância</Label>
+          <CardTitle icon={<RunIcon size={18} color={theme.onSurfaceVariant} />}>Distância</CardTitle>
           <View style={styles.chartHead}>
             <StatNumber
               value={formatDistance(data.weekDistance)}
               unit="km"
-              size={fontSize.numberMd}
+              size={fontSize.numberDisplay}
             />
             <Meta>últimos 7 dias</Meta>
           </View>
@@ -272,10 +272,10 @@ function VolumeCard({ weeks, width }: { weeks: readonly WeekVolume[]; width: num
 
   return (
     <Card>
-      <Label>Volume</Label>
+      <CardTitle icon={<BarbellIcon size={18} color={theme.onSurfaceVariant} />}>Volume</CardTitle>
 
       <View style={styles.chartHead}>
-        <StatNumber value={formatVolume(readout.value)} unit="kg" size={fontSize.numberLg} />
+        <StatNumber value={formatVolume(readout.value)} unit="kg" size={fontSize.numberHero} />
         <Meta>{readout.meta}</Meta>
       </View>
 
@@ -359,7 +359,7 @@ function RecordsCard({
   return (
     <Card resizes>
       <View style={styles.recordsHead}>
-        <Label style={styles.recordsTitle}>Recordes por movimento</Label>
+        <View style={styles.recordsTitle}><CardTitle icon={<TrophyIcon size={18} color={theme.onSurfaceVariant} />}>Recordes por movimento</CardTitle></View>
         {records.length > 0 ? (
           <>
             <Label style={styles.recordColumn}>carga</Label>
@@ -460,7 +460,7 @@ function ProgressCard({
   return (
     <Card>
       {/* O nome do exercicio nao entra no titulo: o chip aceso ja diz qual e. */}
-      <Label>Progressão</Label>
+      <CardTitle icon={<TrendIcon size={18} color={theme.onSurfaceVariant} />}>Progressão</CardTitle>
 
       {candidates.length === 0 ? (
         <Meta style={styles.empty}>
@@ -493,7 +493,7 @@ function ProgressCard({
                 <StatNumber
                   value={formatWeight(shown.weightKg)}
                   unit="kg"
-                  size={fontSize.numberMd}
+                  size={fontSize.numberDisplay}
                 />
                 <Meta>
                   {pointIndex === null
@@ -581,5 +581,23 @@ const styles = StyleSheet.create({
   chips: {
     gap: spacing.sm,
     paddingHorizontal: spacing.xl,
+  },
+});
+
+/** Titulo de card de Numeros: icone de contorno a esquerda e o nome. */
+function CardTitle({ icon, children }: { icon: React.ReactNode; children: string }) {
+  return (
+    <View style={titleStyles.row}>
+      {icon}
+      <Label>{children}</Label>
+    </View>
+  );
+}
+
+const titleStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
 });

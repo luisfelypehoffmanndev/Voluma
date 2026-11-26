@@ -11,8 +11,8 @@ import Constants from 'expo-constants';
 
 import { HEX_COLOR, hexToRgba } from './color';
 
-/** O laranja da marca: o accent do app padrao, e o de qualquer config sem accent valido. */
-const BRAND_ACCENT = '#FF5C00';
+/** O vermelho da marca: o accent do app padrao, e o de qualquer config sem accent valido. */
+const BRAND_ACCENT = '#B83B3B';
 
 // Cada academia traz o proprio accent em `extra.theme` (gyms/<slug>/config.json).
 const configuredAccent: unknown = Constants.expoConfig?.extra?.theme?.accent;
@@ -23,9 +23,9 @@ const ACCENT =
 
 export const colors = {
   /** fundo base, quase preto — nunca #000 puro (mata a profundidade) */
-  bg: '#0A0A0A',
+  bg: '#000000',
   /** bordas de 1px, nunca mais grossas */
-  border: 'rgba(255,255,255,0.08)',
+  border: '#2c2c2e',
   /**
    * Divisores dentro de um card.
    *
@@ -34,11 +34,30 @@ export const colors = {
    * atravessar um halo do campo de luz. A 0,08 ela enfraquecia justamente onde
    * o card estava mais claro.
    */
-  divider: 'rgba(255,255,255,0.12)',
+  divider: '#2c2c2e',
   /** borda um pouco mais visivel, para marcar estado sem mudar preenchimento */
-  borderStrong: 'rgba(255,255,255,0.18)',
-  textPrimary: '#F5F5F5',
-  textSecondary: '#8A8A8A',
+  borderStrong: '#3a3a3c',
+  textPrimary: '#F2F2F2',
+  /**
+   * Cinza de icone apagado, desabilitado e texto direto sobre o FUNDO.
+   *
+   * Nao serve para texto sobre card: sob o halo mais forte o card compoe em
+   * ~`#2D2D2D`, e `#8A8A8A` cai para 4,0:1 — abaixo dos 4,5 que texto pede. Por
+   * isso o texto auxiliar tem token proprio (`textAux`). Este continua aqui
+   * porque o icone inativo da tab bar e calibrado contra ele (`tabIcon`).
+   */
+  textSecondary: '#71717a',
+  /**
+   * Texto auxiliar — rotulo, metadado, linha de baixo — sobre qualquer
+   * superficie do app.
+   *
+   * Calibrado pela conta, nao a olho: a pior superficie onde ele aparece e a
+   * linha de serie (nivel 2 a 0,09) sobre um card (0,06) sobre o pico do campo
+   * de luz, que compoe em ~`#404040`. Ali `#ADADAD` da 4,6:1. O teste em
+   * `composite.test.ts` falha se alguem baixar este cinza ou subir um alpha a
+   * ponto de passar abaixo de 4,5:1.
+   */
+  textAux: '#a1a1aa',
   /**
    * Texto sobre fundo accent solido. Preto puro, e nao o `bg` quase-preto: sobre
    * o laranja, qualquer cinza no lugar do preto vira marrom sujo.
@@ -56,11 +75,13 @@ export const colors = {
    *
    * Num app de academia, e a cor da academia (`ACCENT`, acima).
    */
+  // Preto, branco e uma cor de destaque: o vermelho do Voluma, ou a cor da
+  // academia quando o app e de uma academia (`ACCENT`, acima).
   accent: ACCENT,
   /** pontos apagados do dot-matrix (dias sem treino) */
-  dotEmpty: 'rgba(255,255,255,0.14)',
+  dotEmpty: '#2c2c2e',
   /** pontos cheios do dot-matrix (dias com treino) */
-  dotFilled: '#F5F5F5',
+  dotFilled: '#9a9a9a',
   /**
    * Rampa do dot-matrix: um passo por faixa de carga do dia, do vazio ao mais
    * pesado da janela. Escala de cinza, nunca heatmap colorido — o brief e
@@ -104,10 +125,10 @@ export const chart = {
   baseline: colors.divider,
   tick: colors.dotEmpty,
   cursor: 'rgba(255,255,255,0.28)',
-  area: hexToRgba(ACCENT, 0.24),
+  area: hexToRgba(ACCENT, 0.18),
   fade: hexToRgba(ACCENT, 0),
   track: 'rgba(255,255,255,0.07)',
-  ring: '#191919',
+  ring: '#121212',
 } as const;
 
 /**
@@ -131,16 +152,16 @@ export const chart = {
 export const people = {
   self: colors.accent,
   friends: [
-    /** ciano */
-    '#29B6FF',
-    /** magenta */
-    '#FF4FC0',
-    /** lima */
-    '#C6F53D',
-    /** violeta */
-    '#6E6BFF',
-    /** menta */
-    '#3DF2C4',
+    /** azul acinzentado */
+    '#7c93b3',
+    /** rosa queimado */
+    '#b37c96',
+    /** oliva */
+    '#9aa86f',
+    /** lilas */
+    '#8f84b8',
+    /** verde agua */
+    '#6fa89a',
   ],
 } as const;
 
@@ -155,8 +176,9 @@ export const people = {
  * marca nitida, que continua legivel por cima.
  */
 export const glow = {
-  soft: { blur: 4, opacity: 0.6 },
-  strong: { blur: 8, opacity: 0.9 },
+  // Sem brilho na linguagem Blink: cor so com significado, nada que brilhe.
+  soft: { blur: 4, opacity: 0 },
+  strong: { blur: 8, opacity: 0 },
 } as const;
 
 export type GlowLevel = keyof typeof glow | 'none';
@@ -314,7 +336,8 @@ export const glass = {
  * brilho do unico elemento accent da tela.
  */
 export const accentGlow = {
-  opacity: 0.55,
+  // Sem glow na linguagem Blink: cor so com significado, nada que brilhe.
+  opacity: 0,
   radius: 18,
   /** Android: sombra por elevacao, tingida pelo shadowColor so a partir do 9. */
   elevation: 12,
@@ -411,36 +434,203 @@ export const spacing = {
  * - sans neutra e discreta para UI, labels e corpo. Nunca italico.
  */
 export const fonts = {
-  monoLight: 'JetBrainsMono_300Light',
-  mono: 'JetBrainsMono_400Regular',
+  // Os numeros deixaram de ser mono: agora sao Plus Jakarta Sans com
+  // algarismos tabulares (`fontVariant: ['tabular-nums']` em `Mono`).
+  monoLight: 'PlusJakartaSans_800ExtraBold',
+  mono: 'PlusJakartaSans_700Bold',
   sans: 'Inter_400Regular',
   sansMedium: 'Inter_500Medium',
+  /** Titulos no estilo simples (plano 21, ajuste de clareza): grandes e em negrito. */
+  sansBold: 'Inter_700Bold',
+  /** Titulos e numeros grandes: Plus Jakarta Sans (linguagem Blink). */
+  display: 'PlusJakartaSans_800ExtraBold',
+  displayBold: 'PlusJakartaSans_700Bold',
+  sansSemiBold: 'Inter_600SemiBold',
 } as const;
 
-/** label 12–13, corpo 15–16, numero de destaque 48–72. */
+/**
+ * A escala tipografica: oito papeis, cada tamanho com UM trabalho.
+ *
+ * Eram dez tamanhos, com dois pares quase iguais (12/13 e 15/16) que nenhuma
+ * tela conseguia usar de proposito — a diferenca de 1px nao se le como
+ * hierarquia, so como descuido. O reset (plano 21, Onda 0) fundiu os pares e
+ * deu nome de papel a cada degrau. Texto sobe ~1,25x por degrau (13 → 16 → 20
+ * → 28); numero sobe ~1,65x (20 → 34 → 56), porque numero e o protagonista e
+ * precisa de salto maior para se distinguir de texto ao redor.
+ */
 export const fontSize = {
+  /** Rotulo em caixa alta: "VOLUME", "SÉRIE 3". Nome de campo, nunca frase. */
   label: 12,
-  labelLg: 13,
-  body: 15,
-  bodyLg: 16,
   /**
-   * Titulo de secao dentro de uma tela — "Treino de hoje", "Progresso".
-   *
-   * Existe porque sem ele a tela inteira vivia entre 12 e 16: nada era
-   * manifestamente mais importante que o resto, e o olho nao tinha onde
-   * pousar primeiro. Dois degraus acima do corpo e o minimo para um titulo
-   * ler como titulo.
+   * Texto auxiliar: metadado, linha de baixo, o que explica o dado. Tambem o
+   * PISO da sessao de treino — abaixo disto nao se le com o celular longe do
+   * rosto, em pe e com luz forte.
    */
-  section: 19,
+  aux: 13,
+  /** Corpo: nome de exercicio, item de lista, rotulo de botao. */
+  body: 16,
+  /** Titulo de bloco dentro da tela — o nome do treino, o nome do exercicio. */
+  section: 20,
   /** Titulo de tela ("Hoje", "Plano"). O maior texto em sans do app. */
-  title: 30,
-  /** numero secundario (o "43" ao lado da hora) */
-  numberSm: 20,
-  numberMd: 34,
-  /** numero protagonista da tela */
-  numberLg: 56,
-  numberXl: 72,
+  title: 28,
+  /** Numero numa linha: alvo de serie, estatistica secundaria. */
+  numberLine: 20,
+  /** Numero de destaque dentro de um card: um total, uma leitura do painel. */
+  numberDisplay: 34,
+  /**
+   * O numero heroi: um por tela, o dado que responde a pergunta da tela. Na
+   * sessao, a carga da serie da vez.
+   */
+  numberHero: 56,
 } as const;
+
+/**
+ * Os papeis do espacamento, sobre a escala de `spacing`.
+ *
+ * A escala diz QUANTO; isto diz PARA QUE. Sem os papeis, cada tela escolhia um
+ * degrau de cabeca e o mesmo papel (a margem da tela, o vao entre cards) caia
+ * em valores diferentes de uma tela para outra — o que le como ritmo quebrado
+ * mesmo quando ninguem sabe dizer por que.
+ */
+export const layout = {
+  /** Margem lateral da tela. */
+  screen: 20,
+  /** Recuo interno do card. */
+  cardPadding: 20,
+  /** Vao entre cards irmaos. */
+  cardGap: 12,
+  /** Vao antes de um rotulo de secao: separa "agir" de "consultar". */
+  sectionGap: 28,
+  /**
+   * Alvo minimo de toque — 48dp, o Android; 44pt e o piso do iOS. A pesquisa de
+   * polegar (MS Research, MobileHCI) aponta ~9,2–9,6mm, o que da os mesmos
+   * 48dp num aparelho comum. Vale para TUDO que se toca durante o treino.
+   */
+  touch: 48,
+  /** Respiro minimo entre dois alvos de toque vizinhos. */
+  touchGap: 8,
+} as const;
+
+/**
+ * A linguagem simples (ajuste de clareza do plano 21, com o app Stoic como
+ * referencia de forma): blocos solidos e arredondados, botoes em pilula, um
+ * card de destaque por tela. Cores do Voluma: fundo quase preto, blocos cinza
+ * escuro, o laranja no destaque.
+ */
+export const simple = {
+  block: '#121212',
+  blockPressed: '#1c1c1e',
+  radius: 18,
+  radiusSmall: 14,
+  pill: '#F2F2F2',
+  pillText: '#000000',
+} as const;
+
+/**
+ * A paleta da linguagem Blink (Design/design.md). Monocromatica: o chrome nao
+ * tem cor; cor so com significado (`success`, `error`) e no grafico de amigos.
+ * Escuro e o padrao; o claro fica pronto para quando o tema for ligado.
+ */
+export const palette = {
+  dark: {
+    background: '#000000',
+    surfaceContainerLow: '#0a0a0a',
+    surfaceContainer: '#121212',
+    surfaceContainerHigh: '#1c1c1e',
+    surfaceContainerHighest: '#2c2c2e',
+    surfaceBright: '#3a3a3c',
+    primary: '#F2F2F2',
+    // Mais escuro que o primeiro valor (#bdbdbd), que estourava como branco
+    // neon nos botoes e nos circulos. Preto sobre ele ainda passa 7:1.
+    // O botao principal e branco com texto preto; o vermelho fica nos detalhes.
+    primaryContainer: '#F2F2F2',
+    onPrimary: '#000000',
+    onSurface: '#F2F2F2',
+    onSurfaceVariant: '#a1a1aa',
+    outline: '#71717a',
+    outlineVariant: '#2c2c2e',
+    // Feito e branco: preto, branco e vermelho, sem uma quarta cor.
+    success: '#F2F2F2',
+    error: '#f4212e',
+    cardBorder: 'rgba(255,255,255,0.12)',
+  },
+  light: {
+    background: '#e2e2df',
+    surfaceContainerLow: '#e7e7e4',
+    surfaceContainer: '#ecece9',
+    surfaceContainerHigh: '#d9d9d6',
+    surfaceContainerHighest: '#cececb',
+    surfaceBright: '#f1f1ee',
+    primary: '#111111',
+    primaryContainer: '#111111',
+    onPrimary: '#f7f7f5',
+    onSurface: '#111111',
+    onSurfaceVariant: '#52525b',
+    outline: '#78787d',
+    outlineVariant: '#cdcdca',
+    success: '#15803d',
+    error: '#d92d20',
+    cardBorder: 'rgba(0,0,0,0.06)',
+  },
+} as const;
+
+export type ThemeColors = { [K in keyof (typeof palette)['dark']]: string };
+
+/** As cores do tema atual. Hoje sempre o escuro (o padrao); o claro esta pronto. */
+export function useThemeColors(): ThemeColors {
+  return palette.dark;
+}
+
+/** Atalho estatico para quem esta fora de componente (estilos de StyleSheet). */
+export const theme: ThemeColors = palette.dark;
+
+/**
+ * Cor de identidade por secao. O app monocromatico era bonito e mudo: quem tem
+ * dificuldade para se localizar (pense numa pessoa idosa) nao sabia em que
+ * parte do app estava. Agora cada aba tem uma cor que aparece no icone ao lado
+ * do titulo, na aba ativa da barra e nos icones daquela tela.
+ */
+export const section = {
+  today: ACCENT,
+  plan: ACCENT,
+  history: ACCENT,
+  profile: ACCENT,
+} as const;
+
+/**
+ * Cor por grupo muscular, para a pilula "Pernas" ser sempre da mesma cor e o
+ * grupo ser reconhecido antes de ser lido.
+ */
+export const muscle: Record<string, string> = {
+  Peito: '#F87171',
+  Costas: '#60A5FA',
+  Pernas: '#34D399',
+  Glúteos: '#F472B6',
+  Ombros: '#FBBF24',
+  Bíceps: '#A78BFA',
+  Tríceps: '#FB923C',
+  Abdômen: '#22D3EE',
+  Cardio: '#F43F5E',
+};
+
+/** A cor de um grupo muscular, com um cinza claro para grupo desconhecido. */
+export function muscleColor(group: string | null | undefined): string {
+  // Paleta de tres cores: as pilulas de grupo ficam brancas e discretas. O
+  // mapa `muscle` fica para um grafico que precise distinguir grupos.
+  void group;
+  return '#F2F2F2';
+}
+
+/** `#RRGGBB` com alpha: o fundo das pilulas e dos quadros de icone. */
+export function tint(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+/** Raios da linguagem Blink: os mesmos em todo o app. */
+export const shape = { card: 18, control: 14, pill: 999 } as const;
 
 export const hitSlop = { top: 12, bottom: 12, left: 12, right: 12 } as const;
 

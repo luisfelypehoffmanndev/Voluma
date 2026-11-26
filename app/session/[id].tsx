@@ -38,33 +38,30 @@ import type { ExerciseKind, SessionSet, Targets } from '@/domain/types';
 import { applyOrder } from '@/domain/order';
 import { linkSourceName, routineLink, type RoutineLink } from '@/domain/presets';
 import { formatDistance, formatDuration, runTargetsFromSets } from '@/domain/run';
-import { allDone, countSets, nextSetIndex, type SetDraft, sameSetDrafts, summarizeSets } from '@/domain/sets';
+import { allDone, countSets, nextSetIndex, type SetDraft, sameSetDrafts } from '@/domain/sets';
 import { sameTargets, targetsFromSets } from '@/domain/targets';
-import { formatVolume, formatWeight } from '@/domain/volume';
 import { everyWeekday, fromDateKey, weekStartKey, weekdayName, weekdayOf } from '@/domain/week';
 import { bumpData, useQuery } from '@/store/data';
 import { useAuth } from '@/sync/auth';
-import { colors, fontSize, radius, spacing } from '@/theme/tokens';
+import { colors, layout, radius, spacing } from '@/theme/tokens';
 import { useFlag, useListMotion, useScrollAnimated } from '@/ui/motion';
 import { confirm } from '@/ui/haptics';
-import { Button } from '@/ui/Button';
+import { BUTTON_HEIGHT, Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { ConfirmModal, ConfirmOverlay } from '@/ui/ConfirmModal';
 import { CheckCell } from '@/ui/CheckCell';
-import { CountingStat } from '@/ui/CountingStat';
 import { artSlugFor } from '@/movements/library';
 import { DEFAULT_RUN_TARGETS, DEFAULT_TARGETS, ExercisePicker } from '@/ui/ExercisePicker';
-import { shortDate } from '@/ui/relative';
 import { Reveal } from '@/ui/Reveal';
 import { ReorderableList } from '@/ui/ReorderableList';
 import { EmptyState } from '@/ui/EmptyState';
 import { LoadError } from '@/ui/LoadError';
 import { Header, Screen } from '@/ui/Screen';
-import { Tour } from '@/ui/tour/Tour';
+import { SessionHud } from '@/ui/session/SessionHud';
 import { TourTarget } from '@/ui/tour/TourTarget';
 import { SetRow } from '@/ui/SetRow';
 import { COMMIT_DELAY, TargetsEditor } from '@/ui/TargetsEditor';
-import { Body, Label, Meta } from '@/ui/Text';
+import { Body, Meta } from '@/ui/Text';
 import { ActionSheet, type SheetAction } from '@/ui/ActionSheet';
 import { UndoToast, type UndoOffer } from '@/ui/UndoToast';
 import { useWriteBehind } from '@/ui/useWriteBehind';
@@ -237,16 +234,6 @@ export default function SessionScreen() {
     () => (loaded && localOrder ? applyOrder(loaded, localOrder, exerciseKey) : loaded),
     [loaded, localOrder],
   );
-  const sessionVolume = useMemo(() => {
-    if (!items) return undefined;
-    return items.reduce(
-      (sum, item) =>
-        sum +
-        (drafts[item.exerciseId]?.volume ??
-          draftVolume(item.exerciseKind, item.done, item.rows, item.targets)),
-      0,
-    );
-  }, [items, drafts]);
 
   /**
    * O treino contado em SERIES, com o rascunho da tela na frente do banco.
@@ -285,7 +272,7 @@ export default function SessionScreen() {
       if (index <= 0 || index >= orderKeys.length) return;
       const y = orderKeys
         .slice(0, index)
-        .reduce((sum, key) => sum + (heights.current.get(key) ?? 0) + spacing.lg, 0);
+        .reduce((sum, key) => sum + (heights.current.get(key) ?? 0) + layout.cardGap, 0);
       scrollRef.current?.scrollTo({ y, animated: scrollAnimated });
     },
     [orderKeys, scrollRef, scrollAnimated],
@@ -389,6 +376,15 @@ export default function SessionScreen() {
     }
   };
 
+  // O exercicio da vez e a serie em que a pessoa esta, para o topo da tela.
+  const currentItem = exercises.find((item) => exerciseKey(item) === currentKey) ?? null;
+  const currentDraft = currentItem ? drafts[currentItem.exerciseId] : undefined;
+  const currentDone =
+    currentDraft?.doneSets ?? currentItem?.rows.filter((row) => row.done).length ?? 0;
+  const currentTotal = currentDraft?.totalSets ?? currentItem?.rows.length ?? 0;
+  const currentSetLabel =
+    currentTotal > 0 ? `Série ${Math.min(currentDone + 1, currentTotal)} de ${currentTotal}` : null;
+
   const footerBottom = insets.bottom + spacing.xl;
 
   return (
@@ -396,8 +392,7 @@ export default function SessionScreen() {
       overlay={
         <>
           {exercises.length > 0 || session.completedAt ? (
-            // Vidro, nunca accent: esta tela tem caixas de concluido, e o §2 do
-            // brief tira o accent de todo o resto quando elas existem.
+            // Vidro, nunca accent: o accent desta tela e a serie da vez (§2).
             <View style={[styles.footer, { bottom: footerBottom }]}>
               {session.completedAt ? (
                 <Button
@@ -421,41 +416,21 @@ export default function SessionScreen() {
             offer={undo}
             onExpire={() => setUndo(null)}
             // Acima da barra de finalizar, nunca por cima dela.
-            bottom={footerBottom + FOOTER_HEIGHT + spacing.md}
+            bottom={footerBottom + BUTTON_HEIGHT + spacing.md}
           />
 
-          {/* A marcacao por serie e o conceito novo do app: a dica aponta a
-              serie da vez, uma vez so, e explica o que a caixa faz. Mora no
-              `overlay` para medir nas mesmas coordenadas do alvo. */}
-          <Tour
-            id="session"
-            active={exercises.length > 0}
-            steps={[
-              {
-                target: 'session.next',
-                text: 'Marque a caixa quando terminar esta série. A próxima fica destacada.',
-              },
-            ]}
-          />
         </>
       }
     >
-      <Header title="Treino" back />
+      {/* O HUD fica FORA do fade: o topo fixo e o painel do treino, e ele
+          nao some nem rola (design.md, "HUD da sessão"). */}
+      <SessionHud
+        title={data.title}
+        current={currentItem?.exerciseName ?? null}
+        currentSet={currentSetLabel}
+      />
 
-      {/* O `Header` fica FORA do fade — ele ja estava na tela durante o
-          carregamento, e faze-lo acender de novo seria animar uma troca que nao
-          aconteceu. O volume entra junto com a lista porque ele tambem so
-          existe depois da consulta: ate agora, ali, havia um spinner. */}
       <Reveal style={styles.reveal}>
-      <View style={styles.summary}>
-        <CountingStat kg={sessionVolume ?? undefined} size={fontSize.numberLg} />
-        <View style={styles.summaryMeta}>
-          <Label>Volume levantado</Label>
-          <Meta>
-            {`${weekdayName(weekdayOf(date))} · ${shortDate(date)} · ${counts.done} de ${counts.total} séries`}
-          </Meta>
-        </View>
-      </View>
 
       {/* `skipEntering` so vale para a PRIMEIRA renderizacao: sem ele a lista
           inteira entraria em cascata toda vez que a tela abre ou que o
@@ -477,7 +452,7 @@ export default function SessionScreen() {
             keyOf={exerciseKey}
             onReorder={reorder}
             scrollableRef={scrollRef}
-            gap={spacing.lg}
+            gap={layout.cardGap}
             renderItem={(item) => (
               <ExerciseCard
                 item={item}
@@ -591,9 +566,6 @@ const SOURCE_LABEL: Record<ItemSource, string> = {
   lastActual: 'igual à última vez',
   plan: 'do seu plano',
 };
-
-/** Altura do `Button` — a barra de finalizar e o aviso de desfazer se empilham por ela. */
-const FOOTER_HEIGHT = 54;
 
 /**
  * O volume de UM exercicio a partir do rascunho que esta na tela — o mesmo
@@ -779,9 +751,11 @@ async function removeFromPlan(sessionId: string, item: SessionExercise): Promise
 /**
  * O ⋯ do card e o menu que ele abre.
  *
- * Mora do lado do NOME, e nao ao lado da caixa de concluido: a lixeira antiga
- * ficava colada nela, e errar o toque por alguns pixels apagava um exercicio do
- * plano. Entre o ⋯ e a caixa agora ha o bloco de texto inteiro.
+ * Nunca ao lado de uma caixa de concluido: a lixeira antiga ficava colada
+ * nela, e errar o toque por alguns pixels apagava um exercicio do plano. Na
+ * corrida, cuja caixa mora no cabecalho, o ⋯ fica do outro lado do nome; na
+ * musculacao as caixas sao das series, e o ⋯ vai para a direita do cabecalho,
+ * ao lado do chevron.
  *
  * `beforeLeave` roda antes de o exercicio sair da lista: descarta a escrita
  * adiada do card. Sem isso o flush do unmount regravaria as series depois de o
@@ -1284,6 +1258,25 @@ function StrengthExerciseCard(props: CardProps) {
   return (
     <Card resizes onLayout={(event) => onMeasure(item.exerciseId, event.nativeEvent.layout.height)}>
       <View style={[styles.itemHead, expanded && styles.itemHeadSpaced]}>
+        {/* O cabecalho inteiro abre, nao so o nome — o alvo e a linha toda
+            ate o ⋯. */}
+        <Pressable
+          style={styles.expandable}
+          onPress={() => setExpanded((value) => !value)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded }}
+          accessibilityLabel={`${item.exerciseName}, ${expanded ? 'recolher' : 'ver'} séries`}
+        >
+          <View style={styles.itemText}>
+            <Body numberOfLines={1}>{item.exerciseName}</Body>
+            <Meta numberOfLines={1}>
+              {setsLabel(rows, done)}
+            </Meta>
+          </View>
+          <Animated.View style={chevronStyle}>
+            <ChevronRightIcon size={16} color={colors.textSecondary} />
+          </Animated.View>
+        </Pressable>
         <ExerciseMenu
           {...props}
           extraActions={
@@ -1313,25 +1306,6 @@ function StrengthExerciseCard(props: CardProps) {
             pendingPatches.current.clear();
           }}
         />
-        {/* O cabecalho inteiro abre, nao so o nome — o alvo e a linha toda
-            entre o ⋯ e a caixa de concluido. */}
-        <Pressable
-          style={styles.expandable}
-          onPress={() => setExpanded((value) => !value)}
-          accessibilityRole="button"
-          accessibilityState={{ expanded }}
-          accessibilityLabel={`${item.exerciseName}, ${expanded ? 'recolher' : 'ver'} séries`}
-        >
-          <View style={styles.itemText}>
-            <Body numberOfLines={1}>{item.exerciseName}</Body>
-            <Meta numberOfLines={1}>
-              {`${setsLabel(rows, done, item.source)} · ${strengthSummary(rows)}`}
-            </Meta>
-          </View>
-          <Animated.View style={chevronStyle}>
-            <ChevronRightIcon size={16} color={colors.textSecondary} />
-          </Animated.View>
-        </Pressable>
       </View>
 
       {expanded ? (
@@ -1341,10 +1315,12 @@ function StrengthExerciseCard(props: CardProps) {
             <SetRow
               key={row.id ?? `draft-${index}`}
               index={index + 1}
+              total={rows.length}
               reps={row.reps}
               weightKg={row.weightKg}
               done={row.done}
-              isNext={index === next}
+              mode={index === next ? 'hero' : 'row'}
+              accent={isCurrent && index === next}
               onToggle={() => toggleSet(index)}
               onChangeReps={(reps) => updateRow(index, { reps })}
               onChangeWeight={(weightKg) => updateRow(index, { weightKg })}
@@ -1362,8 +1338,8 @@ function StrengthExerciseCard(props: CardProps) {
             );
           })}
 
-          <Pressable style={styles.addSet} onPress={addRow}>
-            <PlusIcon size={14} color={colors.textSecondary} />
+          <Pressable style={styles.addSet} onPress={addRow} accessibilityRole="button">
+            <PlusIcon size={16} color={colors.textAux} />
             <Meta>Adicionar série</Meta>
           </Pressable>
         </Animated.View>
@@ -1380,11 +1356,11 @@ function StrengthExerciseCard(props: CardProps) {
  * marcado ainda a origem do numero (`SOURCE_LABEL`) importa — ali o que esta na
  * tela e previsao, nao registro.
  */
-function setsLabel(rows: readonly SetDraft[], done: boolean, source: ItemSource): string {
-  if (done) return 'concluído';
+function setsLabel(rows: readonly SetDraft[], done: boolean): string {
+  if (done) return 'pronto ✓';
   const doneSets = rows.filter((row) => row.done).length;
-  if (doneSets === 0) return SOURCE_LABEL[source];
-  return `${doneSets} de ${rows.length} séries`;
+  if (doneSets === 0) return `${rows.length} ${rows.length === 1 ? 'série' : 'séries'}`;
+  return `${doneSets} de ${rows.length} séries feitas`;
 }
 
 /** "5 km · 28 min" — o que a corrida do dia vale. */
@@ -1392,26 +1368,6 @@ function runSummary(targets: Targets): string {
   return `${formatDistance(targets.distanceKm)} km · ${formatDuration(targets.durationMin)}`;
 }
 
-/**
- * "3 × 10 · 62,5 kg · 1.875 kg" quando as series sao iguais, ou
- * "3 séries · 60–70 kg · 1.950 kg" quando a carga varia entre elas.
- *
- * O volume (`formatVolume`) continua bem definido nos dois casos — e sempre a
- * soma de reps × peso de cada serie, divergente ou nao.
- */
-function strengthSummary(rows: readonly SetDraft[]): string {
-  const { uniform, reps, weightRange, volume } = summarizeSets(rows);
-  const [min, max] = weightRange;
-
-  if (uniform) {
-    return `${rows.length} × ${reps} · ${formatWeight(min)} kg · ${formatVolume(volume)} kg`;
-  }
-
-  const weightPart =
-    min === max ? `${formatWeight(min)} kg` : `${formatWeight(min)}–${formatWeight(max)} kg`;
-  const repsPart = reps !== null ? ` · ${reps} reps` : '';
-  return `${rows.length} séries${repsPart} · ${weightPart} · ${formatVolume(volume)} kg`;
-}
 
 /**
  * O que a tela mostra: o plano da semana daquela data, com o que ja foi
@@ -1488,8 +1444,14 @@ async function loadSession(id: string) {
     });
   }
 
+  // O nome do treino no HUD: o da rotina, ou o dia da semana quando ela nao
+  // tem nome (rotina sem nome mostra o nome do dia em todo o app).
+  const routineName = routines.find((routine) => routine.id === session.routineId)?.name.trim();
+  const title = routineName || weekdayName(weekdayOf(fromDateKey(session.date)));
+
   return {
     session,
+    title,
     items: applyOrder(items, session.exerciseOrder, exerciseKey),
     catalog,
     routineId: session.routineId,
@@ -1609,17 +1571,9 @@ function rowsForExercise(
 const styles = StyleSheet.create({
   // Estica igual ao que o `Reveal` embrulha — sem isto o scroll fica sem altura.
   reveal: { flex: 1 },
-  summary: {
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xl,
-  },
-  summaryMeta: {
-    marginTop: spacing.xs,
-    gap: 2,
-  },
   list: {
-    paddingHorizontal: spacing.xl,
-    gap: spacing.lg,
+    paddingHorizontal: layout.screen,
+    gap: layout.cardGap,
   },
   itemHead: {
     flexDirection: 'row',
@@ -1646,13 +1600,14 @@ const styles = StyleSheet.create({
   },
   footer: {
     position: 'absolute',
-    left: spacing.xl,
-    right: spacing.xl,
+    left: layout.screen,
+    right: layout.screen,
   },
   more: {
     // Alvo visual pequeno, alvo de toque grande (hitSlop): o ⋯ nao pode
     // disputar largura com o nome do exercicio.
     paddingVertical: spacing.xs,
+    paddingLeft: spacing.xs,
   },
   setsList: {
     marginTop: spacing.md,
@@ -1661,7 +1616,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingVertical: spacing.sm,
+    minHeight: layout.touch,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.divider,
   },
   addExercise: {
     flexDirection: 'row',

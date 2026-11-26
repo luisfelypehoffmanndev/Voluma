@@ -120,7 +120,9 @@ export function SheetPanel({ onClose, children }: { onClose: () => void; childre
 const styles = StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    // Mais fechado que antes (0,35): com 0,35 a tela por tras continuava
+    // legivel e disputava o olho com a pergunta do painel.
+    backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'flex-end',
   },
   panel: {

@@ -30,6 +30,7 @@ como verificar. A ideia é resolver um de cada vez.
 | [18](18-painel-admin.md) | Painel da academia: equipe (admin/instrutor), prescrição por aluno e em lote, conflito com o aluno offline | feature | **feito e verificado no aparelho** — v16 e v17 no Supabase, ensaio com rollback e testes no banco real passando; prescrever, receber no app e desvincular testados no app `teste`. O painel web fica para um plano próprio |
 | [19](19-painel-web.md) | Painel web da academia: login, alunos, editor do dia, lotes, fichas e equipe | feature | **passos 1 a 3 feitos** (`web/`, guia em [`web/README.md`](../web/README.md)): login, academias, alunos, semana e editor do dia, modo demo; falta testar logado e os passos 4 em diante (lotes, equipe, histórico, publicar) |
 | [20](20-planos.md) | Planos da academia: programa da semana, alunos no plano com exceções individuais, atribuição em lote com prévia | feature | **feito e verificado no aparelho** — v18 no Supabase, painel (testado headless) e app; atribuir também pela tela Alunos; dados de mentira na `teste` (`supabase/seeds/`); falta só o login real no painel |
+| [21](21-redesign.md) | Redesign visual (preto, branco e uma cor de destaque) e funcionalidades de treino (descanso, rotinas, recordes) | feature | **visual feito** em todas as telas, testado no simulador de iPhone; as funcionalidades das ondas 1 a 7 não foram feitas |
 
 ## Pendências fora do código
 

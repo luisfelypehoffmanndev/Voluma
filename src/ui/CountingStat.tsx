@@ -38,7 +38,7 @@ type Props = {
  * primeiro que nao e `undefined`, o estado de "ainda carregando") entra direto.
  * Contar do zero ao abrir a tela seria animar uma mudanca que nao aconteceu.
  */
-export function CountingStat({ kg, size = fontSize.numberLg }: Props) {
+export function CountingStat({ kg, size = fontSize.numberHero }: Props) {
   const reduceMotion = useReducedMotion();
   const value = useSharedValue(kg ?? 0);
   const settled = useRef(kg !== undefined);

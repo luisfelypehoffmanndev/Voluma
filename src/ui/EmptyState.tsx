@@ -3,7 +3,7 @@ import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { spacing } from '@/theme/tokens';
 
 import { Button } from './Button';
-import { Body, Meta } from './Text';
+import { Meta, Section } from './Text';
 
 type Props = {
   title: string;
@@ -27,7 +27,9 @@ type Props = {
 export function EmptyState({ title, message, action, style }: Props) {
   return (
     <View style={[styles.wrap, style]}>
-      <Body style={styles.center}>{title}</Body>
+      {/* Titulo de bloco, nao corpo: o vazio e o assunto da tela naquele
+          momento, e na mesma altura do resto ele sumia no meio dos cards. */}
+      <Section style={styles.center}>{title}</Section>
       <Meta style={styles.center}>{message}</Meta>
       <Button
         variant="inline"
@@ -42,7 +44,7 @@ export function EmptyState({ title, message, action, style }: Props) {
 const styles = StyleSheet.create({
   wrap: {
     paddingVertical: spacing.xxl,
-    gap: spacing.xs,
+    gap: spacing.sm,
   },
   center: {
     textAlign: 'center',

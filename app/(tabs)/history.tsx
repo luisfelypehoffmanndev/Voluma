@@ -1,8 +1,9 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { ChartIcon } from '@/ui/icons';
 
-import { spacing } from '@/theme/tokens';
+import { section, spacing } from '@/theme/tokens';
 import { CalendarPanel } from '@/ui/history/CalendarPanel';
 import { FriendsPanel } from '@/ui/history/FriendsPanel';
 import { StatsPanel } from '@/ui/history/StatsPanel';
@@ -66,7 +67,7 @@ export default function HistoryScreen() {
 
   return (
     <Screen>
-      <Header title="Histórico" />
+      <Header title="Histórico" badge={{ icon: <ChartIcon size={26} color="#FFFFFF" filled />, color: section.history }} />
       <View style={styles.segmented}>
         <Segmented options={OPTIONS} value={view} onChange={onChangeView} />
       </View>
