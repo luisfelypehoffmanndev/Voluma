@@ -23,6 +23,8 @@ import { useTabBarClearance } from '@/ui/tabBar';
 import { Reveal } from '@/ui/Reveal';
 import { Body, Label, Meta } from '@/ui/Text';
 import { CheckIcon } from '@/ui/icons';
+import { MovementFigure } from '@/ui/MovementFigure';
+import { artSlugFor } from '@/movements/library';
 import { useStartWorkout } from '@/ui/useStartWorkout';
 
 /**
@@ -65,10 +67,26 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
         >
           <Card>
-            <Label>{hasPlan ? 'TREINO DE HOJE' : 'HOJE'}</Label>
-            <Text style={styles.heroName} maxFontSizeMultiplier={1.3}>
-              {hasPlan ? today.name : 'Dia de descanso'}
-            </Text>
+            {/* A identidade da tela: a figura do primeiro movimento do dia, grande,
+                ao lado do nome do treino. Diz "e isto que voce vai fazer" sem
+                precisar de texto. */}
+            <View style={styles.heroHead}>
+              <View style={styles.heroText}>
+                <Label>{hasPlan ? 'TREINO DE HOJE' : 'HOJE'}</Label>
+                <Text style={styles.heroName} maxFontSizeMultiplier={1.3}>
+                  {hasPlan ? today.name : 'Dia de descanso'}
+                </Text>
+              </View>
+              {hasPlan ? (
+                <View style={styles.heroArt}>
+                  <MovementFigure
+                    slug={artSlugFor(today.exercises[0].exerciseName)}
+                    size={88}
+                    color={theme.onSurface}
+                  />
+                </View>
+              ) : null}
+            </View>
             {!hasPlan ? (
               <Meta style={styles.heroMeta}>Nada no seu plano para hoje.</Meta>
             ) : null}
@@ -124,6 +142,13 @@ export default function HomeScreen() {
               <Card style={styles.list}>
                 {today.exercises.map((item, index) => (
                   <View key={item.id} style={[styles.row, index > 0 && styles.rowDivided]}>
+                    <View style={styles.thumb}>
+                      <MovementFigure
+                        slug={artSlugFor(item.exerciseName)}
+                        size={36}
+                        color={theme.onSurface}
+                      />
+                    </View>
                     <Body numberOfLines={2} style={styles.rowName}>
                       {item.exerciseName}
                     </Body>
@@ -224,6 +249,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: layout.screen,
     gap: layout.cardGap,
   },
+  heroHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  heroText: {
+    flex: 1,
+  },
+  heroArt: {
+    width: 104,
+    height: 104,
+    borderRadius: shape.card,
+    backgroundColor: theme.surfaceContainerHigh,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  thumb: {
+    width: 52,
+    height: 52,
+    borderRadius: shape.control,
+    backgroundColor: theme.surfaceContainerHigh,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   heroName: {
     fontFamily: fonts.display,
     fontSize: 30,
@@ -312,6 +361,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   rowName: {
+    flex: 1,
     fontFamily: fonts.sansSemiBold,
   },
   rowLoad: {
