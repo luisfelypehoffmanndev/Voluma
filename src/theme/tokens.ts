@@ -158,8 +158,9 @@ export const people = {
  * marca nitida, que continua legivel por cima.
  */
 export const glow = {
-  soft: { blur: 4, opacity: 0.6 },
-  strong: { blur: 8, opacity: 0.9 },
+  // Sem brilho na linguagem Blink: cor so com significado, nada que brilhe.
+  soft: { blur: 4, opacity: 0 },
+  strong: { blur: 8, opacity: 0 },
 } as const;
 
 export type GlowLevel = keyof typeof glow | 'none';

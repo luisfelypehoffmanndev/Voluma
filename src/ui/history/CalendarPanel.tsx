@@ -29,7 +29,7 @@ import {
   weekdayOf,
 } from '@/domain/week';
 import { bumpData, useQuery } from '@/store/data';
-import { colors, fontSize, fonts, radius, spacing, surfaces } from '@/theme/tokens';
+import { colors, fontSize, fonts, radius, spacing, theme } from '@/theme/tokens';
 import { Card } from '@/ui/Card';
 import { LoadError } from '@/ui/LoadError';
 import { shortDate } from '@/ui/relative';
@@ -179,16 +179,22 @@ export function CalendarPanel() {
                   <View
                     style={[
                       styles.dayInner,
+                      trained && styles.dayTrained,
                       isToday && styles.dayToday,
                       isSelected && styles.daySelected,
                       isSelected && isToday && styles.daySelectedToday,
                     ]}
                   >
-                    <Mono style={[styles.dayNumber, !trained && styles.dayNumberIdle]}>
+                    <Mono
+                      style={[
+                        styles.dayNumber,
+                        !trained && styles.dayNumberIdle,
+                        trained && styles.dayNumberTrained,
+                      ]}
+                    >
                       {fromDateKey(dateKey).getDate()}
                     </Mono>
                   </View>
-                  <View style={[styles.dayDot, trained && styles.dayDotFilled]} />
                 </Pressable>
               );
             })}
@@ -336,13 +342,20 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   /** Hoje: so o contorno. Marca o dia sem competir com a selecao. */
+  /** Dia treinado: quadradinho cheio, como num mapa de atividade. */
+  dayTrained: {
+    backgroundColor: theme.primaryContainer,
+  },
+  dayNumberTrained: {
+    color: theme.onPrimary,
+  },
   dayToday: {
-    borderColor: colors.border,
+    borderColor: theme.onSurface,
   },
   /** Selecionado: preenchido. E o estado que o dedo acabou de causar. */
   daySelected: {
-    backgroundColor: surfaces.raised,
-    borderColor: colors.border,
+    borderColor: theme.onSurface,
+    borderWidth: 2,
   },
   /** Os dois ao mesmo tempo: preenchido, com a borda um passo mais visivel. */
   daySelectedToday: {

@@ -11,7 +11,7 @@ import { useProfile } from '@/store/profile';
 import { useAuth } from '@/sync/auth';
 import { signedAvatarUrls } from '@/sync/avatar';
 import { isCloudConfigured } from '@/sync/supabase';
-import { colors, people, spacing } from '@/theme/tokens';
+import { colors, people, spacing, theme } from '@/theme/tokens';
 import { usePrefs } from '@/store/prefs';
 import { Avatar } from '@/ui/Avatar';
 import { Button } from '@/ui/Button';
@@ -24,7 +24,7 @@ import { LoadError } from '@/ui/LoadError';
 import { Header, Screen } from '@/ui/Screen';
 import { useTabBarClearance } from '@/ui/tabBar';
 import { Body, Label, Meta } from '@/ui/Text';
-import { ChevronRightIcon, SyncIcon } from '@/ui/icons';
+import { BodyIcon, ChevronRightIcon, CloudIcon, ImageIcon, InfoIcon, PeopleIcon, PersonIcon, PhoneIcon, ShareIcon, SyncIcon } from '@/ui/icons';
 
 /**
  * Perfil: o que e seu e nao e treino — peso, preferencias, conta, creditos.
@@ -58,7 +58,7 @@ export default function ProfileScreen() {
         <Label style={styles.sectionLabel}>VOCÊ</Label>
 
         <Card onPress={() => router.push('/bodyweight')}>
-          <Label>Peso corporal</Label>
+          <CardTitle icon={<BodyIcon size={18} color={theme.onSurfaceVariant} />}>Peso corporal</CardTitle>
           <View style={styles.row}>
             <View style={styles.rowText}>
               <Body>{latest ? `${formatWeight(latest.weightKg)} kg` : 'Registrar peso'}</Body>
@@ -110,7 +110,7 @@ function MotionCard() {
 
   return (
     <Card>
-      <Label>Vibração</Label>
+      <CardTitle icon={<PhoneIcon size={18} color={theme.onSurfaceVariant} />}>Vibração</CardTitle>
       <View style={styles.row}>
         <View style={styles.rowText}>
           <Body>Feedback tátil</Body>
@@ -151,7 +151,7 @@ function PublicProfileCard() {
 
   return (
     <Card onPress={() => router.push('/profile-setup')}>
-      <Label>Perfil</Label>
+      <CardTitle icon={<PersonIcon size={18} color={theme.onSurfaceVariant} />}>Perfil</CardTitle>
       <View style={styles.row}>
         <View style={styles.rowText}>
           <Body>{profile ? `@${profile.handle}` : 'Definir @'}</Body>
@@ -219,7 +219,7 @@ function AvatarCard() {
 
   return (
     <Card>
-      <Label>Foto</Label>
+      <CardTitle icon={<ImageIcon size={18} color={theme.onSurfaceVariant} />}>Foto</CardTitle>
       <View style={styles.avatarRow}>
         <Avatar
           handle={profile.handle}
@@ -291,7 +291,7 @@ function FriendsCard() {
 
   return (
     <Card onPress={() => router.push('/friends')}>
-      <Label>Amigos</Label>
+      <CardTitle icon={<PeopleIcon size={18} color={theme.onSurfaceVariant} />}>Amigos</CardTitle>
       <View style={styles.row}>
         <View style={styles.rowText}>
           <Body>{friendsTitle(lists.accepted.length)}</Body>
@@ -335,7 +335,7 @@ function SharingCard() {
 
   return (
     <Card>
-      <Label>Compartilhar</Label>
+      <CardTitle icon={<ShareIcon size={18} color={theme.onSurfaceVariant} />}>Compartilhar</CardTitle>
       <View style={styles.row}>
         <View style={styles.rowText}>
           <Body>Estatísticas</Body>
@@ -371,7 +371,7 @@ function SyncCard() {
   if (!isCloudConfigured) {
     return (
       <Card>
-        <Label>Nuvem</Label>
+        <CardTitle icon={<CloudIcon size={18} color={theme.onSurfaceVariant} />}>Nuvem</CardTitle>
         <View style={styles.rowText}>
           <Body>Modo offline</Body>
           <Meta>Configure o .env para sincronizar</Meta>
@@ -383,7 +383,7 @@ function SyncCard() {
   if (status !== 'signedIn') {
     return (
       <Card onPress={() => router.push('/login')}>
-        <Label>Nuvem</Label>
+        <CardTitle icon={<CloudIcon size={18} color={theme.onSurfaceVariant} />}>Nuvem</CardTitle>
         <View style={styles.row}>
           <View style={styles.rowText}>
             <Body>Entrar</Body>
@@ -397,7 +397,7 @@ function SyncCard() {
 
   return (
     <Card>
-      <Label>Nuvem</Label>
+      <CardTitle icon={<CloudIcon size={18} color={theme.onSurfaceVariant} />}>Nuvem</CardTitle>
 
       <Pressable style={styles.row} onPress={() => void runSync()} disabled={syncing}>
         <View style={styles.rowText}>
@@ -435,7 +435,7 @@ function SyncCard() {
 function CreditsCard() {
   return (
     <Card>
-      <Label>Créditos</Label>
+      <CardTitle icon={<InfoIcon size={18} color={theme.onSurfaceVariant} />}>Créditos</CardTitle>
       <View style={styles.rowText}>
         <Body>Figuras dos exercícios</Body>
         <Meta>Bryl Lim · workout-guide, derivado de Everkinetic · CC BY-SA 4.0</Meta>
@@ -481,5 +481,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
     marginTop: spacing.sm,
+  },
+});
+
+/** Titulo de card do Perfil: icone de contorno a esquerda e o nome. */
+function CardTitle({ icon, children }: { icon: React.ReactNode; children: string }) {
+  return (
+    <View style={titleStyles.row}>
+      {icon}
+      <Label>{children}</Label>
+    </View>
+  );
+}
+
+const titleStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
 });
