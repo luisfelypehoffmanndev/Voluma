@@ -9,7 +9,7 @@
 
 import Constants from 'expo-constants';
 
-import { HEX_COLOR, hexToRgba } from './color';
+import { HEX_COLOR, hexToRgba, textOn } from './color';
 
 /** O vermelho da marca: o accent do app padrao, e o de qualquer config sem accent valido. */
 const BRAND_ACCENT = '#B83B3B';
@@ -62,7 +62,8 @@ export const colors = {
    * Texto sobre fundo accent solido. Preto puro, e nao o `bg` quase-preto: sobre
    * o laranja, qualquer cinza no lugar do preto vira marrom sujo.
    */
-  textOnAccent: '#000000',
+  // Preto ou branco, o que contrastar mais com a cor de destaque (`textOn`).
+  textOnAccent: textOn(ACCENT),
   /**
    * Laranja neon — uso minimo, 1 elemento de destaque por tela.
    *

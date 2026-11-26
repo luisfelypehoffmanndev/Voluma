@@ -6,7 +6,7 @@ import type { ConfigContext, ExpoConfig } from 'expo/config';
 import appConfig from '../../../app.config';
 import appJson from '../../../app.json';
 import { gymFromPackage, schemeFor } from '../../world';
-import { contrastRatio, HEX_COLOR } from '../color';
+import { contrastRatio, HEX_COLOR, textOn } from '../color';
 import { colors } from '../tokens';
 
 /**
@@ -51,10 +51,12 @@ describe.each(slugs)('gyms/%s', (slug) => {
     expect(gym.accent).toMatch(HEX_COLOR);
   });
 
-  // Texto preto em cima do accent (textOnAccent) e o accent sobre o fundo.
-  it('tem accent com contraste de pelo menos 4,5:1', () => {
-    expect(contrastRatio(gym.accent, colors.textOnAccent)).toBeGreaterThanOrEqual(4.5);
-    expect(contrastRatio(gym.accent, colors.bg)).toBeGreaterThanOrEqual(4.5);
+  // O texto em cima do accent e preto ou branco, o que contrastar mais
+  // (`textOn`): ele precisa de 4,5:1. O accent sobre o fundo so aparece como
+  // elemento grafico (selo, contorno, icone pequeno), onde a WCAG pede 3:1.
+  it('tem accent com contraste de texto 4,5:1 e grafico 3:1', () => {
+    expect(contrastRatio(gym.accent, textOn(gym.accent))).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(gym.accent, colors.bg)).toBeGreaterThanOrEqual(3);
   });
 
   it.each(ASSETS)('tem %s', (file) => {

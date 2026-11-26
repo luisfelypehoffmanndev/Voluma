@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { colors, fonts, glow } from '@/theme/tokens';
+import { fonts, glow } from '@/theme/tokens';
 
 type Props = {
   handle: string;
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
   initial: {
     // Preto sobre a cor, como o texto sobre o accent (`textOnAccent`): sobre
     // neon, qualquer cinza vira sujo.
-    color: colors.textOnAccent,
+    color: '#000000',
     fontFamily: fonts.sansMedium,
   },
 });

@@ -28,3 +28,12 @@ export function contrastRatio(a: string, b: string): number {
   const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
   return (light + 0.05) / (dark + 0.05);
 }
+
+/**
+ * Preto ou branco, o que tiver mais contraste com `hex`: a cor do texto e do
+ * icone em cima da cor de destaque. Uma academia de cor clara (o ciano da
+ * `teste`) pede texto preto; o vermelho do Voluma pede branco.
+ */
+export function textOn(hex: string): '#000000' | '#FFFFFF' {
+  return contrastRatio(hex, '#000000') >= contrastRatio(hex, '#FFFFFF') ? '#000000' : '#FFFFFF';
+}

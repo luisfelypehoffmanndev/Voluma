@@ -62,7 +62,7 @@ export function Button({
   const textColor = disabled
     ? colors.textSecondary
     : primary
-      ? colors.textOnAccent
+      ? theme.onPrimary
       : colors.textPrimary;
 
   const content = (
