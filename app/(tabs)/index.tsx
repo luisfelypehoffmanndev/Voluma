@@ -3,6 +3,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-nat
 
 import {
   getSessionByDate,
+  listExercises,
   listRoutines,
   listSessionSets,
   targetsForWeek,
@@ -22,7 +23,7 @@ import { Header, Screen } from '@/ui/Screen';
 import { useTabBarClearance } from '@/ui/tabBar';
 import { Reveal } from '@/ui/Reveal';
 import { Body, Label, Meta } from '@/ui/Text';
-import { CheckIcon } from '@/ui/icons';
+import { BarbellIcon, CheckIcon } from '@/ui/icons';
 import { MovementFigure } from '@/ui/MovementFigure';
 import { artSlugFor } from '@/movements/library';
 import { useStartWorkout } from '@/ui/useStartWorkout';
@@ -54,7 +55,9 @@ export default function HomeScreen() {
     );
   }
 
-  const { today, week, streak, trainedToday } = data;
+  const { today, week, streak, trainedToday, current, groups, groupOf } = data;
+  // A figura grande: o exercicio da vez durante o treino, ou o primeiro do dia.
+  const featured = current ?? today.exercises[0]?.exerciseName ?? null;
   const hasPlan = today.exercises.length > 0;
   const progress = today.sets.total > 0 ? today.sets.done / today.sets.total : 0;
 
@@ -72,15 +75,30 @@ export default function HomeScreen() {
                 precisar de texto. */}
             <View style={styles.heroHead}>
               <View style={styles.heroText}>
-                <Label>{hasPlan ? 'TREINO DE HOJE' : 'HOJE'}</Label>
+                <View style={styles.kicker}>
+                  <BarbellIcon size={16} color={theme.onSurfaceVariant} />
+                  <Label>{hasPlan ? 'TREINO DE HOJE' : 'HOJE'}</Label>
+                </View>
                 <Text style={styles.heroName} maxFontSizeMultiplier={1.3}>
                   {hasPlan ? today.name : 'Dia de descanso'}
                 </Text>
+                {current ? <Meta style={styles.now}>{`Agora: ${current}`}</Meta> : null}
+                {groups.length > 0 ? (
+                  <View style={styles.pills}>
+                    {groups.slice(0, 3).map((group) => (
+                      <View key={group} style={styles.pill}>
+                        <Text style={styles.pillText} maxFontSizeMultiplier={1.3}>
+                          {group}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
               </View>
               {hasPlan ? (
                 <View style={styles.heroArt}>
                   <MovementFigure
-                    slug={artSlugFor(today.exercises[0].exerciseName)}
+                    slug={featured ? artSlugFor(featured) : null}
                     size={88}
                     color={theme.onSurface}
                   />
@@ -149,9 +167,12 @@ export default function HomeScreen() {
                         color={theme.onSurface}
                       />
                     </View>
-                    <Body numberOfLines={2} style={styles.rowName}>
-                      {item.exerciseName}
-                    </Body>
+                    <View style={styles.rowText}>
+                      <Body numberOfLines={2} style={styles.rowNameText}>
+                        {item.exerciseName}
+                      </Body>
+                      {groupOf[item.exerciseId] ? <Meta>{groupOf[item.exerciseId]}</Meta> : null}
+                    </View>
                   </View>
                 ))}
               </Card>
@@ -203,12 +224,14 @@ async function loadHome() {
   });
 
   const streakWindow = lastNDays(now, 400);
-  const [routines, session, trainedWeek, trainedAll] = await Promise.all([
+  const [routines, session, trainedWeek, trainedAll, catalog] = await Promise.all([
     listRoutines(),
     getSessionByDate(todayKey),
     trainedDates(weekKeys[0], weekKeys[6]),
     trainedDates(streakWindow[0], todayKey),
+    listExercises(),
   ]);
+  const groupOf = new Map(catalog.map((exercise) => [exercise.id, exercise.muscleGroup]));
 
   const todayRoutine = routineForWeekday(routines, weekdayOf(now));
   const [todayExercises, sessionSets] = await Promise.all([
@@ -220,7 +243,35 @@ async function loadHome() {
   const plannedSets = todayExercises.reduce((sum, item) => sum + item.targets.sets, 0);
   const doneSets = sessionSets.filter((set) => set.done).length;
 
+  // O exercicio da vez: o primeiro do dia que ainda tem serie por fazer. So
+  // existe com o treino em andamento (alguma serie marcada).
+  const recorded = new Map<string, boolean[]>();
+  for (const set of sessionSets) {
+    const list = recorded.get(set.exerciseId) ?? [];
+    list.push(set.done);
+    recorded.set(set.exerciseId, list);
+  }
+  const current =
+    doneSets > 0
+      ? (todayExercises.find((item) => {
+          const done = recorded.get(item.exerciseId);
+          return !done || done.some((value) => !value);
+        }) ?? null)
+      : null;
+
+  // Os grupos do dia, sem repetir, na ordem dos exercicios.
+  const groups = [
+    ...new Set(
+      todayExercises
+        .map((item) => groupOf.get(item.exerciseId))
+        .filter((group): group is string => Boolean(group)),
+    ),
+  ];
+
   return {
+    current: current?.exerciseName ?? null,
+    groups,
+    groupOf: Object.fromEntries(groupOf),
     today: {
       name: dayTitle(todayRoutine?.name ?? '', todayExercises.length),
       exercises: todayExercises,
@@ -256,6 +307,35 @@ const styles = StyleSheet.create({
   },
   heroText: {
     flex: 1,
+  },
+  kicker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  now: {
+    marginTop: spacing.xs,
+    color: theme.onSurface,
+  },
+  pills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  pill: {
+    backgroundColor: theme.surfaceContainerHigh,
+    borderRadius: shape.pill,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 4,
+  },
+  pillText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 12,
+    color: theme.onSurface,
+  },
+  rowNameText: {
+    fontFamily: fonts.sansSemiBold,
   },
   heroArt: {
     width: 104,
