@@ -18,8 +18,11 @@ import { useTabBarClearance } from '@/ui/tabBar';
 import { Label, Meta } from '@/ui/Text';
 import { useStartWorkout } from '@/ui/useStartWorkout';
 
-/** Quantas miniaturas de movimento cabem no card do dia antes do "+N". */
-const MAX_THUMBS = 4;
+/**
+ * Quantas miniaturas cabem no card antes do "+N". Tres: com quatro mais o "+N",
+ * a contagem de exercicios saia cortada da linha num telefone comum.
+ */
+const MAX_THUMBS = 3;
 
 /**
  * Plano: a semana de treino, com cara de ficha de academia.

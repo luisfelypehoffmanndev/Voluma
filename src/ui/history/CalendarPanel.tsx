@@ -36,7 +36,8 @@ import { shortDate } from '@/ui/relative';
 import { RoundButton } from '@/ui/Screen';
 import { useTabBarClearance } from '@/ui/tabBar';
 import { Body, Label, Meta, Mono } from '@/ui/Text';
-import { BarbellIcon, ChevronLeftIcon, ChevronRightIcon, FlameIcon } from '@/ui/icons';
+import { BarbellIcon, ChevronLeftIcon, ChevronRightIcon } from '@/ui/icons';
+import { Flame } from '@/ui/Flame';
 import { MovementFigure } from '@/ui/MovementFigure';
 import { artSlugFor } from '@/movements/library';
 
@@ -157,7 +158,7 @@ export function CalendarPanel() {
           label={`treinos em ${monthLabel(cursor.getMonth()).toLowerCase()}`}
         />
         <StatTile
-          icon={<FlameIcon size={22} color={section.today} />}
+          icon={<Flame size={34} />}
           value={String(streak.data ?? 0)}
           label={(streak.data ?? 0) === 1 ? 'dia seguido' : 'dias seguidos'}
         />
